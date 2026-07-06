@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'wall_follow = my_algo.wall_follow:main',
+            'aeb = my_algo.aeb:main',
         ],
     },
 )
