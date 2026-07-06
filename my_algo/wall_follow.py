@@ -15,18 +15,33 @@ class WallFollowNode(Node):
         super().__init__('wall_follow_node')
 
         # ============ 튜닝 파라미터 ============
-        self.kp = 1.2              # 중앙 유지 P 게인
-        self.kd = 0.05             # 중앙 유지 D 게인
-        self.safety_kp = 2.8       # 벽 회피 P 게인
+        self.kp = 0.95             # 중앙 유지 P 게인
+        self.kd = 0.11             # 중앙 유지 D 게인
+        self.safety_kp = 3.2       # 벽 회피 P 게인
         self.target_dist = 1.0     # 벽까지 목표 거리 (m)
         self.min_wall_dist = 0.8
         self.hard_wall_dist = 0.45  # 너무 가까우면 거의 정지
-        self.front_slow_dist = 1.8  # 전방 장애물 감속 시작 거리
-        self.front_stop_dist = 0.75
+        self.front_slow_dist = 3.2  # 전방 장애물 감속 시작 거리
+        self.front_stop_dist = 0.70
         self.rear_slow_dist = 1.0
         self.rear_stop_dist = 0.45
-        self.lookahead = 0.65      # 코너 예측 거리 (m)
+        self.lookahead = 1.10      # 코너 예측 거리 (m)
         self.max_steer = 0.42
+        self.max_speed = 5.0
+        self.fast_corner_speed = 3.2
+        self.medium_corner_speed = 1.75
+        self.tight_corner_speed = 0.95
+        self.crawl_speed = 0.25
+        self.full_throttle_clear = 4.1
+        self.full_throttle_release_clear = 2.7
+        self.full_throttle_steer = 0.24
+        self.full_throttle_release_steer = 0.34
+        self.high_speed_steer = 0.33
+        self.trail_brake_steer = 0.08
+        self.apex_steer = 0.32
+        self.accel_limit = 8.0
+        self.brake_limit = 9.0
+        self.high_speed_error_deadband = 0.06
         self.stuck_front_dist = 0.85
         self.stuck_side_dist = 1.15
         self.side_open_dist = 1.8
@@ -42,6 +57,11 @@ class WallFollowNode(Node):
         self.recovery_mode = 'normal'
         self.recovery_until = 0.0
         self.recovery_turn = 1.0
+        self.last_debug_time = 0.0
+        self.debug_period = 0.25
+        self.prev_speed = 0.0
+        self.prev_abs_steer = 0.0
+        self.straight_mode = False
 
         self.subscription = self.create_subscription(
             LaserScan, '/scan', self.scan_callback, 10)
@@ -117,6 +137,78 @@ class WallFollowNode(Node):
         drive_msg.drive.steering_angle = steering
         drive_msg.drive.speed = speed
         self.publisher.publish(drive_msg)
+
+    def get_race_speed(self, front_clear, nearest_wall, abs_steer, dt):
+        """F1-like speed plan: full throttle, late brake, trail to apex."""
+        if front_clear < self.front_stop_dist:
+            self.straight_mode = False
+            return 0.0
+        if nearest_wall < self.hard_wall_dist:
+            self.straight_mode = False
+            return self.crawl_speed
+
+        if self.straight_mode:
+            if (
+                front_clear < self.full_throttle_release_clear
+                or abs_steer > self.full_throttle_release_steer
+            ):
+                self.straight_mode = False
+        elif (
+            front_clear > self.full_throttle_clear
+            and abs_steer < self.full_throttle_steer
+        ):
+            self.straight_mode = True
+
+        if self.straight_mode:
+            target_speed = self.max_speed
+        else:
+            brake_zone = self.full_throttle_clear - self.front_stop_dist
+            clearance = self.clamp(
+                (front_clear - self.front_stop_dist) / brake_zone,
+                0.0,
+                1.0,
+            )
+            late_brake = (1.0 - clearance) ** 2.2
+            entry_speed = (
+                self.max_speed
+                - late_brake * (self.max_speed - self.tight_corner_speed)
+            )
+
+            trail_ratio = self.clamp(
+                (abs_steer - self.trail_brake_steer)
+                / (self.apex_steer - self.trail_brake_steer),
+                0.0,
+                1.0,
+            )
+            corner_speed = (
+                self.fast_corner_speed - trail_ratio
+                * (self.fast_corner_speed - self.tight_corner_speed)
+            )
+            trail_speed = self.max_speed - (
+                trail_ratio ** 1.35
+            ) * (self.max_speed - corner_speed)
+            target_speed = min(entry_speed, trail_speed)
+
+            if (
+                front_clear > self.front_slow_dist
+                and abs_steer < self.high_speed_steer
+            ):
+                straightish_speed = self.max_speed - (
+                    (abs_steer / self.high_speed_steer) ** 1.6
+                ) * (self.max_speed - self.fast_corner_speed)
+                target_speed = max(target_speed, straightish_speed)
+
+        steer_releasing = abs_steer < self.prev_abs_steer
+        accel_limit = self.accel_limit * (1.45 if steer_releasing else 1.0)
+        max_step_up = accel_limit * dt
+        max_step_down = self.brake_limit * dt
+        speed = self.clamp(
+            target_speed,
+            self.prev_speed - max_step_down,
+            self.prev_speed + max_step_up,
+        )
+
+        return self.clamp(speed, 0.0, self.max_speed)
 
     def start_recovery(self, left_open, right_open):
         """Begin a reverse maneuver toward the more open side."""
@@ -248,6 +340,7 @@ class WallFollowNode(Node):
         right_dist = self.get_wall_distance(scan_msg, side='right')
         left_dist = self.get_wall_distance(scan_msg, side='left')
         front_min = self.get_sector_min(scan_msg, 0, 45)
+        front_speed_clear = self.get_sector_min(scan_msg, 0, 18)
         right_min = self.get_sector_min(scan_msg, -90, 70)
         left_min = self.get_sector_min(scan_msg, 90, 70)
         rear_min = self.get_sector_min(scan_msg, 180, 50)
@@ -268,6 +361,12 @@ class WallFollowNode(Node):
         # AckermannDrive 기준: +steering은 왼쪽, -steering은 오른쪽.
         # 왼쪽이 더 넓으면 오른쪽 벽이 가까운 상태다.
         center_error = left_dist - right_dist
+        if (
+            front_speed_clear > self.full_throttle_release_clear
+            and abs(center_error) < self.high_speed_error_deadband
+            and self.prev_speed > self.fast_corner_speed
+        ):
+            center_error = 0.0
 
         # 3. 시간 간격(dt) 계산
         now = self.get_clock().now()
@@ -301,43 +400,46 @@ class WallFollowNode(Node):
             steering += (
                 turn_to_open_side
                 * self.clamp(front_ratio, 0.0, 1.0)
-                * 0.28
+                * 0.34
             )
 
         # 조향각 제한 (-0.42 ~ 0.42 라디안 = 약 ±24도)
         steering = self.clamp(steering, -self.max_steer, self.max_steer)
 
-        # 5. 속도 결정 (조향각이 클수록 느리게)
+        # 5. 속도 결정 (조향각/전방 여유 기반 레이스용 프로파일)
         abs_steer = abs(steering)
         nearest_wall = min(left_min, right_min)
-        if front_min < self.front_stop_dist:
-            speed = 0.0
-        elif nearest_wall < self.hard_wall_dist:
-            speed = 0.2
-        elif front_min < self.front_slow_dist or abs_steer > 0.25:
-            speed = 0.35   # 코너/장애물 접근
-        elif abs_steer > 0.12:
-            speed = 0.6    # 완만한 코너
-        else:
-            speed = 0.9    # 직선
+        speed = self.get_race_speed(
+            front_speed_clear,
+            nearest_wall,
+            abs_steer,
+            dt,
+        )
 
         # 6. 드라이브 명령 발행
         self.publish_drive(steering, speed)
 
         # 7. 디버깅 로그
-        print(
-            f'R: {right_dist:.2f}m | L: {left_dist:.2f}m | '
-            f'Rmin: {right_min:.2f}m | Lmin: {left_min:.2f}m | '
-            f'Fmin: {front_min:.2f}m | Rear: {rear_min:.2f}m | '
-            f'center_error: {center_error:.2f} | '
-            f'safety_error: {safety_error:.2f} | '
-            f'steer: {math.degrees(steering):.1f}deg | '
-            f'speed: {speed:.1f}m/s',
-            flush=True
-        )
+        now_sec = self.now_sec()
+        if now_sec - self.last_debug_time >= self.debug_period:
+            print(
+                f'R: {right_dist:.2f}m | L: {left_dist:.2f}m | '
+                f'Rmin: {right_min:.2f}m | Lmin: {left_min:.2f}m | '
+                f'Fmin: {front_min:.2f}m | '
+                f'Fspd: {front_speed_clear:.2f}m | '
+                f'Rear: {rear_min:.2f}m | '
+                f'center_error: {center_error:.2f} | '
+                f'safety_error: {safety_error:.2f} | '
+                f'steer: {math.degrees(steering):.1f}deg | '
+                f'speed: {speed:.1f}m/s',
+                flush=True
+            )
+            self.last_debug_time = now_sec
 
         self.prev_error = center_error
         self.prev_time = now
+        self.prev_speed = speed
+        self.prev_abs_steer = abs_steer
 
     def stop(self):
         """노드 종료 시 차 정지"""
