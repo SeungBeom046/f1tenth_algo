@@ -10,6 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/launch', ['launch/real_launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -21,7 +22,9 @@ setup(
     entry_points={
         'console_scripts': [
             'wall_follow = my_algo.wall_follow:main',
+            'wall_follow_real = my_algo.wall_follow_real:main',
             'aeb = my_algo.aeb:main',
+            'aeb_real = my_algo.aeb_real:main',
         ],
     },
 )
