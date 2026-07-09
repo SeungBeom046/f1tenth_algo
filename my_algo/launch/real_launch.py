@@ -48,4 +48,12 @@ def generate_launch_description():
             name='aeb_real_node',
             output='screen',
         ),
+
+        # 4. rosbridge (Foxglove 연결용)
+        Node(
+            package='rosbridge_server',
+            executable='rosbridge_websocket',
+            name='rosbridge_websocket',
+            parameters=[{'port': 9090}],
+        ),
     ])

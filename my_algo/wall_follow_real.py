@@ -3,7 +3,8 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Float64
+from std_msgs.msg import Float64, Bool
+from nav_msgs.msg import Odometry
 import math
 
 
@@ -12,6 +13,7 @@ class WallFollowRealNode(Node):
     실차용 Wall Following 노드
     - LiDAR: Livox Mid-360 (PointCloud2 → LaserScan 변환 후 수신)
     - 제어: VESC (UART, /commands/motor/speed + /commands/servo/position)
+    - 조이스틱 제어 중이면 자동으로 양보
     """
 
     def __init__(self):
@@ -30,32 +32,35 @@ class WallFollowRealNode(Node):
         self.max_steer = 0.42
 
         # ============ 실차 변환 파라미터 ============
-        # 속도 변환: m/s → ERPM
-        # ERPM = 속도(m/s) * ERPM_GAIN
-        # ERPM_GAIN = (60 * 모터KV * 배터리전압) / (2π * 바퀴반경 * 기어비)
-        # → 실측으로 구하는 게 정확함 (아래 캘리브레이션 방법 참고)
-        self.ERPM_GAIN = 4614.0  # 실측 후 수정 필요
-
-        # 조향 변환: 라디안 → 서보 위치 (0.0 ~ 1.0)
-        # 0.5 = 중앙, 0.0 = 최대 우회전, 1.0 = 최대 좌회전
-        self.SERVO_CENTER = 0.5  # 실측 후 수정 필요
-        self.SERVO_GAIN = 0.4    # 실측 후 수정 필요
-        # ========================================
+        self.ERPM_GAIN = 4614.0   # 실측 후 수정 필요
+        self.SERVO_CENTER = 0.5   # 실측 후 수정 필요
+        self.SERVO_GAIN = 0.4     # 실측 후 수정 필요
+        # ==========================================
 
         self.prev_error = 0.0
         self.prev_time = self.get_clock().now()
 
-        # LiDAR 구독 (pointcloud_to_laserscan 변환 후)
+        # 조이스틱/자율주행 모드 상태
+        self.joy_active = False
+        self.auto_mode = False
+
+        # LiDAR 구독
         self.subscription = self.create_subscription(
             LaserScan, '/scan', self.scan_callback, 10)
 
-        # VESC 속도 명령 (ERPM)
+        # VESC 제어 발행
         self.speed_pub = self.create_publisher(
             Float64, '/commands/motor/speed', 10)
-
-        # VESC 조향 명령 (서보 위치 0.0~1.0)
         self.servo_pub = self.create_publisher(
             Float64, '/commands/servo/position', 10)
+
+        # 조이스틱 활성 상태 구독
+        self.joy_active_sub = self.create_subscription(
+            Bool, '/joy_active', self.joy_active_callback, 10)
+
+        # 자율주행 모드 구독
+        self.auto_mode_sub = self.create_subscription(
+            Bool, '/autonomous_mode', self.auto_mode_callback, 10)
 
         self.get_logger().info('Wall Follow Real Node 시작!')
         self.get_logger().info(
@@ -63,6 +68,22 @@ class WallFollowRealNode(Node):
             f'SERVO_CENTER: {self.SERVO_CENTER} | '
             f'SERVO_GAIN: {self.SERVO_GAIN}'
         )
+
+    # ============ 모드 콜백 ============
+
+    def joy_active_callback(self, msg):
+        """조이스틱 활성 상태 업데이트"""
+        self.joy_active = msg.data
+
+    def auto_mode_callback(self, msg):
+        """자율주행 모드 상태 업데이트"""
+        prev = self.auto_mode
+        self.auto_mode = msg.data
+        if self.auto_mode != prev:
+            mode_str = '자율주행 ON' if self.auto_mode else '자율주행 OFF'
+            print(f'[WallFollow] {mode_str}', flush=True)
+
+    # ============ LiDAR 유틸 ============
 
     def get_range(self, scan_msg, angle_deg):
         """특정 각도(도)의 LiDAR 거리값 반환"""
@@ -82,7 +103,7 @@ class WallFollowRealNode(Node):
         return max(scan_msg.range_min, min(r, scan_msg.range_max))
 
     def get_sector_min(self, scan_msg, center_deg, width_deg, step_deg=2):
-        """각도 구간 최솟값"""
+        """각도 구간 최솟값 반환"""
         start = center_deg - width_deg / 2.0
         end = center_deg + width_deg / 2.0
         min_r = scan_msg.range_max
@@ -93,14 +114,20 @@ class WallFollowRealNode(Node):
         return min_r
 
     def get_wall_distance(self, scan_msg, side='right'):
-        """벽까지 수직 거리 계산"""
+        """
+        벽까지 수직 거리 계산
+        두 빔(a, b)과 사이각도(theta)로 삼각함수 계산:
+        alpha = atan2(a*cos(θ) - b, a*sin(θ))
+        수직거리 D = b * cos(alpha)
+        lookahead: 코너에서 미리 반응
+        """
         theta = 50
         if side == 'right':
-            a = self.get_range(scan_msg, -90 + theta)
-            b = self.get_range(scan_msg, -90)
+            a = self.get_range(scan_msg, -90 + theta)  # -40도
+            b = self.get_range(scan_msg, -90)           # -90도
         else:
-            a = self.get_range(scan_msg, 90 - theta)
-            b = self.get_range(scan_msg, 90)
+            a = self.get_range(scan_msg, 90 - theta)   # +40도
+            b = self.get_range(scan_msg, 90)            # +90도
 
         theta_rad = math.radians(theta)
         alpha = math.atan2(
@@ -109,6 +136,12 @@ class WallFollowRealNode(Node):
         )
         dist = b * math.cos(alpha)
         return dist + self.lookahead * math.sin(alpha)
+
+    def clamp(self, value, low, high):
+        """값 범위 제한"""
+        return max(low, min(value, high))
+
+    # ============ VESC 제어 ============
 
     def publish_command(self, steering_rad, speed_ms):
         """
@@ -130,7 +163,7 @@ class WallFollowRealNode(Node):
 
         # 조향 변환 (라디안 → 서보 위치)
         servo_pos = self.SERVO_CENTER - steering_rad * self.SERVO_GAIN
-        servo_pos = max(0.0, min(1.0, servo_pos))  # 0.0 ~ 1.0 제한
+        servo_pos = self.clamp(servo_pos, 0.0, 1.0)
         servo_msg = Float64()
         servo_msg.data = servo_pos
         self.servo_pub.publish(servo_msg)
@@ -142,12 +175,18 @@ class WallFollowRealNode(Node):
         self.speed_pub.publish(speed_msg)
 
         servo_msg = Float64()
-        servo_msg.data = self.SERVO_CENTER  # 조향 중앙으로
+        servo_msg.data = self.SERVO_CENTER
         self.servo_pub.publish(servo_msg)
-        print('차 정지!')
+        print('[WallFollow] 차 정지!', flush=True)
+
+    # ============ 메인 콜백 ============
 
     def scan_callback(self, scan_msg):
         """LiDAR 데이터 → VESC 제어 명령 변환"""
+
+        # 조이스틱 제어 중이거나 자율주행 모드 아니면 스킵
+        if self.joy_active or not self.auto_mode:
+            return
 
         # 1. 거리 측정
         right_dist = self.get_wall_distance(scan_msg, side='right')
@@ -157,6 +196,7 @@ class WallFollowRealNode(Node):
         left_min = self.get_sector_min(scan_msg, 90, 70)
 
         # 2. 오차 계산 (중앙 유지)
+        # left > right → 오른쪽 벽이 가까움 → 왼쪽으로 꺾어야 함
         center_error = left_dist - right_dist
 
         # 3. 시간 간격
@@ -167,7 +207,7 @@ class WallFollowRealNode(Node):
         # 4. PD 제어
         p_term = self.kp * center_error
         derivative = (center_error - self.prev_error) / dt
-        derivative = max(-5.0, min(5.0, derivative))
+        derivative = self.clamp(derivative, -5.0, 5.0)
         d_term = self.kd * derivative
 
         # 5. 벽 안전거리 보정
@@ -184,25 +224,26 @@ class WallFollowRealNode(Node):
             turn_to_open = 1.0 if left_min > right_min else -1.0
             ratio = (self.front_slow_dist - front_min) / (
                 self.front_slow_dist - self.front_stop_dist)
-            steering += turn_to_open * max(0.0, min(1.0, ratio)) * 0.28
+            steering += turn_to_open * self.clamp(ratio, 0.0, 1.0) * 0.28
 
         # 조향각 제한
-        steering = max(-self.max_steer, min(self.max_steer, steering))
+        steering = self.clamp(steering, -self.max_steer, self.max_steer)
 
-        # 7. 속도 결정 (실차는 시뮬보다 훨씬 보수적으로)
+        # 7. 속도 결정
+        # ⚠️ 실차는 시뮬보다 훨씬 보수적으로 시작!
         abs_steer = abs(steering)
         nearest_wall = min(left_min, right_min)
 
         if front_min < self.front_stop_dist:
-            speed = 0.0   # 전방 장애물 → 즉시 정지
+            speed = 0.0    # 전방 장애물 → 즉시 정지
         elif nearest_wall < self.hard_wall_dist:
-            speed = 0.3   # 벽 너무 가까움 → 극저속
+            speed = 0.3    # 벽 너무 가까움 → 극저속
         elif front_min < self.front_slow_dist or abs_steer > 0.25:
-            speed = 0.5   # 코너 → 저속
+            speed = 0.5    # 코너 → 저속
         elif abs_steer > 0.12:
-            speed = 0.8   # 완만한 코너 → 중속
+            speed = 0.8    # 완만한 코너 → 중속
         else:
-            speed = 1.2   # 직선 → 중고속
+            speed = 1.2    # 직선 → 중고속
             # ⚠️ 처음엔 1.2 이상 올리지 말 것!
             # 실차 테스트 안정 확인 후 조금씩 올리기
 

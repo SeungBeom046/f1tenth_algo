@@ -25,6 +25,7 @@ setup(
             'wall_follow_real = my_algo.wall_follow_real:main',
             'aeb = my_algo.aeb:main',
             'aeb_real = my_algo.aeb_real:main',
+            'joy_controller = my_algo.joy_controller:main',
         ],
     },
 )
