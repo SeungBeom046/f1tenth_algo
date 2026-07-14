@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float64, Bool
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import math
 
 from my_algo.vesc_utils import (
@@ -51,9 +52,16 @@ class WallFollowRealNode(Node):
         self.joy_active = False
         self.auto_mode = False
 
-        # LiDAR 구독
+        # QoS 설정 (pointcloud_to_laserscan과 호환)
+        qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+
+        # LiDAR 구독 (QoS 적용)
         self.subscription = self.create_subscription(
-            LaserScan, '/scan', self.scan_callback, 10)
+            LaserScan, '/scan', self.scan_callback, qos)
 
         # VESC 제어 발행
         self.speed_pub = self.create_publisher(
@@ -158,13 +166,14 @@ class WallFollowRealNode(Node):
 
         [속도 변환]
         ERPM = speed(m/s) * ERPM_GAIN
+        최소 구동 속도 적용 (모터 탈조 방지)
 
         [조향 변환]
         servo = SERVO_CENTER - steering_rad * SERVO_GAIN
         (+steering = 왼쪽, -steering = 오른쪽)
         servo 범위: 0.0(우) ~ 0.5(중앙) ~ 1.0(좌)
         """
-        # 속도 변환 (m/s → ERPM)
+        # 속도 변환 (m/s → ERPM, 최소 구동속도 적용)
         adjusted_speed_ms = apply_min_drive_speed(speed_ms)
         erpm = speed_to_erpm(adjusted_speed_ms)
         speed_msg = Float64()
@@ -254,8 +263,6 @@ class WallFollowRealNode(Node):
             speed = 0.8    # 완만한 코너 → 중속
         else:
             speed = 1.2    # 직선 → 중고속
-            # ⚠️ 처음엔 1.2 이상 올리지 말 것!
-            # 실차 테스트 안정 확인 후 조금씩 올리기
 
         # 8. VESC에 명령 발행
         self.publish_command(steering, speed)

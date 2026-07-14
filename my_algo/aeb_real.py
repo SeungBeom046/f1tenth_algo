@@ -5,6 +5,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import math
 
 
@@ -25,9 +26,16 @@ class AEBRealNode(Node):
 
         self.current_speed = 0.0
 
-        # LiDAR 구독
+        # QoS 설정 (pointcloud_to_laserscan과 호환)
+        qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+
+        # LiDAR 구독 (QoS 적용)
         self.scan_sub = self.create_subscription(
-            LaserScan, '/scan', self.scan_callback, 10)
+            LaserScan, '/scan', self.scan_callback, qos)
 
         # 실차 오도메트리 구독 (VESC에서 발행)
         self.odom_sub = self.create_subscription(
@@ -89,7 +97,6 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        # 종료 시 정지
         stop_msg = Float64()
         stop_msg.data = 0.0
         node.speed_pub.publish(stop_msg)
