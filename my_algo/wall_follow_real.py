@@ -34,8 +34,8 @@ class WallFollowRealNode(Node):
         self.target_dist = 1.0
         self.min_wall_dist = 0.8
         self.hard_wall_dist = 0.45
-        self.front_slow_dist = 1.8
-        self.front_stop_dist = 0.75
+        self.front_slow_dist = 1.0
+        self.front_stop_dist = 0.3
         self.lookahead = 0.65
         self.max_steer = 0.42
 
