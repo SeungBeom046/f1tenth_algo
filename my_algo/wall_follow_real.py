@@ -4,8 +4,15 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float64, Bool
-from nav_msgs.msg import Odometry
 import math
+
+from my_algo.vesc_utils import (
+    ERPM_GAIN,
+    MIN_DRIVE_ERPM,
+    MIN_DRIVE_SPEED_MS,
+    apply_min_drive_speed,
+    speed_to_erpm,
+)
 
 
 class WallFollowRealNode(Node):
@@ -32,7 +39,7 @@ class WallFollowRealNode(Node):
         self.max_steer = 0.42
 
         # ============ 실차 변환 파라미터 ============
-        self.ERPM_GAIN = 4614.0   # 실측 후 수정 필요
+        self.ERPM_GAIN = ERPM_GAIN
         self.SERVO_CENTER = 0.5   # 실측 후 수정 필요
         self.SERVO_GAIN = 0.4     # 실측 후 수정 필요
         # ==========================================
@@ -65,6 +72,8 @@ class WallFollowRealNode(Node):
         self.get_logger().info('Wall Follow Real Node 시작!')
         self.get_logger().info(
             f'ERPM_GAIN: {self.ERPM_GAIN} | '
+            f'MIN_DRIVE: {MIN_DRIVE_SPEED_MS:.2f}m/s '
+            f'({MIN_DRIVE_ERPM:.0f} ERPM) | '
             f'SERVO_CENTER: {self.SERVO_CENTER} | '
             f'SERVO_GAIN: {self.SERVO_GAIN}'
         )
@@ -156,7 +165,8 @@ class WallFollowRealNode(Node):
         servo 범위: 0.0(우) ~ 0.5(중앙) ~ 1.0(좌)
         """
         # 속도 변환 (m/s → ERPM)
-        erpm = speed_ms * self.ERPM_GAIN
+        adjusted_speed_ms = apply_min_drive_speed(speed_ms)
+        erpm = speed_to_erpm(adjusted_speed_ms)
         speed_msg = Float64()
         speed_msg.data = erpm
         self.speed_pub.publish(speed_msg)
@@ -237,7 +247,7 @@ class WallFollowRealNode(Node):
         if front_min < self.front_stop_dist:
             speed = 0.0    # 전방 장애물 → 즉시 정지
         elif nearest_wall < self.hard_wall_dist:
-            speed = 0.3    # 벽 너무 가까움 → 극저속
+            speed = 0.4    # 벽 너무 가까움 → 최소 안정 구동속도
         elif front_min < self.front_slow_dist or abs_steer > 0.25:
             speed = 0.5    # 코너 → 저속
         elif abs_steer > 0.12:
@@ -249,6 +259,7 @@ class WallFollowRealNode(Node):
 
         # 8. VESC에 명령 발행
         self.publish_command(steering, speed)
+        adjusted_speed = apply_min_drive_speed(speed)
 
         # 9. 로그
         print(
@@ -256,8 +267,8 @@ class WallFollowRealNode(Node):
             f'Fmin: {front_min:.2f}m | '
             f'center_err: {center_error:.2f} | '
             f'steer: {math.degrees(steering):.1f}deg | '
-            f'speed: {speed:.1f}m/s | '
-            f'ERPM: {speed * self.ERPM_GAIN:.0f} | '
+            f'speed: {adjusted_speed:.1f}m/s | '
+            f'ERPM: {speed_to_erpm(adjusted_speed):.0f} | '
             f'servo: {self.SERVO_CENTER - steering * self.SERVO_GAIN:.3f}',
             flush=True
         )

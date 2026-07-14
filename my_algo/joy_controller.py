@@ -4,7 +4,14 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Float64, Bool
-import math
+
+from my_algo.vesc_utils import (
+    ERPM_GAIN,
+    MIN_DRIVE_ERPM,
+    MIN_DRIVE_SPEED_MS,
+    apply_min_drive_speed,
+    speed_to_erpm,
+)
 
 
 class JoyControllerNode(Node):
@@ -30,7 +37,9 @@ class JoyControllerNode(Node):
 
         # ============ 튜닝 파라미터 ============
         self.max_speed = 2.0        # 조이스틱 최대 속도 (m/s)
-        self.ERPM_GAIN = 4614.0     # wall_follow_real.py와 동일하게
+        self.ERPM_GAIN = ERPM_GAIN
+        self.speed_deadband = 0.05   # 스틱 중립 노이즈는 정지로 처리
+        self.max_steer = 0.42
         self.SERVO_CENTER = 0.5
         self.SERVO_GAIN = 0.4
         # ======================================
@@ -66,7 +75,9 @@ class JoyControllerNode(Node):
             '  왼쪽 스틱 상하: 속도\n'
             '  오른쪽 스틱 좌우: 조향\n'
             '  RB: 자율주행 모드 토글\n'
-            '  B: 긴급 정지'
+            '  B: 긴급 정지\n'
+            f'  최소 구동: {MIN_DRIVE_SPEED_MS:.2f}m/s '
+            f'({MIN_DRIVE_ERPM:.0f} ERPM)'
         )
 
     def joy_callback(self, msg):
@@ -122,12 +133,15 @@ class JoyControllerNode(Node):
             steer_axis = msg.axes[3]    # 오른쪽 스틱 좌우
 
             # 속도 변환 (m/s → ERPM)
-            speed_ms = speed_axis * self.max_speed
-            erpm = speed_ms * self.ERPM_GAIN
+            requested_speed_ms = speed_axis * self.max_speed
+            speed_ms = apply_min_drive_speed(
+                requested_speed_ms,
+                deadband=self.speed_deadband
+            )
+            erpm = speed_to_erpm(speed_ms)
 
             # 조향 변환 (라디안 → 서보 위치)
-            steering_rad = steer_axis * self.max_steer if hasattr(
-                self, 'max_steer') else steer_axis * 0.42
+            steering_rad = steer_axis * self.max_steer
             servo_pos = self.SERVO_CENTER - steering_rad * self.SERVO_GAIN
             servo_pos = max(0.0, min(1.0, servo_pos))
 
