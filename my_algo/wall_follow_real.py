@@ -34,9 +34,11 @@ class WallFollowRealNode(Node):
         self.target_dist = 1.0
         self.min_wall_dist = 0.8
         self.hard_wall_dist = 0.45
-        self.front_slow_dist = 1.0
-        self.front_stop_dist = 0.45
-        self.close_obstacle_dist = 0.35
+        self.front_slow_dist = 0.80
+        self.front_stop_dist = 0.20
+        self.close_obstacle_dist = 0.20
+        self.lidar_to_bumper_dist = 0.10
+        self.front_decel_clearance = 0.30
         self.front_clear_dist = 2.0
         self.lookahead = 0.65
         self.max_steer = 0.28
@@ -44,7 +46,10 @@ class WallFollowRealNode(Node):
         self.steering_filter_alpha = 0.25
         self.open_space_erpm = 15000.0
         self.open_space_speed = self.open_space_erpm / ERPM_GAIN
-        self.speed_ramp_rate = 1.0
+        self.min_race_erpm = 1850.0
+        self.min_race_speed = max(0.5, self.min_race_erpm / ERPM_GAIN)
+        self.base_race_speed = 2.0
+        self.speed_ramp_rate = 2.0
         # LiDAR is mounted 90 deg clockwise from the datasheet frame:
         # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
         self.lidar_yaw_offset_deg = 90.0
@@ -176,6 +181,10 @@ class WallFollowRealNode(Node):
 
         return min_r if found else scan_msg.range_max
 
+    def get_bumper_clearance(self, scan_range):
+        """LiDAR 거리값을 범퍼 기준 여유거리로 변환"""
+        return max(0.0, scan_range - self.lidar_to_bumper_dist)
+
     def get_wall_distance(self, scan_msg, side='right'):
         """
         벽까지 수직 거리 계산
@@ -225,6 +234,11 @@ class WallFollowRealNode(Node):
             self.current_speed_cmd + max_step,
             target_speed
         )
+        if (
+            target_speed >= self.min_race_speed
+            and 0.0 < self.current_speed_cmd < self.min_race_speed
+        ):
+            self.current_speed_cmd = self.min_race_speed
         return self.current_speed_cmd
 
     # ============ VESC 제어 ============
@@ -280,10 +294,14 @@ class WallFollowRealNode(Node):
         right_dist = self.get_wall_distance(scan_msg, side='right')
         left_dist = self.get_wall_distance(scan_msg, side='left')
         front_min = self.get_sector_min(scan_msg, 0, 50)
+        front_corridor_min = self.get_sector_min(scan_msg, 0, 30)
+        front_guard_min = self.get_sector_min(scan_msg, 0, 120)
         right_min = self.get_sector_min(scan_msg, -90, 70)
         left_min = self.get_sector_min(scan_msg, 90, 70)
-        front_blocked = front_min <= max(
-            self.front_stop_dist, self.close_obstacle_dist)
+        front_clearance = self.get_bumper_clearance(front_min)
+        corridor_clearance = self.get_bumper_clearance(front_corridor_min)
+        guard_clearance = self.get_bumper_clearance(front_guard_min)
+        front_blocked = guard_clearance <= self.front_stop_dist
 
         # 2. 오차 계산 (중앙 유지)
         # left > right → 오른쪽 벽이 가까움 → 왼쪽으로 꺾어야 함
@@ -310,9 +328,9 @@ class WallFollowRealNode(Node):
         steering = p_term + d_term + self.safety_kp * safety_error
 
         # 6. 전방 장애물 보정
-        if front_min < self.front_slow_dist:
+        if corridor_clearance < self.front_slow_dist:
             turn_to_open = 1.0 if left_min > right_min else -1.0
-            ratio = (self.front_slow_dist - front_min) / (
+            ratio = (self.front_slow_dist - corridor_clearance) / (
                 self.front_slow_dist - self.front_stop_dist)
             steering += turn_to_open * self.clamp(ratio, 0.0, 1.0) * 0.12
 
@@ -326,20 +344,19 @@ class WallFollowRealNode(Node):
         # 7. 속도 결정
         # ⚠️ 실차는 시뮬보다 훨씬 보수적으로 시작!
         abs_steer = abs(steering)
-        nearest_wall = min(left_min, right_min)
 
         if front_blocked:
             target_speed = 0.0    # 전방 장애물 → 즉시 정지
-        elif nearest_wall < self.hard_wall_dist:
-            target_speed = 0.4    # 벽 너무 가까움 → 최소 안정 구동속도
-        elif front_min < self.front_slow_dist or abs_steer > 0.25:
-            target_speed = 0.5    # 코너 → 저속
+        elif corridor_clearance <= self.front_decel_clearance:
+            target_speed = self.min_race_speed  # 전방 30cm → 감속, 정지는 AEB가 담당
+        elif corridor_clearance < self.front_slow_dist or abs_steer > 0.25:
+            target_speed = max(self.min_race_speed, 0.9)    # 코너/근거리 → 저속
         elif abs_steer > 0.12:
-            target_speed = 0.8    # 완만한 코너 → 중속
-        elif front_min >= self.front_clear_dist:
+            target_speed = max(self.min_race_speed, 1.4)    # 완만한 코너 → 중속
+        elif front_clearance >= self.front_clear_dist:
             target_speed = self.open_space_speed  # 전방 2m clear → 15000 ERPM까지
         else:
-            target_speed = 1.2    # 직선 → 중고속
+            target_speed = self.base_race_speed    # 기본 주행 속도
 
         speed = self.ramp_speed(target_speed, dt)
 
@@ -351,6 +368,9 @@ class WallFollowRealNode(Node):
         print(
             f'R: {right_dist:.2f}m | L: {left_dist:.2f}m | '
             f'Fmin: {front_min:.2f}m | '
+            f'Fclr: {front_clearance:.2f}m | '
+            f'Cclr: {corridor_clearance:.2f}m | '
+            f'Gclr: {guard_clearance:.2f}m | '
             f'center_err: {center_error:.2f} | '
             f'steer: {math.degrees(steering):.1f}deg | '
             f'target: {target_speed:.1f}m/s | '

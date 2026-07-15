@@ -21,11 +21,15 @@ class AEBRealNode(Node):
         super().__init__('aeb_real_node')
 
         # ============ 튜닝 파라미터 ============
-        self.ttc_threshold = 0.5   # TTC 임계값 (초)
-        self.min_speed = 0.1       # 이 속도 이하면 AEB 비활성화
-        self.close_obstacle_dist = 0.35
-        self.front_angle_limit = math.radians(35.0)
-        self.brake_hold_sec = 0.5
+        self.ttc_threshold = 0.5   # 보존용 파라미터. 현재 실차 AEB는 근거리 기준만 사용.
+        self.min_speed = 0.1
+        self.lidar_to_bumper_dist = 0.10
+        self.close_obstacle_clearance = 0.20
+        self.close_obstacle_dist = (
+            self.close_obstacle_clearance + self.lidar_to_bumper_dist
+        )
+        self.front_angle_limit = math.radians(60.0)
+        self.brake_hold_sec = 0.2
         # LiDAR is mounted 90 deg clockwise from the datasheet frame:
         # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
         self.lidar_yaw_offset = math.radians(90.0)
@@ -80,9 +84,7 @@ class AEBRealNode(Node):
 
     def scan_callback(self, scan_msg):
         """
-        TTC 계산 후 긴급제동 판단
-        TTC = 거리 / 속도
-        TTC < 임계값이면 즉시 제동
+        주행방향 정면 120도 안에서 범퍼 기준 20cm 이하 장애물만 긴급제동.
         """
         angle = scan_msg.angle_min
         for r in scan_msg.ranges:
@@ -96,31 +98,15 @@ class AEBRealNode(Node):
                 abs(vehicle_angle) <= self.front_angle_limit
                 and r <= self.close_obstacle_dist
             ):
+                clearance = max(0.0, r - self.lidar_to_bumper_dist)
                 self.emergency_brake()
                 print(
                     f'⚠️ AEB 근거리 제동! 거리: {r:.2f}m | '
+                    f'범퍼여유: {clearance:.2f}m | '
                     f'속도: {self.current_speed:.2f}m/s',
                     flush=True
                 )
                 return
-
-            if abs(self.current_speed) < self.min_speed:
-                angle += scan_msg.angle_increment
-                continue
-
-            speed_component = self.current_speed * math.cos(vehicle_angle)
-
-            if speed_component > 0:
-                ttc = r / speed_component
-                if ttc <= self.ttc_threshold:
-                    self.emergency_brake()
-                    print(
-                        f'⚠️ AEB 작동! TTC: {ttc:.2f}s | '
-                        f'거리: {r:.2f}m | '
-                        f'속도: {self.current_speed:.2f}m/s',
-                        flush=True
-                    )
-                    return
 
             angle += scan_msg.angle_increment
 
