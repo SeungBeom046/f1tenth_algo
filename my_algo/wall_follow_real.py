@@ -38,8 +38,10 @@ class WallFollowRealNode(Node):
         self.front_stop_dist = 0.20
         self.close_obstacle_dist = 0.20
         self.lidar_to_bumper_dist = 0.10
-        self.front_decel_clearance = 0.30
+        self.front_decel_clearance = 0.25
         self.front_clear_dist = 2.0
+        self.corner_lookahead_dist = 1.4
+        self.course_steer_gain = 0.32
         self.lookahead = 0.65
         self.max_steer = 0.28
         self.steering_deadband = 0.04
@@ -156,17 +158,11 @@ class WallFollowRealNode(Node):
         diff = math.atan2(math.sin(angle - center), math.cos(angle - center))
         return abs(diff) <= half_width
 
-    def get_sector_min(self, scan_msg, center_deg, width_deg):
-        """
-        각도 구간 최솟값 반환.
-
-        모든 LaserScan bin을 검사해서 2도 샘플링 때문에 작은/가까운 장애물을
-        건너뛰지 않도록 한다. range_min보다 작은 유효값도 가까운 장애물로 본다.
-        """
+    def get_sector_values(self, scan_msg, center_deg, width_deg):
+        """차량 기준 각도 구간의 유효 LiDAR 거리값 목록 반환"""
         center = self.vehicle_to_lidar_angle(center_deg)
         half_width = math.radians(width_deg / 2.0)
-        min_r = scan_msg.range_max
-        found = False
+        values = []
 
         for i, r in enumerate(scan_msg.ranges):
             angle = scan_msg.angle_min + i * scan_msg.angle_increment
@@ -176,10 +172,36 @@ class WallFollowRealNode(Node):
             if r is None:
                 continue
             if r <= scan_msg.range_max:
-                min_r = min(min_r, r)
-                found = True
+                values.append(r)
 
-        return min_r if found else scan_msg.range_max
+        return values
+
+    def get_sector_min(self, scan_msg, center_deg, width_deg):
+        """
+        각도 구간 최솟값 반환.
+
+        모든 LaserScan bin을 검사해서 2도 샘플링 때문에 작은/가까운 장애물을
+        건너뛰지 않도록 한다. range_min보다 작은 유효값도 가까운 장애물로 본다.
+        """
+        values = self.get_sector_values(scan_msg, center_deg, width_deg)
+        return min(values) if values else scan_msg.range_max
+
+    def get_sector_percentile(self, scan_msg, center_deg, width_deg, percentile):
+        """작은 노이즈 점 하나에 과민해지지 않는 구간 거리값 반환"""
+        values = self.get_sector_values(scan_msg, center_deg, width_deg)
+        if not values:
+            return scan_msg.range_max
+        values.sort()
+        index = int((len(values) - 1) * self.clamp(percentile, 0.0, 1.0))
+        return values[index]
+
+    def get_sector_mean(self, scan_msg, center_deg, width_deg, cap_dist=3.0):
+        """열린 방향 판단용 평균 거리값 반환"""
+        values = self.get_sector_values(scan_msg, center_deg, width_deg)
+        if not values:
+            return scan_msg.range_max
+        capped = [min(v, cap_dist) for v in values]
+        return sum(capped) / len(capped)
 
     def get_bumper_clearance(self, scan_range):
         """LiDAR 거리값을 범퍼 기준 여유거리로 변환"""
@@ -295,13 +317,16 @@ class WallFollowRealNode(Node):
         left_dist = self.get_wall_distance(scan_msg, side='left')
         front_min = self.get_sector_min(scan_msg, 0, 50)
         front_corridor_min = self.get_sector_min(scan_msg, 0, 30)
-        front_guard_min = self.get_sector_min(scan_msg, 0, 120)
+        front_corridor_p20 = self.get_sector_percentile(scan_msg, 0, 30, 0.20)
+        front_p20 = self.get_sector_percentile(scan_msg, 0, 60, 0.20)
+        left_course_open = self.get_sector_mean(scan_msg, 35, 55)
+        right_course_open = self.get_sector_mean(scan_msg, -35, 55)
         right_min = self.get_sector_min(scan_msg, -90, 70)
         left_min = self.get_sector_min(scan_msg, 90, 70)
         front_clearance = self.get_bumper_clearance(front_min)
         corridor_clearance = self.get_bumper_clearance(front_corridor_min)
-        guard_clearance = self.get_bumper_clearance(front_guard_min)
-        front_blocked = guard_clearance <= self.front_stop_dist
+        corridor_p20_clearance = self.get_bumper_clearance(front_corridor_p20)
+        front_p20_clearance = self.get_bumper_clearance(front_p20)
 
         # 2. 오차 계산 (중앙 유지)
         # left > right → 오른쪽 벽이 가까움 → 왼쪽으로 꺾어야 함
@@ -327,33 +352,37 @@ class WallFollowRealNode(Node):
 
         steering = p_term + d_term + self.safety_kp * safety_error
 
-        # 6. 전방 장애물 보정
-        if corridor_clearance < self.front_slow_dist:
-            turn_to_open = 1.0 if left_min > right_min else -1.0
-            ratio = (self.front_slow_dist - corridor_clearance) / (
-                self.front_slow_dist - self.front_stop_dist)
-            steering += turn_to_open * self.clamp(ratio, 0.0, 1.0) * 0.12
+        # 6. 전방 코스 보정: 코너에서는 더 열린 방향으로 확실히 조향
+        course_bias = (
+            (left_course_open - right_course_open)
+            / max(left_course_open + right_course_open, 1e-3)
+        )
+        if corridor_p20_clearance < self.corner_lookahead_dist:
+            ratio = (self.corner_lookahead_dist - corridor_p20_clearance) / (
+                self.corner_lookahead_dist - self.front_decel_clearance)
+            steering += (
+                self.clamp(course_bias, -1.0, 1.0)
+                * self.clamp(ratio, 0.0, 1.0)
+                * self.course_steer_gain
+            )
 
         # 조향각 제한 + 필터
         steering = self.clamp(steering, -self.max_steer, self.max_steer)
-        if front_blocked:
-            steering = 0.0
-        else:
-            steering = self.apply_steering_filter(steering)
+        steering = self.apply_steering_filter(steering)
 
         # 7. 속도 결정
         # ⚠️ 실차는 시뮬보다 훨씬 보수적으로 시작!
         abs_steer = abs(steering)
 
-        if front_blocked:
-            target_speed = 0.0    # 전방 장애물 → 즉시 정지
-        elif corridor_clearance <= self.front_decel_clearance:
+        if corridor_clearance <= self.front_stop_dist:
+            target_speed = self.min_race_speed  # 정지는 AEB가 담당, 주행 노드는 조향 유지
+        elif corridor_p20_clearance <= self.front_decel_clearance:
             target_speed = self.min_race_speed  # 전방 30cm → 감속, 정지는 AEB가 담당
-        elif corridor_clearance < self.front_slow_dist or abs_steer > 0.25:
+        elif corridor_p20_clearance < self.front_slow_dist or abs_steer > 0.25:
             target_speed = max(self.min_race_speed, 0.9)    # 코너/근거리 → 저속
         elif abs_steer > 0.12:
             target_speed = max(self.min_race_speed, 1.4)    # 완만한 코너 → 중속
-        elif front_clearance >= self.front_clear_dist:
+        elif front_p20_clearance >= self.front_clear_dist:
             target_speed = self.open_space_speed  # 전방 2m clear → 15000 ERPM까지
         else:
             target_speed = self.base_race_speed    # 기본 주행 속도
@@ -370,7 +399,8 @@ class WallFollowRealNode(Node):
             f'Fmin: {front_min:.2f}m | '
             f'Fclr: {front_clearance:.2f}m | '
             f'Cclr: {corridor_clearance:.2f}m | '
-            f'Gclr: {guard_clearance:.2f}m | '
+            f'Cp20: {corridor_p20_clearance:.2f}m | '
+            f'Lp: {left_course_open:.2f}m | Rp: {right_course_open:.2f}m | '
             f'center_err: {center_error:.2f} | '
             f'steer: {math.degrees(steering):.1f}deg | '
             f'target: {target_speed:.1f}m/s | '
