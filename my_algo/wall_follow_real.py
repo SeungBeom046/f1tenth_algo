@@ -35,9 +35,13 @@ class WallFollowRealNode(Node):
         self.min_wall_dist = 0.8
         self.hard_wall_dist = 0.45
         self.front_slow_dist = 1.0
-        self.front_stop_dist = 0.3
+        self.front_stop_dist = 0.45
+        self.close_obstacle_dist = 0.35
         self.lookahead = 0.65
         self.max_steer = 0.42
+        # LiDAR is mounted 90 deg clockwise from the datasheet frame:
+        # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
+        self.lidar_yaw_offset_deg = 90.0
 
         # ============ 실차 변환 파라미터 ============
         self.ERPM_GAIN = ERPM_GAIN
@@ -102,33 +106,67 @@ class WallFollowRealNode(Node):
 
     # ============ LiDAR 유틸 ============
 
-    def get_range(self, scan_msg, angle_deg):
-        """특정 각도(도)의 LiDAR 거리값 반환"""
-        angle_rad = math.radians(angle_deg)
+    def vehicle_to_lidar_angle(self, vehicle_angle_deg):
+        """차량 기준 각도(전방 0도)를 실제 LiDAR scan 각도로 변환"""
+        return math.radians(vehicle_angle_deg + self.lidar_yaw_offset_deg)
+
+    def normalize_scan_angle(self, scan_msg, angle_rad):
+        """scan 범위 안으로 각도를 정규화"""
         span = scan_msg.angle_max - scan_msg.angle_min
         if span >= 2.0 * math.pi - 0.01:
-            angle_rad = (
-                (angle_rad - scan_msg.angle_min) % span
-            ) + scan_msg.angle_min
+            return ((angle_rad - scan_msg.angle_min) % span) + scan_msg.angle_min
+        return angle_rad
+
+    def sanitize_range(self, scan_msg, r):
+        """LiDAR 값을 장애물 판단에 안전한 거리값으로 변환"""
+        if math.isnan(r) or math.isinf(r):
+            return None
+        if r <= 0.0:
+            return 0.0
+        return min(r, scan_msg.range_max)
+
+    def get_range(self, scan_msg, angle_deg):
+        """특정 각도(도)의 LiDAR 거리값 반환"""
+        angle_rad = self.normalize_scan_angle(
+            scan_msg, self.vehicle_to_lidar_angle(angle_deg))
 
         index = int((angle_rad - scan_msg.angle_min)
                     / scan_msg.angle_increment)
         index = max(0, min(index, len(scan_msg.ranges) - 1))
-        r = scan_msg.ranges[index]
-        if math.isnan(r) or math.isinf(r):
+        r = self.sanitize_range(scan_msg, scan_msg.ranges[index])
+        if r is None:
             return scan_msg.range_max
-        return max(scan_msg.range_min, min(r, scan_msg.range_max))
+        return r
 
-    def get_sector_min(self, scan_msg, center_deg, width_deg, step_deg=2):
-        """각도 구간 최솟값 반환"""
-        start = center_deg - width_deg / 2.0
-        end = center_deg + width_deg / 2.0
+    def angle_in_sector(self, angle, center, half_width):
+        """라디안 각도가 섹터 안에 있는지 확인"""
+        diff = math.atan2(math.sin(angle - center), math.cos(angle - center))
+        return abs(diff) <= half_width
+
+    def get_sector_min(self, scan_msg, center_deg, width_deg):
+        """
+        각도 구간 최솟값 반환.
+
+        모든 LaserScan bin을 검사해서 2도 샘플링 때문에 작은/가까운 장애물을
+        건너뛰지 않도록 한다. range_min보다 작은 유효값도 가까운 장애물로 본다.
+        """
+        center = self.vehicle_to_lidar_angle(center_deg)
+        half_width = math.radians(width_deg / 2.0)
         min_r = scan_msg.range_max
-        angle = start
-        while angle <= end:
-            min_r = min(min_r, self.get_range(scan_msg, angle))
-            angle += step_deg
-        return min_r
+        found = False
+
+        for i, r in enumerate(scan_msg.ranges):
+            angle = scan_msg.angle_min + i * scan_msg.angle_increment
+            if not self.angle_in_sector(angle, center, half_width):
+                continue
+            r = self.sanitize_range(scan_msg, r)
+            if r is None:
+                continue
+            if r <= scan_msg.range_max:
+                min_r = min(min_r, r)
+                found = True
+
+        return min_r if found else scan_msg.range_max
 
     def get_wall_distance(self, scan_msg, side='right'):
         """
@@ -210,7 +248,7 @@ class WallFollowRealNode(Node):
         # 1. 거리 측정
         right_dist = self.get_wall_distance(scan_msg, side='right')
         left_dist = self.get_wall_distance(scan_msg, side='left')
-        front_min = self.get_sector_min(scan_msg, 0, 40)
+        front_min = self.get_sector_min(scan_msg, 0, 50)
         right_min = self.get_sector_min(scan_msg, -90, 70)
         left_min = self.get_sector_min(scan_msg, 90, 70)
 
@@ -253,7 +291,7 @@ class WallFollowRealNode(Node):
         abs_steer = abs(steering)
         nearest_wall = min(left_min, right_min)
 
-        if front_min < self.front_stop_dist:
+        if front_min <= max(self.front_stop_dist, self.close_obstacle_dist):
             speed = 0.0    # 전방 장애물 → 즉시 정지
         elif nearest_wall < self.hard_wall_dist:
             speed = 0.4    # 벽 너무 가까움 → 최소 안정 구동속도

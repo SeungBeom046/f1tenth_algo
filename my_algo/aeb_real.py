@@ -1,6 +1,7 @@
 """AEB (Automatic Emergency Braking) ROS2 node for real F1TENTH car."""
 
 import rclpy
+from rclpy.duration import Duration
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float64
@@ -22,9 +23,16 @@ class AEBRealNode(Node):
         # ============ 튜닝 파라미터 ============
         self.ttc_threshold = 0.5   # TTC 임계값 (초)
         self.min_speed = 0.1       # 이 속도 이하면 AEB 비활성화
+        self.close_obstacle_dist = 0.35
+        self.front_angle_limit = math.radians(35.0)
+        self.brake_hold_sec = 0.5
+        # LiDAR is mounted 90 deg clockwise from the datasheet frame:
+        # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
+        self.lidar_yaw_offset = math.radians(90.0)
         # ======================================
 
         self.current_speed = 0.0
+        self.brake_until = self.get_clock().now()
 
         # QoS 설정 (pointcloud_to_laserscan과 호환)
         qos = QoSProfile(
@@ -44,6 +52,7 @@ class AEBRealNode(Node):
         # VESC 속도 명령
         self.speed_pub = self.create_publisher(
             Float64, '/commands/motor/speed', 10)
+        self.brake_timer = self.create_timer(0.02, self.brake_timer_callback)
 
         self.get_logger().info('AEB Real Node 시작!')
 
@@ -51,26 +60,59 @@ class AEBRealNode(Node):
         """현재 속도 업데이트"""
         self.current_speed = msg.twist.twist.linear.x
 
+    def brake_timer_callback(self):
+        """브레이크 래치 중이면 wall_follow 명령을 덮어쓰도록 0 속도를 반복 발행"""
+        if self.get_clock().now() < self.brake_until:
+            self.publish_zero_speed()
+
+    def lidar_to_vehicle_angle(self, lidar_angle):
+        """실제 LiDAR scan 각도를 차량 기준 각도(전방 0도)로 변환"""
+        angle = lidar_angle - self.lidar_yaw_offset
+        return math.atan2(math.sin(angle), math.cos(angle))
+
+    def sanitize_range(self, scan_msg, r):
+        """LiDAR 값을 장애물 판단에 안전한 거리값으로 변환"""
+        if math.isnan(r) or math.isinf(r):
+            return None
+        if r <= 0.0:
+            return 0.0
+        return min(r, scan_msg.range_max)
+
     def scan_callback(self, scan_msg):
         """
         TTC 계산 후 긴급제동 판단
         TTC = 거리 / 속도
         TTC < 임계값이면 즉시 제동
         """
-        if abs(self.current_speed) < self.min_speed:
-            return
-
         angle = scan_msg.angle_min
         for r in scan_msg.ranges:
-            if math.isnan(r) or math.isinf(r):
+            vehicle_angle = self.lidar_to_vehicle_angle(angle)
+            r = self.sanitize_range(scan_msg, r)
+            if r is None:
                 angle += scan_msg.angle_increment
                 continue
 
-            speed_component = self.current_speed * math.cos(angle)
+            if (
+                abs(vehicle_angle) <= self.front_angle_limit
+                and r <= self.close_obstacle_dist
+            ):
+                self.emergency_brake()
+                print(
+                    f'⚠️ AEB 근거리 제동! 거리: {r:.2f}m | '
+                    f'속도: {self.current_speed:.2f}m/s',
+                    flush=True
+                )
+                return
+
+            if abs(self.current_speed) < self.min_speed:
+                angle += scan_msg.angle_increment
+                continue
+
+            speed_component = self.current_speed * math.cos(vehicle_angle)
 
             if speed_component > 0:
                 ttc = r / speed_component
-                if ttc < self.ttc_threshold:
+                if ttc <= self.ttc_threshold:
                     self.emergency_brake()
                     print(
                         f'⚠️ AEB 작동! TTC: {ttc:.2f}s | '
@@ -84,6 +126,14 @@ class AEBRealNode(Node):
 
     def emergency_brake(self):
         """긴급 제동 - 속도 0으로"""
+        self.brake_until = (
+            self.get_clock().now()
+            + Duration(seconds=self.brake_hold_sec)
+        )
+        self.publish_zero_speed()
+
+    def publish_zero_speed(self):
+        """속도 0 명령 발행"""
         speed_msg = Float64()
         speed_msg.data = 0.0
         self.speed_pub.publish(speed_msg)
