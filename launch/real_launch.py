@@ -50,11 +50,11 @@ def generate_launch_description():
             output='screen',
         ),
 
-        # 4. Wall Following
+        # 4. Gap Following
         Node(
             package='my_algo',
-            executable='wall_follow_real',
-            name='wall_follow_real_node',
+            executable='gap_follow_real',
+            name='gap_follow_real_node',
             output='screen',
         ),
 

@@ -23,6 +23,7 @@ setup(
         'console_scripts': [
             'wall_follow = my_algo.wall_follow:main',
             'wall_follow_real = my_algo.wall_follow_real:main',
+            'gap_follow_real = my_algo.gap_follow_real:main',
             'aeb = my_algo.aeb:main',
             'aeb_real = my_algo.aeb_real:main',
             'joy_controller = my_algo.joy_controller:main',
