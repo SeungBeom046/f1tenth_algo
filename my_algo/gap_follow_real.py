@@ -590,13 +590,7 @@ class GapFollowRealNode(Node):
             f'speed={speed:5.2f} m/s | '
             f'erpm={erpm:7.0f} | '
             f'steer={steering:6.2f} rad | '
-            f'servo={servo_pos:5.3f} | '
-            f'tgt={math.degrees(target_angle):6.1f} deg | '
-            f'front={front_min:4.2f} m | '
-            f'center={central_min:4.2f} m | '
-            f'cp20={corridor_p20:4.2f} m | '
-            f'q={path_quality:4.2f} | '
-            f'blk={int(front_blocked)} corner={int(corner_active)} sharp={int(sharp_corner)}'
+            f'servo={servo_pos:5.3f}'
         )
 
 

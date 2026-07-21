@@ -183,8 +183,7 @@ class JoyControllerNode(Node):
                 f'speed={speed_ms:5.2f} m/s | '
                 f'erpm={erpm:7.0f} | '
                 f'steer={steering_rad:6.2f} rad | '
-                f'servo={servo_pos:5.3f} | '
-                f'lt={trigger_scale:4.2f}'
+                f'servo={servo_pos:5.3f}'
             )
         else:
             self.stop()

@@ -31,13 +31,12 @@ def speed_to_erpm(speed_ms):
 
 
 def print_status_line(text):
-    """Update one readable terminal status line without stacking log rows."""
+    """Print one readable terminal status row."""
     global _STATUS_LINE_LEN
 
-    padding = ' ' * max(0, _STATUS_LINE_LEN - len(text))
-    sys.stdout.write(f'\r{text}{padding}')
+    sys.stdout.write(f'{text}\n')
     sys.stdout.flush()
-    _STATUS_LINE_LEN = len(text)
+    _STATUS_LINE_LEN = 0
 
 
 def print_event_line(text):
