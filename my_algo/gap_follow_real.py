@@ -24,7 +24,7 @@ class GapFollowRealNode(Node):
 
     - LiDAR: Livox Mid-360 (PointCloud2 -> LaserScan 변환 후 수신)
     - 제어: VESC (/commands/motor/speed + /commands/servo/position)
-    - 안전: 25cm 이하 전방 장애물은 즉시 정지 후 짧은 후진 탈출 시도
+    - 안전: 주행 노드는 gap을 따라 탈출하고, 최후 제동은 AEB에 맡긴다
     - 최후 제동: aeb_real 노드가 20cm 이하에서 0속도를 덮어쓴다
     """
 
@@ -33,39 +33,43 @@ class GapFollowRealNode(Node):
 
         # ============ LiDAR/차량 파라미터 ============
         self.lidar_yaw_offset_deg = 90.0
-        self.lidar_to_bumper_dist = 0.10
-        self.forward_fov_deg = 190.0
+        self.lidar_to_bumper_dist = 0.15
+        self.forward_fov_deg = 260.0
         self.guard_fov_deg = 120.0
-        self.corridor_fov_deg = 36.0
+        self.corridor_fov_deg = 24.0
+        self.emergency_fov_deg = 12.0
         self.max_considered_range = 6.0
         self.vehicle_half_width = 0.18
-        self.bubble_margin = 0.18
-        self.bubble_trigger_clearance = 0.85
-        self.gap_min_clearance = 0.42
+        self.bubble_margin = 0.08
+        self.bubble_trigger_clearance = 0.65
+        self.gap_min_clearance = 0.30
         # ============================================
 
         # ============ 속도/조향 튜닝 ============
-        self.emergency_clearance = 0.25
-        self.decel_clearance = 0.70
+        self.escape_clearance = 0.25
+        self.decel_clearance = 0.85
         self.fast_clearance = 2.0
-        self.open_space_erpm = 15000.0
+        self.full_output_erpm = 15000.0
+        self.output_limit_ratio = 0.60
+        self.open_space_erpm = self.full_output_erpm * self.output_limit_ratio
         self.open_space_speed = self.open_space_erpm / ERPM_GAIN
-        self.base_speed = 2.2
-        self.corner_speed = 1.5
+        self.base_speed = min(2.0, self.open_space_speed)
+        self.corner_speed = 1.15
         self.slow_speed = max(0.5, 1850.0 / ERPM_GAIN)
-        self.reverse_speed = -0.55
+        self.reverse_speed = -0.50
         self.speed_ramp_rate = 2.8
-        self.max_steer = 0.34
-        self.steering_filter_alpha = 0.35
-        self.steering_deadband = 0.025
-        self.angle_gain = 1.0
-        self.center_bias = 0.18
+        self.max_steer = 0.46
+        self.steering_filter_alpha = 0.55
+        self.steering_deadband = 0.015
+        self.angle_gain = 1.25
+        self.center_bias = 0.04
+        self.turn_commit_angle = math.radians(35.0)
         # =======================================
 
         # ============ 실차 변환 파라미터 ============
         self.ERPM_GAIN = ERPM_GAIN
         self.SERVO_CENTER = 0.5
-        self.SERVO_GAIN = 0.30
+        self.SERVO_GAIN = 0.34
         # ==========================================
 
         self.prev_steering = 0.0
@@ -90,6 +94,8 @@ class GapFollowRealNode(Node):
             Float64, '/commands/motor/speed', 10)
         self.servo_pub = self.create_publisher(
             Float64, '/commands/servo/position', 10)
+        self.escape_pub = self.create_publisher(
+            Bool, '/gap_escape_active', 10)
 
         self.joy_active_sub = self.create_subscription(
             Bool, '/joy_active', self.joy_active_callback, 10)
@@ -101,6 +107,7 @@ class GapFollowRealNode(Node):
             f'ERPM_GAIN: {self.ERPM_GAIN} | '
             f'MIN_DRIVE: {MIN_DRIVE_SPEED_MS:.2f}m/s '
             f'({MIN_DRIVE_ERPM:.0f} ERPM) | '
+            f'LIMIT: {self.output_limit_ratio * 100:.0f}% | '
             f'OPEN: {self.open_space_erpm:.0f} ERPM | '
             f'SERVO_CENTER: {self.SERVO_CENTER} | '
             f'SERVO_GAIN: {self.SERVO_GAIN}'
@@ -209,9 +216,25 @@ class GapFollowRealNode(Node):
                 if abs(sample['angle'] - obs['angle']) <= angle_width:
                     sample['masked'] = True
 
-    def find_best_gap(self, samples):
+    def find_best_gap(self, samples, front_blocked=False):
         best_gap = []
+        best_score = -float('inf')
         current_gap = []
+
+        def score_gap(gap):
+            if not gap:
+                return -float('inf')
+            width = abs(gap[-1]['angle'] - gap[0]['angle'])
+            clearances = sorted(s['clearance'] for s in gap)
+            p70 = clearances[int((len(clearances) - 1) * 0.70)]
+            center = (gap[0]['angle'] + gap[-1]['angle']) / 2.0
+            turn_bonus = abs(center) * 0.55 if front_blocked else 0.0
+            return (
+                width * 2.6
+                + min(p70, self.max_considered_range) * 1.2
+                - abs(center) * self.center_bias
+                + turn_bonus
+            )
 
         for sample in samples:
             is_clear = (
@@ -221,11 +244,14 @@ class GapFollowRealNode(Node):
             if is_clear:
                 current_gap.append(sample)
             else:
-                if len(current_gap) > len(best_gap):
+                score = score_gap(current_gap)
+                if score > best_score:
                     best_gap = current_gap
+                    best_score = score
                 current_gap = []
 
-        if len(current_gap) > len(best_gap):
+        score = score_gap(current_gap)
+        if score > best_score:
             best_gap = current_gap
 
         if best_gap:
@@ -233,19 +259,46 @@ class GapFollowRealNode(Node):
 
         return [max(samples, key=lambda s: s['clearance'])] if samples else []
 
-    def choose_target_angle(self, gap):
+    def choose_target_angle(self, gap, front_blocked=False):
         best_sample = None
         best_score = -float('inf')
 
         for sample in gap:
             clearance_score = min(sample['clearance'], self.max_considered_range)
             center_score = -abs(sample['angle']) * self.center_bias
-            score = clearance_score + center_score
+            turn_score = 0.0
+            if front_blocked:
+                turn_score = abs(sample['angle']) * 0.35
+            score = clearance_score + center_score + turn_score
             if score > best_score:
                 best_score = score
                 best_sample = sample
 
-        return best_sample['angle'] if best_sample else 0.0
+        if not best_sample:
+            return 0.0
+
+        target_angle = best_sample['angle']
+        if front_blocked and abs(target_angle) < self.turn_commit_angle:
+            direction = 1.0 if target_angle >= 0.0 else -1.0
+            target_angle = direction * self.turn_commit_angle
+        return target_angle
+
+    def score_path_quality(self, gap, front_clearance, corridor_clearance):
+        if not gap:
+            return 0.0
+        width = abs(gap[-1]['angle'] - gap[0]['angle'])
+        gap_clearances = sorted(s['clearance'] for s in gap)
+        gap_p60 = gap_clearances[int((len(gap_clearances) - 1) * 0.60)]
+        width_score = self.clamp(width / math.radians(70.0), 0.0, 1.0)
+        gap_score = self.clamp(gap_p60 / self.fast_clearance, 0.0, 1.0)
+        front_score = self.clamp(front_clearance / self.fast_clearance, 0.0, 1.0)
+        corridor_score = self.clamp(corridor_clearance / self.decel_clearance, 0.0, 1.0)
+        return (
+            0.35 * width_score
+            + 0.30 * gap_score
+            + 0.20 * front_score
+            + 0.15 * corridor_score
+        )
 
     # ============ 제어 유틸 ============
 
@@ -270,26 +323,30 @@ class GapFollowRealNode(Node):
         )
         return self.current_speed_cmd
 
-    def compute_target_speed(self, steering, corridor_clearance, front_clearance):
+    def compute_target_speed(
+        self, steering, corridor_clearance, front_clearance, path_quality
+    ):
         abs_steer = abs(steering)
 
-        if corridor_clearance <= self.emergency_clearance:
-            return 0.0
         if corridor_clearance < self.decel_clearance:
             ratio = (
-                (corridor_clearance - self.emergency_clearance)
-                / (self.decel_clearance - self.emergency_clearance)
+                (corridor_clearance - self.escape_clearance)
+                / (self.decel_clearance - self.escape_clearance)
             )
             return self.slow_speed + self.clamp(ratio, 0.0, 1.0) * (
                 self.corner_speed - self.slow_speed
             )
-        if abs_steer > 0.24:
-            return self.corner_speed
-        if abs_steer > 0.12:
-            return max(self.corner_speed, self.base_speed)
-        if front_clearance >= self.fast_clearance:
-            return self.open_space_speed
-        return self.base_speed
+        steer_factor = self.clamp(abs_steer / self.max_steer, 0.0, 1.0)
+        clear_factor = self.clamp(front_clearance / self.fast_clearance, 0.0, 1.0)
+        quality = self.clamp(path_quality, 0.0, 1.0)
+        race_factor = 0.15 + 0.55 * quality + 0.30 * clear_factor
+        target = self.slow_speed + race_factor * (
+            self.open_space_speed - self.slow_speed
+        )
+        corner_limit = self.corner_speed + (1.0 - steer_factor) * (
+            self.open_space_speed - self.corner_speed
+        )
+        return min(target, corner_limit, self.open_space_speed)
 
     def publish_command(self, steering_rad, speed_ms):
         adjusted_speed_ms = apply_min_drive_speed(speed_ms)
@@ -303,8 +360,14 @@ class GapFollowRealNode(Node):
         servo_msg.data = servo_pos
         self.servo_pub.publish(servo_msg)
 
+    def publish_escape_active(self, active):
+        msg = Bool()
+        msg.data = active
+        self.escape_pub.publish(msg)
+
     def stop(self):
         self.current_speed_cmd = 0.0
+        self.publish_escape_active(False)
         self.publish_command(0.0, 0.0)
         print('[GapFollow] 차 정지!', flush=True)
 
@@ -313,14 +376,17 @@ class GapFollowRealNode(Node):
         right_clear = self.sector_percentile_at(samples, -30, 50, 0.35)
         self.escape_steering = -0.18 if left_clear >= right_clear else 0.18
         self.escape_until = (
-            self.get_clock().now() + Duration(seconds=0.7)
+            self.get_clock().now() + Duration(seconds=0.9)
         )
         self.current_speed_cmd = 0.0
+        self.publish_escape_active(True)
         self.publish_command(0.0, 0.0)
 
     def handle_escape(self):
         if self.get_clock().now() >= self.escape_until:
+            self.publish_escape_active(False)
             return False
+        self.publish_escape_active(True)
         self.publish_command(self.escape_steering, self.reverse_speed)
         return True
 
@@ -328,6 +394,7 @@ class GapFollowRealNode(Node):
 
     def scan_callback(self, scan_msg):
         if self.joy_active or not self.auto_mode:
+            self.publish_escape_active(False)
             return
 
         if self.handle_escape():
@@ -344,25 +411,28 @@ class GapFollowRealNode(Node):
 
         front_min = self.sector_min_clearance(
             samples, self.guard_fov_deg / 2.0)
+        central_min = self.sector_min_clearance(
+            samples, self.emergency_fov_deg / 2.0)
         corridor_min = self.sector_min_clearance(
             samples, self.corridor_fov_deg / 2.0)
         corridor_p20 = self.sector_percentile_clearance(
             samples, self.corridor_fov_deg / 2.0, 0.20)
         front_p20 = self.sector_percentile_clearance(
             samples, 45.0, 0.20)
+        front_blocked = corridor_p20 < 1.10 or front_p20 < 0.85
 
-        if corridor_min <= self.emergency_clearance:
+        if central_min <= self.escape_clearance:
             self.start_escape(samples)
             print(
-                f'[GapFollow] 전방 250mm 이하 감지 -> 정지 후 후진 | '
-                f'Cmin: {corridor_min:.2f}m',
+                f'[GapFollow] 중앙 초근접 감지 -> 정지 후 후진 | '
+                f'Center: {central_min:.2f}m',
                 flush=True
             )
             return
 
         self.mask_safety_bubbles(samples)
-        gap = self.find_best_gap(samples)
-        target_angle = self.choose_target_angle(gap)
+        gap = self.find_best_gap(samples, front_blocked)
+        target_angle = self.choose_target_angle(gap, front_blocked)
 
         steering = self.clamp(
             target_angle * self.angle_gain,
@@ -371,16 +441,20 @@ class GapFollowRealNode(Node):
         )
         steering = self.apply_steering_filter(steering)
 
+        path_quality = self.score_path_quality(gap, front_p20, corridor_p20)
         target_speed = self.compute_target_speed(
-            steering, corridor_p20, front_p20)
+            steering, corridor_p20, front_p20, path_quality)
         speed = self.ramp_speed(target_speed, dt)
         self.publish_command(steering, speed)
         adjusted_speed = apply_min_drive_speed(speed)
 
         print(
             f'Gap: {len(gap)} | '
-            f'Fmin: {front_min:.2f}m | Cmin: {corridor_min:.2f}m | '
+            f'Fmin: {front_min:.2f}m | Center: {central_min:.2f}m | '
+            f'Cmin: {corridor_min:.2f}m | '
             f'Cp20: {corridor_p20:.2f}m | Fp20: {front_p20:.2f}m | '
+            f'blocked: {int(front_blocked)} | '
+            f'Q: {path_quality:.2f} | '
             f'target: {math.degrees(target_angle):.1f}deg | '
             f'steer: {math.degrees(steering):.1f}deg | '
             f'speed: {adjusted_speed:.1f}m/s | '

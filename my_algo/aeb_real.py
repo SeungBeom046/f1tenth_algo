@@ -4,7 +4,7 @@ import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Float64
+from std_msgs.msg import Bool, Float64
 from nav_msgs.msg import Odometry
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import math
@@ -23,13 +23,18 @@ class AEBRealNode(Node):
         # ============ 튜닝 파라미터 ============
         self.ttc_threshold = 0.5   # 보존용 파라미터. 현재 실차 AEB는 근거리 기준만 사용.
         self.min_speed = 0.1
-        self.lidar_to_bumper_dist = 0.10
+        self.lidar_to_bumper_dist = 0.15
         self.close_obstacle_clearance = 0.20
         self.close_obstacle_dist = (
             self.close_obstacle_clearance + self.lidar_to_bumper_dist
         )
-        self.front_angle_limit = math.radians(60.0)
-        self.brake_hold_sec = 0.2
+        self.close_front_angle_limit = math.radians(35.0)
+        self.ultra_close_clearance = 0.10
+        self.ultra_close_dist = (
+            self.ultra_close_clearance + self.lidar_to_bumper_dist
+        )
+        self.ultra_front_angle_limit = math.radians(60.0)
+        self.brake_hold_sec = 0.15
         # LiDAR is mounted 90 deg clockwise from the datasheet frame:
         # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
         self.lidar_yaw_offset = math.radians(90.0)
@@ -37,6 +42,7 @@ class AEBRealNode(Node):
 
         self.current_speed = 0.0
         self.brake_until = self.get_clock().now()
+        self.gap_escape_active = False
 
         # QoS 설정 (pointcloud_to_laserscan과 호환)
         qos = QoSProfile(
@@ -52,6 +58,8 @@ class AEBRealNode(Node):
         # 실차 오도메트리 구독 (VESC에서 발행)
         self.odom_sub = self.create_subscription(
             Odometry, '/vesc/odom', self.odom_callback, 10)
+        self.escape_sub = self.create_subscription(
+            Bool, '/gap_escape_active', self.escape_callback, 10)
 
         # VESC 속도 명령
         self.speed_pub = self.create_publisher(
@@ -64,9 +72,13 @@ class AEBRealNode(Node):
         """현재 속도 업데이트"""
         self.current_speed = msg.twist.twist.linear.x
 
+    def escape_callback(self, msg):
+        """Gap follow 후진 탈출 중에는 AEB가 reverse 명령을 덮지 않게 양보"""
+        self.gap_escape_active = msg.data
+
     def brake_timer_callback(self):
         """브레이크 래치 중이면 wall_follow 명령을 덮어쓰도록 0 속도를 반복 발행"""
-        if self.get_clock().now() < self.brake_until:
+        if not self.gap_escape_active and self.get_clock().now() < self.brake_until:
             self.publish_zero_speed()
 
     def lidar_to_vehicle_angle(self, lidar_angle):
@@ -84,9 +96,14 @@ class AEBRealNode(Node):
 
     def scan_callback(self, scan_msg):
         """
-        주행방향 정면 120도 안에서 범퍼 기준 20cm 이하 장애물만 긴급제동.
+        정면 근거리 장애물만 긴급제동.
+        - 범퍼 기준 20cm: 정면 70도
+        - 범퍼 기준 10cm: 정면 120도
         """
         angle = scan_msg.angle_min
+        if self.gap_escape_active:
+            return
+
         for r in scan_msg.ranges:
             vehicle_angle = self.lidar_to_vehicle_angle(angle)
             r = self.sanitize_range(scan_msg, r)
@@ -94,10 +111,16 @@ class AEBRealNode(Node):
                 angle += scan_msg.angle_increment
                 continue
 
-            if (
-                abs(vehicle_angle) <= self.front_angle_limit
+            close_stop = (
+                abs(vehicle_angle) <= self.close_front_angle_limit
                 and r <= self.close_obstacle_dist
-            ):
+            )
+            ultra_stop = (
+                abs(vehicle_angle) <= self.ultra_front_angle_limit
+                and r <= self.ultra_close_dist
+            )
+
+            if close_stop or ultra_stop:
                 clearance = max(0.0, r - self.lidar_to_bumper_dist)
                 self.emergency_brake()
                 print(
