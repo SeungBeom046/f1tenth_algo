@@ -43,6 +43,7 @@ class AEBRealNode(Node):
         self.current_speed = 0.0
         self.brake_until = self.get_clock().now()
         self.gap_escape_active = False
+        self.joy_active = False
 
         # QoS 설정 (pointcloud_to_laserscan과 호환)
         qos = QoSProfile(
@@ -60,6 +61,8 @@ class AEBRealNode(Node):
             Odometry, '/vesc/odom', self.odom_callback, 10)
         self.escape_sub = self.create_subscription(
             Bool, '/gap_escape_active', self.escape_callback, 10)
+        self.joy_active_sub = self.create_subscription(
+            Bool, '/joy_active', self.joy_active_callback, 10)
 
         # VESC 속도 명령
         self.speed_pub = self.create_publisher(
@@ -76,9 +79,17 @@ class AEBRealNode(Node):
         """Gap follow 후진 탈출 중에는 AEB가 reverse 명령을 덮지 않게 양보"""
         self.gap_escape_active = msg.data
 
+    def joy_active_callback(self, msg):
+        """수동 조이스틱 조작 중에는 AEB가 명령을 덮어쓰지 않게 양보"""
+        self.joy_active = msg.data
+
     def brake_timer_callback(self):
         """브레이크 래치 중이면 wall_follow 명령을 덮어쓰도록 0 속도를 반복 발행"""
-        if not self.gap_escape_active and self.get_clock().now() < self.brake_until:
+        if (
+            not self.gap_escape_active
+            and not self.joy_active
+            and self.get_clock().now() < self.brake_until
+        ):
             self.publish_zero_speed()
 
     def lidar_to_vehicle_angle(self, lidar_angle):
@@ -101,7 +112,7 @@ class AEBRealNode(Node):
         - 범퍼 기준 10cm: 정면 120도
         """
         angle = scan_msg.angle_min
-        if self.gap_escape_active:
+        if self.gap_escape_active or self.joy_active:
             return
 
         for r in scan_msg.ranges:

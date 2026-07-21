@@ -12,6 +12,8 @@ from my_algo.vesc_utils import (
     MIN_DRIVE_ERPM,
     MIN_DRIVE_SPEED_MS,
     apply_min_drive_speed,
+    print_event_line,
+    print_status_line,
     speed_to_erpm,
 )
 
@@ -117,7 +119,7 @@ class WallFollowRealNode(Node):
         self.auto_mode = msg.data
         if self.auto_mode != prev:
             mode_str = '자율주행 ON' if self.auto_mode else '자율주행 OFF'
-            print(f'[WallFollow] {mode_str}', flush=True)
+            print_event_line(f'[WallFollow] {mode_str}')
 
     # ============ LiDAR 유틸 ============
 
@@ -301,7 +303,7 @@ class WallFollowRealNode(Node):
         servo_msg = Float64()
         servo_msg.data = self.SERVO_CENTER
         self.servo_pub.publish(servo_msg)
-        print('[WallFollow] 차 정지!', flush=True)
+        print_event_line('[WallFollow] 차 정지!')
 
     # ============ 메인 콜백 ============
 
@@ -394,20 +396,17 @@ class WallFollowRealNode(Node):
         adjusted_speed = apply_min_drive_speed(speed)
 
         # 9. 로그
-        print(
-            f'R: {right_dist:.2f}m | L: {left_dist:.2f}m | '
-            f'Fmin: {front_min:.2f}m | '
-            f'Fclr: {front_clearance:.2f}m | '
-            f'Cclr: {corridor_clearance:.2f}m | '
-            f'Cp20: {corridor_p20_clearance:.2f}m | '
-            f'Lp: {left_course_open:.2f}m | Rp: {right_course_open:.2f}m | '
-            f'center_err: {center_error:.2f} | '
-            f'steer: {math.degrees(steering):.1f}deg | '
-            f'target: {target_speed:.1f}m/s | '
-            f'speed: {adjusted_speed:.1f}m/s | '
-            f'ERPM: {speed_to_erpm(adjusted_speed):.0f} | '
-            f'servo: {self.SERVO_CENTER - steering * self.SERVO_GAIN:.3f}',
-            flush=True
+        print_status_line(
+            '[WallFollow] '
+            f'speed={adjusted_speed:5.2f} m/s | '
+            f'erpm={speed_to_erpm(adjusted_speed):7.0f} | '
+            f'steer={steering:6.2f} rad/{math.degrees(steering):6.1f} deg | '
+            f'servo={self.SERVO_CENTER - steering * self.SERVO_GAIN:5.3f} | '
+            f'tgt={target_speed:5.2f} m/s | '
+            f'L={left_dist:4.2f} m R={right_dist:4.2f} m | '
+            f'F={front_clearance:4.2f} m C={corridor_clearance:4.2f} m '
+            f'Cp20={corridor_p20_clearance:4.2f} m | '
+            f'err={center_error:5.2f}'
         )
 
         self.prev_error = center_error
