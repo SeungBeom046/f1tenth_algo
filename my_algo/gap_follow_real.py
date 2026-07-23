@@ -39,10 +39,15 @@ class GapFollowRealNode(Node):
         self.corridor_fov_deg = 24.0
         self.center_fov_deg = 10.0
         self.max_considered_range = 6.0
-        self.vehicle_half_width = 0.18
-        self.bubble_margin = 0.08
+        self.vehicle_length = 0.50
+        self.vehicle_half_width = 0.15
+        self.passage_margin = 0.08
+        self.bubble_margin = 0.06
         self.bubble_trigger_clearance = 0.70
         self.gap_min_clearance = 0.30
+        self.required_passage_width = (
+            2.0 * (self.vehicle_half_width + self.passage_margin)
+        )
 
         # Safety / obstacle distance is bumper clearance, not raw LiDAR range.
         self.escape_clearance = 0.11
@@ -70,6 +75,7 @@ class GapFollowRealNode(Node):
         self.target_speed_filter_up = 0.55
         self.target_speed_filter_down = 0.70
         self.open_corridor_front_clearance = 3.20
+        self.open_corridor_lookahead = 2.20
         self.clear_straight_front_clearance = 3.00
         self.clear_straight_corridor_clearance = 2.00
         self.straight_hold_sec = 0.90
@@ -254,6 +260,25 @@ class GapFollowRealNode(Node):
             return default
         idx = int(self.clamp((len(values) - 1) * pct, 0, len(values) - 1))
         return values[idx]
+
+    def estimate_passage_width(self, samples, lookahead):
+        left_limit = self.max_considered_range
+        right_limit = self.max_considered_range
+
+        for sample in samples:
+            raw_range = sample['range']
+            x = raw_range * math.cos(sample['angle']) - self.lidar_to_bumper_dist
+            y = raw_range * math.sin(sample['angle'])
+            if x < 0.05 or x > lookahead:
+                continue
+            if abs(y) < self.vehicle_half_width:
+                continue
+            if y > 0.0:
+                left_limit = min(left_limit, y)
+            else:
+                right_limit = min(right_limit, -y)
+
+        return left_limit + right_limit
 
     def rear_min_clearance(self, scan_msg):
         rear_limit = math.radians(self.rear_fov_deg * 0.5)
@@ -565,12 +590,13 @@ class GapFollowRealNode(Node):
         )
         return held_clear
 
-    def is_open_corridor(self, samples, front_p20, corridor_p20, front_blocked):
+    def is_open_corridor(self, samples, narrow_front_p20, corridor_p20, passage_width, front_blocked):
         if front_blocked:
             return False
         return (
-            front_p20 >= self.open_corridor_front_clearance
+            narrow_front_p20 >= self.open_corridor_front_clearance
             and corridor_p20 >= self.clear_straight_corridor_clearance
+            and passage_width >= self.required_passage_width
         )
 
     def ramp_speed(self, target_speed, straight_active):
@@ -722,10 +748,16 @@ class GapFollowRealNode(Node):
             samples, math.radians(self.corridor_fov_deg * 0.5), 0.20)
         front_p20 = self.sector_percentile_clearance(
             samples, math.radians(self.guard_fov_deg * 0.5), 0.20)
+        narrow_front_p20 = self.sector_percentile_clearance(
+            samples, math.radians(self.center_fov_deg * 0.5), 0.20)
+        passage_width = self.estimate_passage_width(
+            samples,
+            self.open_corridor_lookahead,
+        )
 
         front_blocked = (
             corridor_p20 < self.front_blocked_corridor_clearance
-            or front_p20 < self.front_blocked_front_clearance
+            or narrow_front_p20 < self.front_blocked_front_clearance
         )
 
         if central_min <= self.escape_clearance:
@@ -740,17 +772,11 @@ class GapFollowRealNode(Node):
             self.close_center_count = 0
             return
 
-        self.mask_safety_bubbles(samples)
-        gap = self.find_best_gap(samples, front_blocked)
-        if gap is None:
-            self.start_escape(samples)
-            return
-
-        path_quality = self.score_path_quality(gap, front_p20, corridor_p20)
         open_corridor = self.is_open_corridor(
             samples,
-            front_p20,
+            narrow_front_p20,
             corridor_p20,
+            passage_width,
             front_blocked,
         )
         if open_corridor:
@@ -759,6 +785,13 @@ class GapFollowRealNode(Node):
             sharp_corner = False
             path_quality = 1.0
         else:
+            self.mask_safety_bubbles(samples)
+            gap = self.find_best_gap(samples, front_blocked)
+            if gap is None:
+                self.start_escape(samples)
+                return
+
+            path_quality = self.score_path_quality(gap, narrow_front_p20, corridor_p20)
             target_angle = self.choose_target_angle(samples, gap, front_blocked)
             self.maybe_start_avoidance(samples, front_blocked, corridor_p20)
             target_angle = self.apply_avoidance_commit(target_angle)
@@ -776,7 +809,7 @@ class GapFollowRealNode(Node):
             return
 
         straight_active = self.update_straight_active(
-            front_p20=front_p20,
+            front_p20=narrow_front_p20,
             corridor_p20=corridor_p20,
             steering=steering,
             corner_active=corner_active,
@@ -809,8 +842,9 @@ class GapFollowRealNode(Node):
             f'erpm={erpm:7.0f} | '
             f'steer={steering:6.2f} rad | '
             f'servo={servo_pos:5.3f} | '
-            f'front={front_p20:4.2f} | '
-            f'corr={corridor_p20:4.2f}'
+            f'front={narrow_front_p20:4.2f} | '
+            f'corr={corridor_p20:4.2f} | '
+            f'width={passage_width:4.2f}'
         )
 
 
