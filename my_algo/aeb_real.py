@@ -37,11 +37,11 @@ class AEBRealNode(Node):
             self.ultra_close_clearance + self.lidar_to_bumper_dist
         )
         self.ultra_front_angle_limit = math.radians(60.0)
-        self.dynamic_clearance_offset = 0.45
-        self.dynamic_clearance_gain = 0.38
-        self.path_stop_clearance = 1.15
-        self.brake_hold_sec = 0.50
-        self.required_stop_hits = 2
+        self.dynamic_clearance_offset = 0.35
+        self.dynamic_clearance_gain = 0.28
+        self.path_stop_clearance = 0.80
+        self.brake_hold_sec = 0.35
+        self.required_stop_hits = 3
         # LiDAR is mounted 90 deg clockwise from the datasheet frame:
         # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
         self.lidar_yaw_offset = math.radians(90.0)

@@ -57,21 +57,21 @@ class GapFollowRealNode(Node):
         self.front_blocked_front_clearance = 1.00
         self.sharp_blocked_clearance = 1.05
 
-        # Speed. Hard-limit autonomy commands to 20000 ERPM.
-        self.full_output_erpm = 20000.0
+        # Speed. Hard-limit autonomy commands to 15000 ERPM.
+        self.full_output_erpm = 15000.0
         self.output_limit_ratio = 1.00
         self.open_space_erpm = self.full_output_erpm * self.output_limit_ratio
         self.open_space_speed = self.open_space_erpm / ERPM_GAIN
-        self.base_speed = min(5.0, self.open_space_speed)
-        self.straight_speed = min(4.2, self.open_space_speed)
+        self.base_speed = min(2.6, self.open_space_speed)
+        self.straight_speed = min(3.2, self.open_space_speed)
         self.corner_speed = 0.80
         self.sharp_corner_speed = 0.42
         self.slow_speed = max(0.50, 1850.0 / ERPM_GAIN)
         self.reverse_speed = -0.65
-        self.speed_accel_ramp_rate = 3.0
-        self.straight_accel_ramp_rate = 4.8
-        self.speed_decel_ramp_rate = 8.0
-        self.target_speed_filter_up = 0.28
+        self.speed_accel_ramp_rate = 1.4
+        self.straight_accel_ramp_rate = 2.2
+        self.speed_decel_ramp_rate = 7.0
+        self.target_speed_filter_up = 0.16
         self.target_speed_filter_down = 0.85
         self.open_corridor_front_clearance = 3.20
         self.open_corridor_lookahead = 2.20
@@ -83,8 +83,8 @@ class GapFollowRealNode(Node):
         self.stall_recovery_sec = 0.50
         self.stall_count_trigger = 6
         self.path_hazard_width = self.vehicle_half_width + self.passage_margin
-        self.path_hazard_slow_clearance = 1.40
-        self.path_hazard_stop_clearance = 0.65
+        self.path_hazard_slow_clearance = 1.20
+        self.path_hazard_stop_clearance = 0.45
 
         # Steering. Use the servo's practical limit in corners/U-turns.
         self.max_steer = 0.78
@@ -567,7 +567,7 @@ class GapFollowRealNode(Node):
 
         if speed > 0.0:
             speed = max(self.slow_speed, speed)
-        if path_hazard <= self.path_hazard_stop_clearance:
+        if path_hazard <= self.path_hazard_stop_clearance and not corner_active:
             speed = 0.0
         elif path_hazard <= self.path_hazard_slow_clearance:
             hazard_ratio = self.clamp(
@@ -576,7 +576,11 @@ class GapFollowRealNode(Node):
                 0.0,
                 1.0,
             )
-            speed = min(speed, self.slow_speed + hazard_ratio * (self.corner_speed - self.slow_speed))
+            min_hazard_speed = self.sharp_corner_speed if corner_active else 0.0
+            speed = min(
+                speed,
+                min_hazard_speed + hazard_ratio * (self.corner_speed - min_hazard_speed),
+            )
         return min(speed, self.open_space_speed)
 
     def filter_target_speed(self, target_speed, corner_active, sharp_corner):
