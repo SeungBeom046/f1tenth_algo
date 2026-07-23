@@ -52,19 +52,26 @@ class GapFollowRealNode(Node):
         self.front_blocked_front_clearance = 1.00
         self.sharp_blocked_clearance = 1.05
 
-        # Speed. Keep corner speeds conservative, but let straights recover hard.
-        self.full_output_erpm = 15000.0
-        self.output_limit_ratio = 0.90
+        # Speed. Use 85% of the configured 50000 ERPM ceiling. Straights should
+        # pull strongly, while corner speeds stay conservative.
+        self.full_output_erpm = 50000.0
+        self.output_limit_ratio = 0.85
         self.open_space_erpm = self.full_output_erpm * self.output_limit_ratio
         self.open_space_speed = self.open_space_erpm / ERPM_GAIN
-        self.base_speed = min(4.125, self.open_space_speed)
+        self.base_speed = min(5.0, self.open_space_speed)
+        self.straight_speed = min(8.0, self.open_space_speed)
         self.corner_speed = 0.80
         self.sharp_corner_speed = 0.42
         self.slow_speed = max(0.50, 1850.0 / ERPM_GAIN)
         self.reverse_speed = -0.50
-        self.speed_accel_ramp_rate = 4.4
-        self.straight_accel_ramp_rate = 8.8
-        self.speed_decel_ramp_rate = 3.2
+        self.speed_accel_ramp_rate = 4.8
+        self.straight_accel_ramp_rate = 7.2
+        self.speed_decel_ramp_rate = 4.6
+        self.target_speed_filter_up = 0.35
+        self.target_speed_filter_down = 0.70
+        self.clear_straight_front_clearance = 3.50
+        self.clear_straight_corridor_clearance = 2.00
+        self.straight_hold_sec = 0.65
 
         # Steering. Use the servo's practical limit in corners/U-turns.
         self.max_steer = 0.78
@@ -114,6 +121,7 @@ class GapFollowRealNode(Node):
         self.auto_mode = False
         self.prev_steering = 0.0
         self.current_speed_cmd = 0.0
+        self.filtered_target_speed = 0.0
         self.prev_time = self.get_clock().now()
         self.escape_until = self.get_clock().now()
         self.escape_steering = 0.0
@@ -124,6 +132,7 @@ class GapFollowRealNode(Node):
         self.auto_switch_debounce_sec = 0.35
         self.avoidance_until = self.get_clock().now()
         self.avoidance_direction = 0.0
+        self.straight_hold_until = self.get_clock().now()
 
         qos = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -477,6 +486,7 @@ class GapFollowRealNode(Node):
         corner_active,
         sharp_corner,
         path_quality,
+        straight_active,
     ):
         clearance = min(front_min, corridor_p20)
 
@@ -484,6 +494,8 @@ class GapFollowRealNode(Node):
             speed = self.sharp_corner_speed
         elif corner_active:
             speed = self.corner_speed
+        elif straight_active:
+            speed = self.straight_speed
         else:
             ratio = self.clamp(
                 (clearance - self.decel_clearance)
@@ -496,13 +508,55 @@ class GapFollowRealNode(Node):
                 speed = max(speed, self.base_speed)
 
         steer_ratio = self.clamp(abs_steer / self.max_steer, 0.0, 1.0)
-        steer_scale = 1.0 - 0.34 * steer_ratio
-        quality_scale = 0.78 + 0.22 * path_quality
+        if straight_active:
+            steer_scale = 1.0 - 0.12 * steer_ratio
+            quality_scale = 1.0
+        else:
+            steer_scale = 1.0 - 0.34 * steer_ratio
+            quality_scale = 0.78 + 0.22 * path_quality
         speed *= steer_scale * quality_scale
 
         if speed > 0.0:
             speed = max(self.slow_speed, speed)
         return min(speed, self.open_space_speed)
+
+    def filter_target_speed(self, target_speed, corner_active, sharp_corner):
+        if corner_active or sharp_corner:
+            self.filtered_target_speed = target_speed
+            return target_speed
+
+        alpha = (
+            self.target_speed_filter_up
+            if target_speed >= self.filtered_target_speed
+            else self.target_speed_filter_down
+        )
+        self.filtered_target_speed = (
+            alpha * target_speed
+            + (1.0 - alpha) * self.filtered_target_speed
+        )
+        return self.filtered_target_speed
+
+    def update_straight_active(self, front_p20, corridor_p20, steering, corner_active, sharp_corner):
+        now = self.get_clock().now()
+        clear_now = (
+            not corner_active
+            and not sharp_corner
+            and abs(steering) < self.cruise_max_steer * 0.90
+            and front_p20 > self.clear_straight_front_clearance
+            and corridor_p20 > self.clear_straight_corridor_clearance
+        )
+        if clear_now:
+            self.straight_hold_until = now + Duration(seconds=self.straight_hold_sec)
+            return True
+
+        held_clear = (
+            not corner_active
+            and not sharp_corner
+            and abs(steering) < self.cruise_max_steer
+            and corridor_p20 > self.decel_clearance
+            and now < self.straight_hold_until
+        )
+        return held_clear
 
     def ramp_speed(self, target_speed, straight_active):
         now = self.get_clock().now()
@@ -601,6 +655,7 @@ class GapFollowRealNode(Node):
 
     def stop(self):
         self.current_speed_cmd = 0.0
+        self.filtered_target_speed = 0.0
         self.prev_steering = 0.0
         self.publish_command(0.0, 0.0)
 
@@ -660,6 +715,13 @@ class GapFollowRealNode(Node):
             steering, target_angle, corner_active, sharp_corner)
         steering = self.filter_steering_for_context(steering, corner_active)
 
+        straight_active = self.update_straight_active(
+            front_p20=front_p20,
+            corridor_p20=corridor_p20,
+            steering=steering,
+            corner_active=corner_active,
+            sharp_corner=sharp_corner,
+        )
         target_speed = self.compute_target_speed(
             front_min=front_min,
             corridor_p20=corridor_p20,
@@ -667,12 +729,12 @@ class GapFollowRealNode(Node):
             corner_active=corner_active,
             sharp_corner=sharp_corner,
             path_quality=path_quality,
+            straight_active=straight_active,
         )
-        straight_active = (
-            not corner_active
-            and not sharp_corner
-            and abs(steering) < self.cruise_max_steer * 0.85
-            and corridor_p20 > self.fast_clearance
+        target_speed = self.filter_target_speed(
+            target_speed,
+            corner_active,
+            sharp_corner,
         )
         speed = self.ramp_speed(target_speed, straight_active)
         erpm, servo_pos = self.publish_command(speed, steering)

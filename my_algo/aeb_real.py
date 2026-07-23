@@ -21,20 +21,23 @@ class AEBRealNode(Node):
         super().__init__('aeb_real_node')
 
         # ============ 튜닝 파라미터 ============
-        self.ttc_threshold = 0.5   # 보존용 파라미터. 현재 실차 AEB는 근거리 기준만 사용.
+        self.ttc_threshold = 0.75
         self.min_speed = 0.1
         self.lidar_to_bumper_dist = 0.15
-        self.close_obstacle_clearance = 0.20
+        self.close_obstacle_clearance = 0.45
         self.close_obstacle_dist = (
             self.close_obstacle_clearance + self.lidar_to_bumper_dist
         )
-        self.close_front_angle_limit = math.radians(35.0)
-        self.ultra_close_clearance = 0.10
+        self.close_front_angle_limit = math.radians(40.0)
+        self.ultra_close_clearance = 0.20
         self.ultra_close_dist = (
             self.ultra_close_clearance + self.lidar_to_bumper_dist
         )
         self.ultra_front_angle_limit = math.radians(60.0)
-        self.brake_hold_sec = 0.15
+        self.dynamic_clearance_offset = 0.35
+        self.dynamic_clearance_gain = 0.28
+        self.brake_hold_sec = 0.35
+        self.required_stop_hits = 3
         # LiDAR is mounted 90 deg clockwise from the datasheet frame:
         # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
         self.lidar_yaw_offset = math.radians(90.0)
@@ -114,14 +117,18 @@ class AEBRealNode(Node):
         return min(r, scan_msg.range_max)
 
     def scan_callback(self, scan_msg):
-        """
-        정면 근거리 장애물만 긴급제동.
-        - 범퍼 기준 20cm: 정면 70도
-        - 범퍼 기준 10cm: 정면 120도
-        """
+        """정면 근거리 + 속도 기반 TTC/동적거리 긴급제동."""
         angle = scan_msg.angle_min
         if self.gap_escape_active or self.joy_active or not self.autonomous_mode:
             return
+
+        stop_hits = 0
+        closest_stop_clearance = None
+        speed = max(0.0, self.current_speed)
+        dynamic_clearance = (
+            self.dynamic_clearance_offset
+            + self.dynamic_clearance_gain * speed
+        )
 
         for r in scan_msg.ranges:
             vehicle_angle = self.lidar_to_vehicle_angle(angle)
@@ -130,25 +137,53 @@ class AEBRealNode(Node):
                 angle += scan_msg.angle_increment
                 continue
 
+            clearance = max(0.0, r - self.lidar_to_bumper_dist)
+            closing_speed = speed * max(0.0, math.cos(vehicle_angle))
+            ttc = (
+                clearance / closing_speed
+                if closing_speed > self.min_speed
+                else float('inf')
+            )
+
             close_stop = (
                 abs(vehicle_angle) <= self.close_front_angle_limit
-                and r <= self.close_obstacle_dist
+                and (
+                    clearance <= self.close_obstacle_clearance
+                    or clearance <= dynamic_clearance
+                    or ttc <= self.ttc_threshold
+                )
             )
             ultra_stop = (
                 abs(vehicle_angle) <= self.ultra_front_angle_limit
-                and r <= self.ultra_close_dist
+                and clearance <= self.ultra_close_clearance
             )
 
-            if close_stop or ultra_stop:
-                clearance = max(0.0, r - self.lidar_to_bumper_dist)
+            if ultra_stop:
                 self.emergency_brake()
                 print(
-                    f'⚠️ AEB 근거리 제동! 거리: {r:.2f}m | '
+                    f'⚠️ AEB 초근접 제동! 거리: {r:.2f}m | '
                     f'범퍼여유: {clearance:.2f}m | '
                     f'속도: {self.current_speed:.2f}m/s',
                     flush=True
                 )
                 return
+
+            if close_stop:
+                stop_hits += 1
+                if closest_stop_clearance is None:
+                    closest_stop_clearance = clearance
+                else:
+                    closest_stop_clearance = min(closest_stop_clearance, clearance)
+                if stop_hits >= self.required_stop_hits:
+                    self.emergency_brake()
+                    print(
+                        f'⚠️ AEB 고속 제동! '
+                        f'범퍼여유: {closest_stop_clearance:.2f}m | '
+                        f'동적기준: {dynamic_clearance:.2f}m | '
+                        f'속도: {self.current_speed:.2f}m/s',
+                        flush=True
+                    )
+                    return
 
             angle += scan_msg.angle_increment
 
