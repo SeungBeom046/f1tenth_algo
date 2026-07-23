@@ -24,7 +24,9 @@ class AEBRealNode(Node):
         self.ttc_threshold = 0.75
         self.min_speed = 0.1
         self.lidar_to_bumper_dist = 0.15
-        self.close_obstacle_clearance = 0.45
+        self.vehicle_half_width = 0.15
+        self.path_margin = 0.15
+        self.close_obstacle_clearance = 0.60
         self.close_obstacle_dist = (
             self.close_obstacle_clearance + self.lidar_to_bumper_dist
         )
@@ -35,10 +37,11 @@ class AEBRealNode(Node):
             self.ultra_close_clearance + self.lidar_to_bumper_dist
         )
         self.ultra_front_angle_limit = math.radians(60.0)
-        self.dynamic_clearance_offset = 0.35
-        self.dynamic_clearance_gain = 0.28
-        self.brake_hold_sec = 0.35
-        self.required_stop_hits = 3
+        self.dynamic_clearance_offset = 0.45
+        self.dynamic_clearance_gain = 0.38
+        self.path_stop_clearance = 1.15
+        self.brake_hold_sec = 0.50
+        self.required_stop_hits = 2
         # LiDAR is mounted 90 deg clockwise from the datasheet frame:
         # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
         self.lidar_yaw_offset = math.radians(90.0)
@@ -139,6 +142,8 @@ class AEBRealNode(Node):
                 continue
 
             clearance = max(0.0, r - self.lidar_to_bumper_dist)
+            x = r * math.cos(vehicle_angle) - self.lidar_to_bumper_dist
+            y = r * math.sin(vehicle_angle)
             closing_speed = speed * max(0.0, math.cos(vehicle_angle))
             ttc = (
                 clearance / closing_speed
@@ -157,6 +162,11 @@ class AEBRealNode(Node):
                     or ttc <= self.ttc_threshold
                 )
             )
+            path_stop = (
+                x >= 0.0
+                and x <= max(self.path_stop_clearance, dynamic_clearance)
+                and abs(y) <= self.vehicle_half_width + self.path_margin
+            )
             ultra_stop = (
                 abs(vehicle_angle) <= self.ultra_front_angle_limit
                 and clearance <= self.ultra_close_clearance
@@ -172,7 +182,7 @@ class AEBRealNode(Node):
                 )
                 return
 
-            if close_stop or dynamic_stop:
+            if close_stop or dynamic_stop or path_stop:
                 stop_hits += 1
                 if closest_stop_clearance is None:
                     closest_stop_clearance = clearance
