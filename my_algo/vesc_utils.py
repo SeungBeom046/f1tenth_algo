@@ -3,7 +3,7 @@
 import sys
 
 ERPM_GAIN = 4614.0
-MIN_DRIVE_ERPM = 1750.0
+MIN_DRIVE_ERPM = 1800.0
 MIN_DRIVE_SPEED_MS = MIN_DRIVE_ERPM / ERPM_GAIN
 
 _STATUS_LINE_LEN = 0
@@ -20,7 +20,7 @@ def apply_min_drive_speed(speed_ms, deadband=0.0):
         return 0.0
 
     if abs(speed_ms) < MIN_DRIVE_SPEED_MS:
-        return MIN_DRIVE_SPEED_MS if speed_ms > 0.0 else -MIN_DRIVE_SPEED_MS
+        return 0.0
 
     return speed_ms
 

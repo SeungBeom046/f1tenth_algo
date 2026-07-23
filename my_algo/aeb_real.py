@@ -29,6 +29,7 @@ class AEBRealNode(Node):
             self.close_obstacle_clearance + self.lidar_to_bumper_dist
         )
         self.close_front_angle_limit = math.radians(40.0)
+        self.dynamic_front_angle_limit = math.radians(22.0)
         self.ultra_close_clearance = 0.20
         self.ultra_close_dist = (
             self.ultra_close_clearance + self.lidar_to_bumper_dist
@@ -147,9 +148,12 @@ class AEBRealNode(Node):
 
             close_stop = (
                 abs(vehicle_angle) <= self.close_front_angle_limit
+                and clearance <= self.close_obstacle_clearance
+            )
+            dynamic_stop = (
+                abs(vehicle_angle) <= self.dynamic_front_angle_limit
                 and (
-                    clearance <= self.close_obstacle_clearance
-                    or clearance <= dynamic_clearance
+                    clearance <= dynamic_clearance
                     or ttc <= self.ttc_threshold
                 )
             )
@@ -168,7 +172,7 @@ class AEBRealNode(Node):
                 )
                 return
 
-            if close_stop:
+            if close_stop or dynamic_stop:
                 stop_hits += 1
                 if closest_stop_clearance is None:
                     closest_stop_clearance = clearance

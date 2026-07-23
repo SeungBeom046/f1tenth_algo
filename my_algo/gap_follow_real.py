@@ -46,8 +46,8 @@ class GapFollowRealNode(Node):
 
         # Safety / obstacle distance is bumper clearance, not raw LiDAR range.
         self.escape_clearance = 0.11
-        self.decel_clearance = 1.05
-        self.fast_clearance = 2.00
+        self.decel_clearance = 1.20
+        self.fast_clearance = 2.40
         self.front_blocked_corridor_clearance = 1.20
         self.front_blocked_front_clearance = 1.00
         self.sharp_blocked_clearance = 1.05
@@ -63,15 +63,20 @@ class GapFollowRealNode(Node):
         self.corner_speed = 0.80
         self.sharp_corner_speed = 0.42
         self.slow_speed = max(0.50, 1850.0 / ERPM_GAIN)
-        self.reverse_speed = -0.50
-        self.speed_accel_ramp_rate = 4.8
-        self.straight_accel_ramp_rate = 7.2
+        self.reverse_speed = -0.65
+        self.speed_accel_ramp_rate = 8.0
+        self.straight_accel_ramp_rate = 14.0
         self.speed_decel_ramp_rate = 4.6
-        self.target_speed_filter_up = 0.35
+        self.target_speed_filter_up = 0.55
         self.target_speed_filter_down = 0.70
-        self.clear_straight_front_clearance = 3.50
+        self.open_corridor_front_clearance = 3.20
+        self.clear_straight_front_clearance = 3.00
         self.clear_straight_corridor_clearance = 2.00
-        self.straight_hold_sec = 0.65
+        self.straight_hold_sec = 0.90
+        self.stall_erpm_threshold = 1900.0
+        self.stall_command_erpm_threshold = 2600.0
+        self.stall_recovery_sec = 0.50
+        self.stall_count_trigger = 6
 
         # Steering. Use the servo's practical limit in corners/U-turns.
         self.max_steer = 0.78
@@ -128,11 +133,13 @@ class GapFollowRealNode(Node):
         self.escape_active = False
         self.escape_started = False
         self.close_center_count = 0
+        self.stall_count = 0
         self.last_auto_switch_time = None
         self.auto_switch_debounce_sec = 0.35
         self.avoidance_until = self.get_clock().now()
         self.avoidance_direction = 0.0
         self.straight_hold_until = self.get_clock().now()
+        self.last_commanded_erpm = 0.0
 
         qos = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -558,6 +565,14 @@ class GapFollowRealNode(Node):
         )
         return held_clear
 
+    def is_open_corridor(self, samples, front_p20, corridor_p20, front_blocked):
+        if front_blocked:
+            return False
+        return (
+            front_p20 >= self.open_corridor_front_clearance
+            and corridor_p20 >= self.clear_straight_corridor_clearance
+        )
+
     def ramp_speed(self, target_speed, straight_active):
         now = self.get_clock().now()
         dt = (now - self.prev_time).nanoseconds / 1e9
@@ -589,6 +604,7 @@ class GapFollowRealNode(Node):
     def publish_command(self, speed_ms, steering):
         speed_ms = apply_min_drive_speed(speed_ms)
         erpm = speed_to_erpm(speed_ms)
+        self.last_commanded_erpm = erpm
 
         speed_msg = Float64()
         speed_msg.data = erpm
@@ -626,11 +642,22 @@ class GapFollowRealNode(Node):
 
     def start_escape(self, samples):
         self.escape_steering = self.get_escape_steering(samples)
-        self.escape_until = self.get_clock().now() + Duration(seconds=0.55)
+        self.escape_until = self.get_clock().now() + Duration(seconds=0.70)
         self.escape_started = True
         self.current_speed_cmd = self.reverse_speed
+        self.filtered_target_speed = self.reverse_speed
         self.publish_escape_active(True)
         print_event_line('[GapFollow] 근접 장애물: 후진 탈출 시작')
+
+    def start_stall_recovery(self, samples):
+        self.escape_steering = self.get_escape_steering(samples)
+        self.escape_until = self.get_clock().now() + Duration(seconds=self.stall_recovery_sec)
+        self.escape_started = True
+        self.current_speed_cmd = self.reverse_speed
+        self.filtered_target_speed = self.reverse_speed
+        self.stall_count = 0
+        self.publish_escape_active(True)
+        print_event_line('[GapFollow] 정지 상태 감지: 후진 후 경로 재탐색')
 
     def handle_escape(self):
         if not self.escape_started:
@@ -656,8 +683,26 @@ class GapFollowRealNode(Node):
     def stop(self):
         self.current_speed_cmd = 0.0
         self.filtered_target_speed = 0.0
+        self.stall_count = 0
         self.prev_steering = 0.0
         self.publish_command(0.0, 0.0)
+
+    def update_stall_recovery(self, samples, front_blocked):
+        if not front_blocked:
+            self.stall_count = 0
+            return False
+
+        commanded_forward = self.last_commanded_erpm > self.stall_command_erpm_threshold
+        actually_stopped = abs(speed_to_erpm(self.current_speed_cmd)) < self.stall_erpm_threshold
+        if commanded_forward or actually_stopped:
+            self.stall_count += 1
+        else:
+            self.stall_count = 0
+
+        if self.stall_count >= self.stall_count_trigger:
+            self.start_stall_recovery(samples)
+            return True
+        return False
 
     def scan_callback(self, scan_msg):
         if self.joy_active or not self.auto_mode:
@@ -701,12 +746,24 @@ class GapFollowRealNode(Node):
             self.start_escape(samples)
             return
 
-        target_angle = self.choose_target_angle(samples, gap, front_blocked)
-        self.maybe_start_avoidance(samples, front_blocked, corridor_p20)
-        target_angle = self.apply_avoidance_commit(target_angle)
         path_quality = self.score_path_quality(gap, front_p20, corridor_p20)
-        corner_active = self.is_corner(target_angle, front_blocked, path_quality)
-        sharp_corner = self.is_sharp_corner(target_angle, corridor_p20)
+        open_corridor = self.is_open_corridor(
+            samples,
+            front_p20,
+            corridor_p20,
+            front_blocked,
+        )
+        if open_corridor:
+            target_angle = 0.0
+            corner_active = False
+            sharp_corner = False
+            path_quality = 1.0
+        else:
+            target_angle = self.choose_target_angle(samples, gap, front_blocked)
+            self.maybe_start_avoidance(samples, front_blocked, corridor_p20)
+            target_angle = self.apply_avoidance_commit(target_angle)
+            corner_active = self.is_corner(target_angle, front_blocked, path_quality)
+            sharp_corner = self.is_sharp_corner(target_angle, corridor_p20)
 
         gain = self.corner_angle_gain if corner_active else self.angle_gain
         steering = self.clamp(target_angle * gain, -self.max_steer, self.max_steer)
@@ -714,6 +771,9 @@ class GapFollowRealNode(Node):
         steering = self.enforce_corner_steering(
             steering, target_angle, corner_active, sharp_corner)
         steering = self.filter_steering_for_context(steering, corner_active)
+
+        if self.update_stall_recovery(samples, front_blocked):
+            return
 
         straight_active = self.update_straight_active(
             front_p20=front_p20,
