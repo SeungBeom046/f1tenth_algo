@@ -44,6 +44,7 @@ class AEBRealNode(Node):
         self.brake_until = self.get_clock().now()
         self.gap_escape_active = False
         self.joy_active = False
+        self.autonomous_mode = False
 
         # QoS 설정 (pointcloud_to_laserscan과 호환)
         qos = QoSProfile(
@@ -63,6 +64,8 @@ class AEBRealNode(Node):
             Bool, '/gap_escape_active', self.escape_callback, 10)
         self.joy_active_sub = self.create_subscription(
             Bool, '/joy_active', self.joy_active_callback, 10)
+        self.auto_mode_sub = self.create_subscription(
+            Bool, '/autonomous_mode', self.auto_mode_callback, 10)
 
         # VESC 속도 명령
         self.speed_pub = self.create_publisher(
@@ -83,11 +86,16 @@ class AEBRealNode(Node):
         """수동 조이스틱 조작 중에는 AEB가 명령을 덮어쓰지 않게 양보"""
         self.joy_active = msg.data
 
+    def auto_mode_callback(self, msg):
+        """자율주행 중일 때만 AEB가 모터 명령을 덮어쓰게 한다."""
+        self.autonomous_mode = msg.data
+
     def brake_timer_callback(self):
         """브레이크 래치 중이면 wall_follow 명령을 덮어쓰도록 0 속도를 반복 발행"""
         if (
             not self.gap_escape_active
             and not self.joy_active
+            and self.autonomous_mode
             and self.get_clock().now() < self.brake_until
         ):
             self.publish_zero_speed()
@@ -112,7 +120,7 @@ class AEBRealNode(Node):
         - 범퍼 기준 10cm: 정면 120도
         """
         angle = scan_msg.angle_min
-        if self.gap_escape_active or self.joy_active:
+        if self.gap_escape_active or self.joy_active or not self.autonomous_mode:
             return
 
         for r in scan_msg.ranges:

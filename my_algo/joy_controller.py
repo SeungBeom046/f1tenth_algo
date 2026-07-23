@@ -52,6 +52,12 @@ class JoyControllerNode(Node):
         self.autonomous_mode = False  # 자율주행 모드 여부
         self.emergency_stop = False   # 긴급 정지 상태
         self.prev_lb = False          # LB 버튼 이전 상태 (토글용)
+        self.toggle_debounce_sec = 0.45
+        self.last_toggle_time = None
+        self.last_mode_publish_time = self.get_clock().now()
+        self.last_published_joy_active = None
+        self.last_published_auto_mode = None
+        self.mode_heartbeat_sec = 0.25
 
         # 조이스틱 구독
         self.joy_sub = self.create_subscription(
@@ -132,9 +138,17 @@ class JoyControllerNode(Node):
         # 긴급 정지 해제 (B 안 누른 상태)
         self.emergency_stop = False
 
-        # LB로 자율주행 모드 토글 (엣지 감지)
-        if lb and not self.prev_lb:
+        # LB로 자율주행 모드 토글. 무선 패드/버튼 바운스를 막기 위해
+        # 짧은 시간 안의 재입력은 같은 눌림으로 간주한다.
+        now = self.get_clock().now()
+        since_last_toggle = (
+            self.toggle_debounce_sec
+            if self.last_toggle_time is None
+            else (now - self.last_toggle_time).nanoseconds / 1e9
+        )
+        if lb and not self.prev_lb and since_last_toggle >= self.toggle_debounce_sec:
             self.autonomous_mode = not self.autonomous_mode
+            self.last_toggle_time = now
             mode_str = '자율주행' if self.autonomous_mode else '수동'
             print_event_line(f'모드 전환: {mode_str}')
         self.prev_lb = lb
@@ -191,6 +205,15 @@ class JoyControllerNode(Node):
 
     def _publish_mode(self, joy_active, auto_mode):
         """모드 상태 발행"""
+        now = self.get_clock().now()
+        elapsed = (now - self.last_mode_publish_time).nanoseconds / 1e9
+        unchanged = (
+            self.last_published_joy_active == joy_active
+            and self.last_published_auto_mode == auto_mode
+        )
+        if unchanged and elapsed < self.mode_heartbeat_sec:
+            return
+
         joy_msg = Bool()
         joy_msg.data = joy_active
         self.joy_active_pub.publish(joy_msg)
@@ -198,6 +221,9 @@ class JoyControllerNode(Node):
         auto_msg = Bool()
         auto_msg.data = auto_mode
         self.auto_mode_pub.publish(auto_msg)
+        self.last_published_joy_active = joy_active
+        self.last_published_auto_mode = auto_mode
+        self.last_mode_publish_time = now
 
     def stop(self):
         """정지 명령"""
