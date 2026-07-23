@@ -798,13 +798,19 @@ class GapFollowRealNode(Node):
         )
         speed = self.ramp_speed(target_speed, straight_active)
         erpm, servo_pos = self.publish_command(speed, steering)
+        target_erpm = speed_to_erpm(target_speed)
+        drive_mode = 'OPEN' if open_corridor else ('STRAIGHT' if straight_active else 'GAP')
 
         print_status_line(
             '[GapFollow] '
+            f'mode={drive_mode:8s} | '
             f'speed={speed:5.2f} m/s | '
+            f'target_erpm={target_erpm:7.0f} | '
             f'erpm={erpm:7.0f} | '
             f'steer={steering:6.2f} rad | '
-            f'servo={servo_pos:5.3f}'
+            f'servo={servo_pos:5.3f} | '
+            f'front={front_p20:4.2f} | '
+            f'corr={corridor_p20:4.2f}'
         )
 
 
