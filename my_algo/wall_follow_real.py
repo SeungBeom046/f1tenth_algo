@@ -8,6 +8,7 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import math
 
 from my_algo.vesc_utils import (
+    DRIVE_SPEED_SCALE,
     ERPM_GAIN,
     MIN_DRIVE_ERPM,
     MIN_DRIVE_SPEED_MS,
@@ -48,12 +49,12 @@ class WallFollowRealNode(Node):
         self.max_steer = 0.28
         self.steering_deadband = 0.04
         self.steering_filter_alpha = 0.25
-        self.open_space_erpm = 15000.0
+        self.open_space_erpm = 15000.0 * DRIVE_SPEED_SCALE
         self.open_space_speed = self.open_space_erpm / ERPM_GAIN
         self.min_race_erpm = 1850.0
         self.min_race_speed = max(0.5, self.min_race_erpm / ERPM_GAIN)
-        self.base_race_speed = 2.0
-        self.speed_ramp_rate = 2.0
+        self.base_race_speed = 2.0 * DRIVE_SPEED_SCALE
+        self.speed_ramp_rate = 2.0 * DRIVE_SPEED_SCALE
         # LiDAR is mounted 90 deg clockwise from the datasheet frame:
         # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
         self.lidar_yaw_offset_deg = 90.0
@@ -381,11 +382,11 @@ class WallFollowRealNode(Node):
         elif corridor_p20_clearance <= self.front_decel_clearance:
             target_speed = self.min_race_speed  # 전방 30cm → 감속, 정지는 AEB가 담당
         elif corridor_p20_clearance < self.front_slow_dist or abs_steer > 0.25:
-            target_speed = max(self.min_race_speed, 0.9)    # 코너/근거리 → 저속
+            target_speed = max(self.min_race_speed, 0.9 * DRIVE_SPEED_SCALE)
         elif abs_steer > 0.12:
-            target_speed = max(self.min_race_speed, 1.4)    # 완만한 코너 → 중속
+            target_speed = max(self.min_race_speed, 1.4 * DRIVE_SPEED_SCALE)
         elif front_p20_clearance >= self.front_clear_dist:
-            target_speed = self.open_space_speed  # 전방 2m clear → 15000 ERPM까지
+            target_speed = self.open_space_speed
         else:
             target_speed = self.base_race_speed    # 기본 주행 속도
 

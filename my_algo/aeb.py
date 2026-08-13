@@ -1,6 +1,7 @@
 """AEB (Automatic Emergency Braking) ROS2 node."""
 
 import rclpy
+from rclpy.duration import Duration
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
@@ -19,11 +20,16 @@ class AEBNode(Node):
         super().__init__('aeb_node')
 
         # ============ 튜닝 파라미터 ============
-        self.ttc_threshold = 0.5   # TTC 임계값 (초) - 이 시간 이내 충돌 예상 시 제동
+        self.ttc_threshold = 0.60  # TTC 임계값 (초) - 이 시간 이내 충돌 예상 시 제동
         self.min_speed = 0.1       # 이 속도 이하면 AEB 비활성화 (정지 상태)
+        self.front_angle_limit = math.radians(45.0)
+        self.brake_hold_sec = 0.35
+        self.required_stop_hits = 3
         # ======================================
 
         self.current_speed = 0.0   # 현재 속도
+        self.brake_until = self.get_clock().now()
+        self.brake_timer = self.create_timer(0.02, self.brake_timer_callback)
 
         # LiDAR 구독
         self.scan_sub = self.create_subscription(
@@ -58,6 +64,9 @@ class AEBNode(Node):
             return  # 거의 정지 상태면 AEB 불필요
 
         angle = scan_msg.angle_min
+        stop_hits = 0
+        closest_ttc = float('inf')
+        closest_range = None
         for r in scan_msg.ranges:
             # 유효한 거리값만 처리
             if math.isnan(r) or math.isinf(r):
@@ -68,23 +77,44 @@ class AEBNode(Node):
             # cos(angle) > 0 이면 전방 방향 빔
             speed_component = self.current_speed * math.cos(angle)
 
-            if speed_component > 0:  # 전방으로 이동 중인 빔만
+            if (
+                abs(angle) <= self.front_angle_limit
+                and speed_component > 0
+            ):
                 ttc = r / speed_component
 
                 if ttc < self.ttc_threshold:
-                    # 충돌 위험! 즉시 제동
-                    self.emergency_brake()
-                    print(
-                        f'⚠️ AEB 작동! TTC: {ttc:.2f}s | '
-                        f'거리: {r:.2f}m | 속도: {self.current_speed:.2f}m/s',
-                        flush=True
-                    )
-                    return
+                    stop_hits += 1
+                    if ttc < closest_ttc:
+                        closest_ttc = ttc
+                        closest_range = r
+                    if stop_hits >= self.required_stop_hits:
+                        self.emergency_brake()
+                        print(
+                            f'⚠️ AEB 작동! TTC: {closest_ttc:.2f}s | '
+                            f'거리: {closest_range:.2f}m | '
+                            f'속도: {self.current_speed:.2f}m/s',
+                            flush=True
+                        )
+                        return
 
             angle += scan_msg.angle_increment
 
+    def brake_timer_callback(self):
+        """브레이크 홀드 중에는 0속도 명령을 반복 발행."""
+        if self.get_clock().now() < self.brake_until:
+            self.publish_zero_speed()
+
     def emergency_brake(self):
         """긴급 제동 명령 발행"""
+        self.brake_until = (
+            self.get_clock().now()
+            + Duration(seconds=self.brake_hold_sec)
+        )
+        self.publish_zero_speed()
+
+    def publish_zero_speed(self):
+        """속도 0 명령 발행."""
         brake_msg = AckermannDriveStamped()
         brake_msg.drive.speed = 0.0
         brake_msg.drive.steering_angle = 0.0

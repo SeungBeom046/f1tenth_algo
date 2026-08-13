@@ -6,6 +6,7 @@ from sensor_msgs.msg import Joy
 from std_msgs.msg import Float64, Bool
 
 from my_algo.vesc_utils import (
+    DRIVE_SPEED_SCALE,
     ERPM_GAIN,
     MIN_DRIVE_ERPM,
     MIN_DRIVE_SPEED_MS,
@@ -37,7 +38,7 @@ class JoyControllerNode(Node):
         super().__init__('joy_controller_node')
 
         # ============ 튜닝 파라미터 ============
-        self.max_speed = 2.0        # 조이스틱 최대 속도 (m/s)
+        self.max_speed = 2.0 * DRIVE_SPEED_SCALE
         self.ERPM_GAIN = ERPM_GAIN
         self.speed_deadband = 0.05   # 스틱 중립 노이즈는 정지로 처리
         self.steer_deadband = 0.03

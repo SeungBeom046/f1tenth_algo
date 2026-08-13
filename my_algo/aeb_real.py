@@ -21,12 +21,12 @@ class AEBRealNode(Node):
         super().__init__('aeb_real_node')
 
         # ============ 튜닝 파라미터 ============
-        self.ttc_threshold = 0.75
+        self.ttc_threshold = 0.85
         self.min_speed = 0.1
         self.lidar_to_bumper_dist = 0.15
         self.vehicle_half_width = 0.15
         self.path_margin = 0.15
-        self.close_obstacle_clearance = 0.60
+        self.close_obstacle_clearance = 0.65
         self.close_obstacle_dist = (
             self.close_obstacle_clearance + self.lidar_to_bumper_dist
         )
@@ -37,11 +37,13 @@ class AEBRealNode(Node):
             self.ultra_close_clearance + self.lidar_to_bumper_dist
         )
         self.ultra_front_angle_limit = math.radians(60.0)
-        self.dynamic_clearance_offset = 0.35
-        self.dynamic_clearance_gain = 0.28
-        self.path_stop_clearance = 0.80
-        self.brake_hold_sec = 0.35
+        self.dynamic_clearance_offset = 0.38
+        self.dynamic_clearance_gain = 0.32
+        self.path_stop_clearance = 0.90
+        self.brake_hold_sec = 0.60
         self.required_stop_hits = 3
+        self.required_stop_frames = 2
+        self.clear_release_frames = 4
         # LiDAR is mounted 90 deg clockwise from the datasheet frame:
         # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
         self.lidar_yaw_offset = math.radians(90.0)
@@ -49,6 +51,9 @@ class AEBRealNode(Node):
 
         self.current_speed = 0.0
         self.brake_until = self.get_clock().now()
+        self.stop_frame_count = 0
+        self.clear_frame_count = 0
+        self.last_brake_log_time = self.get_clock().now()
         self.gap_escape_active = False
         self.joy_active = False
         self.autonomous_mode = False
@@ -128,6 +133,7 @@ class AEBRealNode(Node):
 
         stop_hits = 0
         closest_stop_clearance = None
+        stop_reason = None
         speed = max(0.0, self.current_speed)
         dynamic_clearance = (
             self.dynamic_clearance_offset
@@ -173,12 +179,11 @@ class AEBRealNode(Node):
             )
 
             if ultra_stop:
-                self.emergency_brake()
-                print(
-                    f'⚠️ AEB 초근접 제동! 거리: {r:.2f}m | '
-                    f'범퍼여유: {clearance:.2f}m | '
-                    f'속도: {self.current_speed:.2f}m/s',
-                    flush=True
+                self.register_stop_condition(
+                    '초근접',
+                    clearance,
+                    dynamic_clearance,
+                    force=True,
                 )
                 return
 
@@ -189,17 +194,56 @@ class AEBRealNode(Node):
                 else:
                     closest_stop_clearance = min(closest_stop_clearance, clearance)
                 if stop_hits >= self.required_stop_hits:
-                    self.emergency_brake()
-                    print(
-                        f'⚠️ AEB 고속 제동! '
-                        f'범퍼여유: {closest_stop_clearance:.2f}m | '
-                        f'동적기준: {dynamic_clearance:.2f}m | '
-                        f'속도: {self.current_speed:.2f}m/s',
-                        flush=True
-                    )
-                    return
+                    if path_stop:
+                        stop_reason = '경로'
+                    elif dynamic_stop:
+                        stop_reason = 'TTC/동적거리'
+                    else:
+                        stop_reason = '근거리'
+                    break
 
             angle += scan_msg.angle_increment
+
+        if stop_hits >= self.required_stop_hits:
+            self.register_stop_condition(
+                stop_reason,
+                closest_stop_clearance,
+                dynamic_clearance,
+            )
+        else:
+            self.register_clear_scan()
+
+    def register_stop_condition(
+        self,
+        reason,
+        clearance,
+        dynamic_clearance,
+        force=False,
+    ):
+        """연속 위험 프레임을 확인한 뒤 브레이크를 래치한다."""
+        self.stop_frame_count += 1
+        self.clear_frame_count = 0
+
+        if force or self.stop_frame_count >= self.required_stop_frames:
+            self.emergency_brake()
+            now = self.get_clock().now()
+            elapsed = (now - self.last_brake_log_time).nanoseconds / 1e9
+            if force or elapsed >= 0.25:
+                print(
+                    f'⚠️ AEB {reason} 제동! '
+                    f'범퍼여유: {clearance:.2f}m | '
+                    f'동적기준: {dynamic_clearance:.2f}m | '
+                    f'속도: {self.current_speed:.2f}m/s | '
+                    f'frames: {self.stop_frame_count}',
+                    flush=True
+                )
+                self.last_brake_log_time = now
+
+    def register_clear_scan(self):
+        """충분히 깨끗한 스캔이 이어질 때까지 위험 카운터를 유지한다."""
+        self.clear_frame_count += 1
+        if self.clear_frame_count >= self.clear_release_frames:
+            self.stop_frame_count = 0
 
     def emergency_brake(self):
         """긴급 제동 - 속도 0으로"""

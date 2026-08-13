@@ -27,11 +27,12 @@ class WallFollowNode(Node):
         self.rear_stop_dist = 0.45
         self.lookahead = 1.10      # 코너 예측 거리 (m)
         self.max_steer = 0.42
-        self.max_speed = 5.0
-        self.fast_corner_speed = 3.2
-        self.medium_corner_speed = 1.75
-        self.tight_corner_speed = 0.95
-        self.crawl_speed = 0.25
+        self.speed_scale = 0.80
+        self.max_speed = 5.0 * self.speed_scale
+        self.fast_corner_speed = 3.2 * self.speed_scale
+        self.medium_corner_speed = 1.75 * self.speed_scale
+        self.tight_corner_speed = 0.95 * self.speed_scale
+        self.crawl_speed = 0.25 * self.speed_scale
         self.full_throttle_clear = 4.1
         self.full_throttle_release_clear = 2.7
         self.full_throttle_steer = 0.24
@@ -39,7 +40,7 @@ class WallFollowNode(Node):
         self.high_speed_steer = 0.33
         self.trail_brake_steer = 0.08
         self.apex_steer = 0.32
-        self.accel_limit = 8.0
+        self.accel_limit = 8.0 * self.speed_scale
         self.brake_limit = 9.0
         self.high_speed_error_deadband = 0.06
         self.stuck_front_dist = 0.85

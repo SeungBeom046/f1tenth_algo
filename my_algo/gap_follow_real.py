@@ -16,6 +16,7 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool, Float64
 
 from my_algo.vesc_utils import (
+    DRIVE_SPEED_SCALE,
     ERPM_GAIN,
     apply_min_drive_speed,
     print_event_line,
@@ -57,19 +58,19 @@ class GapFollowRealNode(Node):
         self.front_blocked_front_clearance = 1.00
         self.sharp_blocked_clearance = 1.05
 
-        # Speed. Hard-limit autonomy commands to 15000 ERPM.
+        # Speed. Keep autonomy at 80% of the previous race tune.
         self.full_output_erpm = 15000.0
-        self.output_limit_ratio = 1.00
+        self.output_limit_ratio = DRIVE_SPEED_SCALE
         self.open_space_erpm = self.full_output_erpm * self.output_limit_ratio
         self.open_space_speed = self.open_space_erpm / ERPM_GAIN
-        self.base_speed = min(2.6, self.open_space_speed)
-        self.straight_speed = min(3.2, self.open_space_speed)
-        self.corner_speed = 0.80
-        self.sharp_corner_speed = 0.42
+        self.base_speed = min(2.6 * DRIVE_SPEED_SCALE, self.open_space_speed)
+        self.straight_speed = min(3.2 * DRIVE_SPEED_SCALE, self.open_space_speed)
+        self.corner_speed = 0.80 * DRIVE_SPEED_SCALE
+        self.sharp_corner_speed = max(0.42 * DRIVE_SPEED_SCALE, 1850.0 / ERPM_GAIN)
         self.slow_speed = max(0.50, 1850.0 / ERPM_GAIN)
         self.reverse_speed = -0.65
-        self.speed_accel_ramp_rate = 1.4
-        self.straight_accel_ramp_rate = 2.2
+        self.speed_accel_ramp_rate = 1.4 * DRIVE_SPEED_SCALE
+        self.straight_accel_ramp_rate = 2.2 * DRIVE_SPEED_SCALE
         self.speed_decel_ramp_rate = 7.0
         self.target_speed_filter_up = 0.16
         self.target_speed_filter_down = 0.85
