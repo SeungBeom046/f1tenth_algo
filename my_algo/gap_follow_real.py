@@ -51,7 +51,7 @@ class GapFollowRealNode(Node):
         )
 
         # Safety / obstacle distance is bumper clearance, not raw LiDAR range.
-        self.escape_clearance = 0.11
+        self.escape_clearance = 0.16
         self.decel_clearance = 1.20
         self.fast_clearance = 2.40
         self.front_blocked_corridor_clearance = 1.20
@@ -68,7 +68,7 @@ class GapFollowRealNode(Node):
         self.corner_speed = 0.80 * DRIVE_SPEED_SCALE
         self.sharp_corner_speed = max(0.42 * DRIVE_SPEED_SCALE, MIN_DRIVE_ERPM / ERPM_GAIN)
         self.slow_speed = max(0.50, MIN_DRIVE_ERPM / ERPM_GAIN)
-        self.reverse_speed = -0.65
+        self.reverse_speed = -0.80
         self.speed_accel_ramp_rate = 1.4 * DRIVE_SPEED_SCALE
         self.straight_accel_ramp_rate = 2.2 * DRIVE_SPEED_SCALE
         self.speed_decel_ramp_rate = 7.0
@@ -81,7 +81,7 @@ class GapFollowRealNode(Node):
         self.straight_hold_sec = 0.90
         self.stall_erpm_threshold = 1900.0
         self.stall_command_erpm_threshold = 2600.0
-        self.stall_recovery_sec = 0.50
+        self.stall_recovery_sec = 0.90
         self.stall_count_trigger = 6
         self.path_hazard_width = self.vehicle_half_width + self.passage_margin
         self.path_hazard_slow_clearance = 1.20
@@ -700,7 +700,7 @@ class GapFollowRealNode(Node):
 
     def start_escape(self, samples):
         self.escape_steering = self.get_escape_steering(samples)
-        self.escape_until = self.get_clock().now() + Duration(seconds=0.70)
+        self.escape_until = self.get_clock().now() + Duration(seconds=1.10)
         self.escape_started = True
         self.current_speed_cmd = self.reverse_speed
         self.filtered_target_speed = self.reverse_speed

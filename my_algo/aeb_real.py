@@ -26,23 +26,24 @@ class AEBRealNode(Node):
         self.lidar_to_bumper_dist = 0.30
         self.vehicle_half_width = 0.15
         self.path_margin = 0.15
-        self.close_obstacle_clearance = 0.65
+        self.min_forward_obstacle_x = 0.05
+        self.close_obstacle_clearance = 0.80
         self.close_obstacle_dist = (
             self.close_obstacle_clearance + self.lidar_to_bumper_dist
         )
-        self.close_front_angle_limit = math.radians(40.0)
-        self.dynamic_front_angle_limit = math.radians(22.0)
-        self.ultra_close_clearance = 0.20
+        self.close_front_angle_limit = math.radians(30.0)
+        self.dynamic_front_angle_limit = math.radians(16.0)
+        self.ultra_close_clearance = 0.15
         self.ultra_close_dist = (
             self.ultra_close_clearance + self.lidar_to_bumper_dist
         )
         self.ultra_front_angle_limit = math.radians(60.0)
         self.dynamic_clearance_offset = 0.38
         self.dynamic_clearance_gain = 0.32
-        self.path_stop_clearance = 0.90
-        self.brake_hold_sec = 0.60
-        self.required_stop_hits = 3
-        self.required_stop_frames = 2
+        self.path_stop_clearance = 0.75
+        self.brake_hold_sec = 0.35
+        self.required_stop_hits = 8
+        self.required_stop_frames = 3
         self.clear_release_frames = 4
         # LiDAR x-axis is aligned with the vehicle front in the LaserScan frame.
         self.lidar_yaw_offset = 0.0
@@ -92,6 +93,8 @@ class AEBRealNode(Node):
     def escape_callback(self, msg):
         """Gap follow 후진 탈출 중에는 AEB가 reverse 명령을 덮지 않게 양보"""
         self.gap_escape_active = msg.data
+        if self.gap_escape_active:
+            self.release_brake_latch()
 
     def joy_active_callback(self, msg):
         """수동 조이스틱 조작 중에는 AEB가 명령을 덮어쓰지 않게 양보"""
@@ -148,6 +151,10 @@ class AEBRealNode(Node):
 
             x = r * math.cos(vehicle_angle) - self.lidar_to_bumper_dist
             y = r * math.sin(vehicle_angle)
+            if x < self.min_forward_obstacle_x:
+                angle += scan_msg.angle_increment
+                continue
+
             clearance = max(0.0, x)
             ttc = (
                 clearance / speed
@@ -167,8 +174,7 @@ class AEBRealNode(Node):
                 )
             )
             path_stop = (
-                x >= 0.0
-                and x <= max(self.path_stop_clearance, dynamic_clearance)
+                x <= max(self.path_stop_clearance, dynamic_clearance)
                 and abs(y) <= self.vehicle_half_width + self.path_margin
             )
             ultra_stop = (
@@ -242,6 +248,12 @@ class AEBRealNode(Node):
         self.clear_frame_count += 1
         if self.clear_frame_count >= self.clear_release_frames:
             self.stop_frame_count = 0
+
+    def release_brake_latch(self):
+        """후진 탈출/수동 제어가 즉시 이길 수 있게 AEB 래치를 해제한다."""
+        self.brake_until = self.get_clock().now()
+        self.stop_frame_count = 0
+        self.clear_frame_count = 0
 
     def emergency_brake(self):
         """긴급 제동 - 속도 0으로"""
