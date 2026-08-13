@@ -17,6 +17,7 @@ from std_msgs.msg import Bool, Float64
 from my_algo.vesc_utils import (
     DRIVE_SPEED_SCALE,
     ERPM_GAIN,
+    MIN_DRIVE_ERPM,
     apply_min_drive_speed,
     print_event_line,
     print_status_line,
@@ -65,8 +66,8 @@ class GapFollowRealNode(Node):
         self.base_speed = min(2.6 * DRIVE_SPEED_SCALE, self.open_space_speed)
         self.straight_speed = min(3.2 * DRIVE_SPEED_SCALE, self.open_space_speed)
         self.corner_speed = 0.80 * DRIVE_SPEED_SCALE
-        self.sharp_corner_speed = max(0.42 * DRIVE_SPEED_SCALE, 1850.0 / ERPM_GAIN)
-        self.slow_speed = max(0.50, 1850.0 / ERPM_GAIN)
+        self.sharp_corner_speed = max(0.42 * DRIVE_SPEED_SCALE, MIN_DRIVE_ERPM / ERPM_GAIN)
+        self.slow_speed = max(0.50, MIN_DRIVE_ERPM / ERPM_GAIN)
         self.reverse_speed = -0.65
         self.speed_accel_ramp_rate = 1.4 * DRIVE_SPEED_SCALE
         self.straight_accel_ramp_rate = 2.2 * DRIVE_SPEED_SCALE

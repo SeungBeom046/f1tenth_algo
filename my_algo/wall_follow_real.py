@@ -51,7 +51,7 @@ class WallFollowRealNode(Node):
         self.steering_filter_alpha = 0.25
         self.open_space_erpm = 15000.0 * DRIVE_SPEED_SCALE
         self.open_space_speed = self.open_space_erpm / ERPM_GAIN
-        self.min_race_erpm = 1850.0
+        self.min_race_erpm = MIN_DRIVE_ERPM
         self.min_race_speed = max(0.5, self.min_race_erpm / ERPM_GAIN)
         self.base_race_speed = 2.0 * DRIVE_SPEED_SCALE
         self.speed_ramp_rate = 2.0 * DRIVE_SPEED_SCALE
