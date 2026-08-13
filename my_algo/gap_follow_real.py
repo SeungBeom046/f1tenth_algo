@@ -2,8 +2,7 @@
 Gap-following controller for the real F1TENTH car.
 
 This version is tuned for a cone course and a Livox Mid-360 style 360 deg scan.
-The LiDAR is mounted 90 deg clockwise from its datasheet frame, so vehicle front
-is +90 deg in the raw LaserScan frame.
+The LiDAR x-axis is aligned with the vehicle front in the raw LaserScan frame.
 """
 
 import math
@@ -32,8 +31,8 @@ class GapFollowRealNode(Node):
         super().__init__('gap_follow_real_node')
 
         # LiDAR / geometry
-        self.lidar_yaw_offset = math.radians(90.0)
-        self.lidar_to_bumper_dist = 0.15
+        self.lidar_yaw_offset = 0.0
+        self.lidar_to_bumper_dist = 0.30
         self.forward_fov_deg = 240.0          # vehicle front +/-120 deg
         self.rear_fov_deg = 70.0
         self.guard_fov_deg = 120.0
@@ -173,7 +172,7 @@ class GapFollowRealNode(Node):
         self.escape_timer = self.create_timer(0.02, self.escape_timer_callback)
 
         self.get_logger().info(
-            'Gap Follow Real Node 시작: LiDAR +90deg 보정, 전방 +/-120deg, '
+            'Gap Follow Real Node 시작: LiDAR 정면 0deg, 전방 +/-120deg, '
             f'최대조향 {self.max_steer:.2f}rad, 출력제한 {self.output_limit_ratio:.0%}'
         )
 

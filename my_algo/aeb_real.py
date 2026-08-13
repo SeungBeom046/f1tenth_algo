@@ -23,7 +23,7 @@ class AEBRealNode(Node):
         # ============ 튜닝 파라미터 ============
         self.ttc_threshold = 0.85
         self.min_speed = 0.1
-        self.lidar_to_bumper_dist = 0.15
+        self.lidar_to_bumper_dist = 0.30
         self.vehicle_half_width = 0.15
         self.path_margin = 0.15
         self.close_obstacle_clearance = 0.65
@@ -44,9 +44,8 @@ class AEBRealNode(Node):
         self.required_stop_hits = 3
         self.required_stop_frames = 2
         self.clear_release_frames = 4
-        # LiDAR is mounted 90 deg clockwise from the datasheet frame:
-        # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
-        self.lidar_yaw_offset = math.radians(90.0)
+        # LiDAR x-axis is aligned with the vehicle front in the LaserScan frame.
+        self.lidar_yaw_offset = 0.0
         # ======================================
 
         self.current_speed = 0.0
@@ -147,13 +146,12 @@ class AEBRealNode(Node):
                 angle += scan_msg.angle_increment
                 continue
 
-            clearance = max(0.0, r - self.lidar_to_bumper_dist)
             x = r * math.cos(vehicle_angle) - self.lidar_to_bumper_dist
             y = r * math.sin(vehicle_angle)
-            closing_speed = speed * max(0.0, math.cos(vehicle_angle))
+            clearance = max(0.0, x)
             ttc = (
-                clearance / closing_speed
-                if closing_speed > self.min_speed
+                clearance / speed
+                if speed > self.min_speed
                 else float('inf')
             )
 

@@ -40,7 +40,7 @@ class WallFollowRealNode(Node):
         self.front_slow_dist = 0.80
         self.front_stop_dist = 0.20
         self.close_obstacle_dist = 0.20
-        self.lidar_to_bumper_dist = 0.10
+        self.lidar_to_bumper_dist = 0.30
         self.front_decel_clearance = 0.25
         self.front_clear_dist = 2.0
         self.corner_lookahead_dist = 1.4
@@ -55,9 +55,8 @@ class WallFollowRealNode(Node):
         self.min_race_speed = max(0.5, self.min_race_erpm / ERPM_GAIN)
         self.base_race_speed = 2.0 * DRIVE_SPEED_SCALE
         self.speed_ramp_rate = 2.0 * DRIVE_SPEED_SCALE
-        # LiDAR is mounted 90 deg clockwise from the datasheet frame:
-        # vehicle front is +90 deg in the raw LiDAR/LaserScan frame.
-        self.lidar_yaw_offset_deg = 90.0
+        # LiDAR x-axis is aligned with the vehicle front in the LaserScan frame.
+        self.lidar_yaw_offset_deg = 0.0
 
         # ============ 실차 변환 파라미터 ============
         self.ERPM_GAIN = ERPM_GAIN
