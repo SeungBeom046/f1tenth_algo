@@ -1,12 +1,9 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 
 def generate_launch_description():
     return LaunchDescription([
-
-        # 1. PointCloud2 → LaserScan 변환
         Node(
             package='pointcloud_to_laserscan',
             executable='pointcloud_to_laserscan_node',
@@ -27,10 +24,8 @@ def generate_launch_description():
             remappings=[
                 ('cloud_in', '/livox/lidar'),
                 ('scan', '/scan'),
-            ]
+            ],
         ),
-
-        # 2. 조이스틱 드라이버
         Node(
             package='joy',
             executable='joy_node',
@@ -41,32 +36,52 @@ def generate_launch_description():
                 'autorepeat_rate': 20.0,
             }],
         ),
-
-        # 3. 조이스틱 컨트롤러
         Node(
             package='my_algo',
             executable='joy_controller',
-            name='joy_controller_node',
+            name='joy_controller',
             output='screen',
         ),
-
-        # 4. Gap Following
         Node(
             package='my_algo',
-            executable='gap_follow_real',
-            name='gap_follow_real_node',
+            executable='lidar_reactive_drive',
+            name='lidar_reactive_drive',
             output='screen',
         ),
-
-        # 5. AEB
         Node(
             package='my_algo',
-            executable='aeb_real',
-            name='aeb_real_node',
+            executable='camera_reactive_drive',
+            name='camera_reactive_drive',
             output='screen',
         ),
-
-        # 6. rosbridge (delay_between_messages를 float으로 수정)
+        Node(
+            package='my_algo',
+            executable='autonomous_drive',
+            name='autonomous_drive',
+            output='screen',
+            parameters=[{
+                'drive_source': 'lidar',
+                'command_timeout_sec': 0.35,
+                'aeb_ttc_threshold': 0.55,
+                'aeb_vehicle_half_width': 0.15,
+                'aeb_path_margin': 0.10,
+                'lidar_to_bumper_dist': 0.30,
+            }],
+        ),
+        Node(
+            package='my_algo',
+            executable='autonomous_metrics_logger',
+            name='autonomous_metrics_logger',
+            output='screen',
+            parameters=[{
+                'logs_dir': 'logs',
+                'servo_center': 0.5,
+                'servo_gain': 0.60,
+                'front_fov_deg': 120.0,
+                'lidar_to_bumper_dist': 0.30,
+                'max_valid_speed_mps': 4.0,
+            }],
+        ),
         Node(
             package='rosbridge_server',
             executable='rosbridge_websocket',
@@ -76,7 +91,7 @@ def generate_launch_description():
                 'address': '',
                 'retry_startup_delay': 5.0,
                 'fragment_timeout': 600,
-                'delay_between_messages': 0.0,  # int → float으로 수정
+                'delay_between_messages': 0.0,
                 'max_message_size': 10000000,
                 'unregister_timeout': 10.0,
             }],

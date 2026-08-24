@@ -1,11 +1,11 @@
-"""Joystick controller node for F1TENTH real car."""
+"""실차 F1TENTH 조이스틱 제어 노드."""
 
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Float64, Bool
 
-from my_algo.vesc_utils import (
+from my_algo.vehicle_utils import (
     DRIVE_SPEED_SCALE,
     ERPM_GAIN,
     MIN_DRIVE_ERPM,
@@ -70,7 +70,7 @@ class JoyControllerNode(Node):
         self.servo_pub = self.create_publisher(
             Float64, '/commands/servo/position', 10)
 
-        # 자율주행 모드 상태 발행 (wall_follow_real이 구독)
+        # 자율주행 모드 상태 발행 (autonomous_drive/lidar_reactive_drive가 구독)
         self.auto_mode_pub = self.create_publisher(
             Bool, '/autonomous_mode', 10)
 
@@ -98,8 +98,8 @@ class JoyControllerNode(Node):
 
     def get_left_trigger_scale(self, msg):
         """
-        Logitech-style trigger axis is usually +1 released, -1 fully pressed.
-        If released or missing, keep full scale so left-stick drive still works.
+        Logitech 계열 트리거 축은 보통 +1이 해제, -1이 완전 입력이다.
+        해제 상태이거나 축이 없으면 왼쪽 스틱 주행이 가능하도록 최대 scale을 유지한다.
         """
         if len(msg.axes) <= 2:
             return 1.0
@@ -154,7 +154,7 @@ class JoyControllerNode(Node):
             print_event_line(f'모드 전환: {mode_str}')
         self.prev_lb = lb
 
-        # 자율주행 모드에서는 gap_follow_real이 제어
+        # 자율주행 모드에서는 autonomous_drive가 VESC 명령을 제어
         if self.autonomous_mode:
             self._publish_mode(joy_active=False, auto_mode=True)
             return
@@ -164,16 +164,20 @@ class JoyControllerNode(Node):
         steer_axis = self.get_axis(msg, 3)    # 오른쪽 스틱 좌우
         trigger_scale = self.get_left_trigger_scale(msg)
 
+        # 수동 속도 공식: 스틱 입력(-1~1) * LT scale(0~1) * 최대속도[m/s].
         requested_speed_ms = drive_axis * trigger_scale * self.max_speed
         speed_ms = apply_min_drive_speed(
             requested_speed_ms,
             deadband=self.speed_deadband,
         )
+        # VESC 모터 명령은 m/s가 아니라 ERPM이므로 공통 변환식을 적용한다.
         erpm = speed_to_erpm(speed_ms)
 
         if abs(steer_axis) < self.steer_deadband:
             steer_axis = 0.0
+        # 수동 조향각 공식: 스틱 입력(-1~1) * 최대 조향각[rad].
         steering_rad = steer_axis * self.max_steer
+        # 서보 위치 공식: servo = center - steering_rad * gain.
         servo_pos = self.SERVO_CENTER - steering_rad * self.SERVO_GAIN
         servo_pos = max(self.SERVO_MIN, min(self.SERVO_MAX, servo_pos))
 
