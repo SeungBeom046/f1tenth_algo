@@ -18,8 +18,9 @@
     ttc_threshold:
         충돌 예상 시간 임계값 [s]. 더 빨리 멈추려면 키우고,
         AEB가 너무 민감하면 줄인다.
-    stopping_margin:
-        추가 제동 거리 [m]. 더 보수적으로 멈추려면 키운다.
+    bumper_emergency_distance:
+        앞범퍼 기준 즉시 정지 거리 [m]. AEB는 이 거리 안에 실제 충돌 후보가
+        들어왔을 때만 마지막 안전망처럼 작동한다.
     lidar_to_bumper_dist:
         LiDAR x축 원점에서 앞범퍼까지의 수평거리 [m].
 """
@@ -36,12 +37,14 @@ class AEBSafetyModel:
         self,
         ttc_threshold=0.55,
         stopping_margin=0.20,
+        bumper_emergency_distance=0.15,
         lidar_to_bumper_dist=0.30,
         vehicle_half_width=0.15,
         path_margin=0.10,
     ):
         self.ttc_threshold = ttc_threshold
         self.stopping_margin = stopping_margin
+        self.bumper_emergency_distance = bumper_emergency_distance
         self.lidar_to_bumper_dist = lidar_to_bumper_dist
         self.vehicle_half_width = vehicle_half_width
         self.path_margin = path_margin
@@ -91,20 +94,15 @@ class AEBSafetyModel:
             self.last_reason = 'clear'
             return False
 
-        # TTC(Time To Collision) 공식: 충돌 예상 시간 = 앞 장애물 거리 / 현재 속도.
-        # speed가 0에 가까울 때 0으로 나누지 않도록 1e-3 하한을 둔다.
+        # TTC는 상태 로그용으로만 남긴다. 보이는 장애물 회피는 planner가 맡고,
+        # AEB는 앞범퍼 기준 bumper_emergency_distance 안쪽의 임박 충돌에만 개입한다.
         ttc = closest_x / max(speed, 1e-3)
         stopping_distance = self.estimate_stopping_distance(speed)
-        # 두 조건 중 하나라도 만족하면 AEB 작동:
-        # 1) TTC가 임계값 이하
-        # 2) 앞 장애물이 추정 제동거리 안에 있음
-        emergency = (
-            ttc <= self.ttc_threshold
-            or closest_x <= stopping_distance
-        )
+        emergency = closest_x <= self.bumper_emergency_distance
         self.last_reason = (
             f'ttc={ttc:.2f}s closest={closest_x:.2f}m '
-            f'stop={stopping_distance:.2f}m'
+            f'stop={stopping_distance:.2f}m '
+            f'aeb_limit={self.bumper_emergency_distance:.2f}m'
         )
         return emergency
 

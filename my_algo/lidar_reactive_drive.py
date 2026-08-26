@@ -59,7 +59,7 @@ class LidarReactiveDriveNode(Node):
 
         # 장애물 여유거리 [m]
         # 증가: 장애물에서 멀리 회피, 감소: 좁은 통로 통과 가능.
-        self.declare_parameter('safety_margin', 0.18)
+        self.declare_parameter('safety_margin', 0.25)
 
         # 벽 추종 목표 거리 [m]
         # 증가: 벽에서 멀리, 감소: 벽에 가까이 붙음.
@@ -67,7 +67,13 @@ class LidarReactiveDriveNode(Node):
 
         # 전방 계획 거리 [m]
         # 증가: 더 일찍 회피, 감소: 가까운 장애물에 더 민감.
-        self.declare_parameter('lookahead_distance', 2.2)
+        self.declare_parameter('lookahead_distance', 2.6)
+
+        # 현재 진행 띠 안 장애물이 이 거리보다 가까우면 회피 모드로 들어간다.
+        self.declare_parameter('obstacle_avoidance_distance', 1.20)
+
+        # 이 거리 안에 전방 장애물이 있는데 통과 gap이 없으면 전진하지 않는다.
+        self.declare_parameter('blocked_stop_distance', 0.45)
 
         # 최대 조향각 [rad]
         # 증가: 더 급하게 회피, 감소: 조향이 부드러워짐.
@@ -86,6 +92,10 @@ class LidarReactiveDriveNode(Node):
         self.max_steering = float(self.get_parameter('max_steering').value)
         self.lidar_to_bumper_dist = float(
             self.get_parameter('lidar_to_bumper_dist').value)
+        self.obstacle_avoidance_distance = float(
+            self.get_parameter('obstacle_avoidance_distance').value)
+        self.blocked_stop_distance = float(
+            self.get_parameter('blocked_stop_distance').value)
 
         self.auto_mode = False
         self.joy_active = False
@@ -133,7 +143,9 @@ class LidarReactiveDriveNode(Node):
         gaps = self.find_drivable_gaps(points)
         corridor = self.detect_corridor(points)
         cone_track = self.detect_cone_track(points)
-        path_blocked = self.forward_clearance(points, 0.18) < 0.75
+        path_half_width = 0.5 * self.vehicle_width + self.safety_margin
+        forward_clearance = self.forward_clearance(points, path_half_width)
+        path_blocked = forward_clearance < self.obstacle_avoidance_distance
 
         desired_mode = self.select_reactive_mode(
             gaps=gaps,
@@ -143,13 +155,23 @@ class LidarReactiveDriveNode(Node):
         )
 
         if desired_mode == 'OBSTACLE_AVOIDANCE':
-            command = self.plan_gap_follow(points, gaps, aggressive=True)
+            command = self.plan_gap_follow(
+                points,
+                gaps,
+                aggressive=True,
+                forward_clearance=forward_clearance,
+            )
         elif desired_mode == 'CONE_TRACK':
             command = self.plan_cone_track(cone_track)
         elif desired_mode == 'WALL_FOLLOW':
             command = self.plan_wall_follow(corridor)
         else:
-            command = self.plan_gap_follow(points, gaps, aggressive=False)
+            command = self.plan_gap_follow(
+                points,
+                gaps,
+                aggressive=False,
+                forward_clearance=forward_clearance,
+            )
 
         command.steering_rad = self.smooth_steering(command.steering_rad)
         command.rpm = sanitize_rpm(command.rpm)
@@ -339,9 +361,20 @@ class LidarReactiveDriveNode(Node):
             self.mode_started_at = self.get_clock().now()
         return self.current_mode
 
-    def plan_gap_follow(self, points, gaps, aggressive):
+    def plan_gap_follow(self, points, gaps, aggressive, forward_clearance=None):
         """여유거리, 폭, 조향 부담을 균형 있게 고려해 gap을 선택한다."""
         if not gaps:
+            if (
+                forward_clearance is not None
+                and forward_clearance <= self.blocked_stop_distance
+            ):
+                return ReactiveDriveCommand(
+                    steering_rad=0.0,
+                    rpm=0.0,
+                    mode='STOP',
+                    confidence=0.9,
+                    reason=f'blocked_no_gap_{forward_clearance:.2f}m',
+                )
             steering = self.turn_toward_open_space(points)
             return ReactiveDriveCommand(
                 steering_rad=steering,
@@ -365,6 +398,7 @@ class LidarReactiveDriveNode(Node):
         # width_ratio: 틈새 폭이 1.5 m 이상이면 넓다고 보고 1로 포화한다.
         width_ratio = clamp(best_gap['width'] / 1.5, 0.0, 1.0)
         # 기본 RPM 공식: CRUISE_RPM에서 시작해 틈새가 넓을수록 MAX_RPM에 가까워진다.
+        # CRUISE_RPM/MAX_RPM은 현재 실차 테스트용 70% 스케일 값이다.
         rpm = CRUISE_RPM + (MAX_RPM - CRUISE_RPM) * width_ratio
         # 조향 감속 공식: 최대 조향이면 RPM을 35% 줄이고, 직진이면 줄이지 않는다.
         rpm *= 1.0 - 0.35 * steer_ratio
