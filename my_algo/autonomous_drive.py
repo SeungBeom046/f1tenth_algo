@@ -70,11 +70,14 @@ class AutonomousDriveNode(Node):
 
         # 앞범퍼 기준 AEB 즉시 정지 거리 [m]
         # 보이는 장애물은 planner가 피하고, AEB는 이 거리 안 임박 충돌만 막는다.
-        self.declare_parameter('aeb_bumper_emergency_distance', 0.15)
+        self.declare_parameter('aeb_bumper_emergency_distance', 0.25)
+
+        # 라이다-범퍼 보정 후 살짝 음수가 되는 근접점 허용치 [m]
+        self.declare_parameter('aeb_bumper_overlap_tolerance', 0.10)
 
         # AEB 전방 검사 띠의 좌우 추가 여유거리 [m]
         # 검사 반폭 = 차량 반폭 + 이 값. 키우면 옆 장애물에도 더 민감해진다.
-        self.declare_parameter('aeb_path_margin', 0.10)
+        self.declare_parameter('aeb_path_margin', 0.15)
 
         # 라이다-앞범퍼 수평거리 [m]
         # 증가: 앞범퍼 기준 충돌 거리를 더 보수적으로 계산.
@@ -98,6 +101,8 @@ class AutonomousDriveNode(Node):
             path_margin=float(self.get_parameter('aeb_path_margin').value),
             bumper_emergency_distance=float(
                 self.get_parameter('aeb_bumper_emergency_distance').value),
+            bumper_overlap_tolerance=float(
+                self.get_parameter('aeb_bumper_overlap_tolerance').value),
         )
 
         # 초기 상태 안정화
