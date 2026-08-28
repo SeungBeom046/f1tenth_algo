@@ -62,6 +62,8 @@ class JoyControllerNode(Node):
         self.last_manual_command_time = self.get_clock().now()
         self.manual_command_timeout_sec = 0.30
         self.manual_active = False
+        self.last_manual_erpm = 0.0
+        self.last_manual_servo = self.SERVO_CENTER
 
         # 조이스틱 구독
         self.joy_sub = self.create_subscription(
@@ -167,7 +169,7 @@ class JoyControllerNode(Node):
 
         # 수동 조이스틱 제어
         drive_axis = self.get_axis(msg, 1)    # 왼쪽 스틱/L3 상하
-        steer_axis = self.get_axis(msg, 3)    # 오른쪽 스틱 좌우
+        steer_axis = self.select_steer_axis(msg)
         trigger_scale = self.get_left_trigger_scale(msg)
 
         # 수동 속도 공식: 스틱 입력(-1~1) * LT scale(0~1) * 최대속도[m/s].
@@ -195,13 +197,7 @@ class JoyControllerNode(Node):
         if active_manual:
             self.manual_active = True
             self.last_manual_command_time = self.get_clock().now()
-            speed_msg = Float64()
-            speed_msg.data = erpm
-            self.speed_pub.publish(speed_msg)
-
-            servo_msg = Float64()
-            servo_msg.data = servo_pos
-            self.servo_pub.publish(servo_msg)
+            self.publish_manual_command(erpm, servo_pos)
 
             self._publish_mode(joy_active=True, auto_mode=False)
 
@@ -214,8 +210,31 @@ class JoyControllerNode(Node):
             )
         else:
             self.manual_active = False
+            self.last_manual_erpm = 0.0
+            self.last_manual_servo = self.SERVO_CENTER
             self.stop()
             self._publish_mode(joy_active=False, auto_mode=False)
+
+    def select_steer_axis(self, msg):
+        """F710 모드 차이를 흡수하기 위해 오른쪽/왼쪽 stick X 중 실제 입력된 축을 고른다."""
+        right_stick_x = self.get_axis(msg, 3)
+        left_stick_x = self.get_axis(msg, 0)
+        if abs(right_stick_x) >= self.steer_deadband:
+            return right_stick_x
+        return left_stick_x
+
+    def publish_manual_command(self, erpm, servo_pos):
+        """수동 VESC 명령을 발행하고 마지막 값을 저장한다."""
+        self.last_manual_erpm = erpm
+        self.last_manual_servo = servo_pos
+
+        speed_msg = Float64()
+        speed_msg.data = erpm
+        self.speed_pub.publish(speed_msg)
+
+        servo_msg = Float64()
+        servo_msg.data = servo_pos
+        self.servo_pub.publish(servo_msg)
 
     def mode_timer_callback(self):
         """joy 메시지가 잠깐 끊겨도 mode/joy_active 상태를 계속 발행한다."""
@@ -228,6 +247,8 @@ class JoyControllerNode(Node):
         ).nanoseconds / 1e9
         active = self.manual_active and elapsed <= self.manual_command_timeout_sec
         self._publish_mode(joy_active=active, auto_mode=False)
+        if active:
+            self.publish_manual_command(self.last_manual_erpm, self.last_manual_servo)
 
     def _publish_mode(self, joy_active, auto_mode):
         """모드 상태 발행"""

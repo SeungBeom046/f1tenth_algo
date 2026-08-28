@@ -152,8 +152,9 @@ class AutonomousDriveNode(Node):
 
     def auto_mode_callback(self, msg):
         """자율주행 명령 출력을 시작하거나 정지한다."""
+        was_auto = self.auto_mode
         self.auto_mode = msg.data
-        if not self.auto_mode:
+        if was_auto and not self.auto_mode:
             self.publish_drive_command(0.0, 0.0, center_steering=True)
             self.publish_aeb_state(False, 'auto_off')
             print_event_line('[Drive] AUTO off: stop')

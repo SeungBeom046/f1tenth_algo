@@ -94,6 +94,10 @@ class LidarReactiveDriveNode(Node):
         self.declare_parameter('open_space_steering_gain', 0.70)
         self.declare_parameter('obstacle_steering_gain', 1.10)
 
+        # 실차 기본 주행에서는 cone mode를 끈다. 단순 LiDAR 점군만으로는 벽/장애물을
+        # cone pair처럼 오인해 주행 mode가 튀기 쉽다.
+        self.declare_parameter('enable_cone_track', False)
+
         # 최대 조향각 [rad]
         # 증가: 더 급하게 회피, 감소: 조향이 부드러워짐.
         self.declare_parameter('max_steering', 0.78)
@@ -131,6 +135,8 @@ class LidarReactiveDriveNode(Node):
             self.get_parameter('open_space_steering_gain').value)
         self.obstacle_steering_gain = float(
             self.get_parameter('obstacle_steering_gain').value)
+        self.enable_cone_track = bool(
+            self.get_parameter('enable_cone_track').value)
 
         self.auto_mode = False
         self.joy_active = False
@@ -161,8 +167,9 @@ class LidarReactiveDriveNode(Node):
 
     def auto_mode_callback(self, msg):
         """AUTO 모드일 때만 planning을 활성화한다."""
+        was_auto = self.auto_mode
         self.auto_mode = msg.data
-        if not self.auto_mode:
+        if was_auto and not self.auto_mode:
             self.publish_command(ReactiveDriveCommand(mode='STOP', rpm=0.0))
 
     def joy_active_callback(self, msg):
@@ -187,7 +194,11 @@ class LidarReactiveDriveNode(Node):
         self.active_lookahead_distance = self.adaptive_lookahead_distance()
         gaps = self.find_drivable_gaps(points)
         corridor = self.detect_corridor(points)
-        cone_track = self.detect_cone_track(points)
+        cone_track = (
+            self.detect_cone_track(points)
+            if self.enable_cone_track
+            else {'confidence': 0.0}
+        )
         path_half_width = 0.5 * self.vehicle_width + self.safety_margin
         forward_clearance = self.forward_clearance(points, path_half_width)
         obstacle_avoidance_distance = self.adaptive_obstacle_avoidance_distance()

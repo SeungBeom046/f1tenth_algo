@@ -79,6 +79,7 @@ def generate_launch_description():
                 'steering_deadband': 0.055,
                 'open_space_steering_gain': 0.70,
                 'obstacle_steering_gain': 1.10,
+                'enable_cone_track': False,
                 'max_steering': 0.78,
                 'lidar_to_bumper_dist': 0.30,
             }],
