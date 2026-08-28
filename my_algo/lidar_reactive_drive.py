@@ -96,6 +96,9 @@ class LidarReactiveDriveNode(Node):
         self.declare_parameter('steering_deadband', 0.055)
         self.declare_parameter('open_space_steering_gain', 0.70)
         self.declare_parameter('obstacle_steering_gain', 1.10)
+        self.declare_parameter('path_block_margin', 0.10)
+        self.declare_parameter('wall_follow_gain', 0.30)
+        self.declare_parameter('wall_error_filter_alpha', 0.25)
 
         # 실차 기본 주행에서는 cone mode를 끈다. 단순 LiDAR 점군만으로는 벽/장애물을
         # cone pair처럼 오인해 주행 mode가 튀기 쉽다.
@@ -138,6 +141,12 @@ class LidarReactiveDriveNode(Node):
             self.get_parameter('open_space_steering_gain').value)
         self.obstacle_steering_gain = float(
             self.get_parameter('obstacle_steering_gain').value)
+        self.path_block_margin = float(
+            self.get_parameter('path_block_margin').value)
+        self.wall_follow_gain = float(
+            self.get_parameter('wall_follow_gain').value)
+        self.wall_error_filter_alpha = float(
+            self.get_parameter('wall_error_filter_alpha').value)
         self.enable_cone_track = bool(
             self.get_parameter('enable_cone_track').value)
 
@@ -148,6 +157,7 @@ class LidarReactiveDriveNode(Node):
         self.current_mode = 'OPEN_SPACE'
         self.mode_started_at = self.get_clock().now()
         self.previous_steering = 0.0
+        self.filtered_wall_error = None
         self.last_status = self.get_clock().now()
 
         qos = QoSProfile(
@@ -202,7 +212,7 @@ class LidarReactiveDriveNode(Node):
             if self.enable_cone_track
             else {'confidence': 0.0}
         )
-        path_half_width = 0.5 * self.vehicle_width + self.safety_margin
+        path_half_width = 0.5 * self.vehicle_width + self.path_block_margin
         forward_clearance = self.forward_clearance(points, path_half_width)
         obstacle_avoidance_distance = self.adaptive_obstacle_avoidance_distance()
         path_blocked = forward_clearance < obstacle_avoidance_distance
@@ -563,9 +573,8 @@ class LidarReactiveDriveNode(Node):
             error = self.target_wall_distance - right
         else:
             error = 0.0
-        # 단순 P 제어: 조향각 = 0.55 * 거리 오차.
-        # 이후 최대 조향각으로 제한해 급격한 명령을 막는다.
-        steering = clamp(0.40 * error, -self.max_steering, self.max_steering)
+        error = self.filter_wall_error(error)
+        steering = clamp(self.wall_follow_gain * error, -self.max_steering, self.max_steering)
         if abs(steering) < self.steering_deadband:
             steering = 0.0
         # 벽 추종에서도 조향량이 클수록 속도를 줄인다. 최대 조향이면 20% 감속.
@@ -618,9 +627,21 @@ class LidarReactiveDriveNode(Node):
         )
         return clamp(dynamic_stop, self.planner_stop_distance, 1.50)
 
+    def filter_wall_error(self, error):
+        """복도 벽 거리 잡음이 바로 좌우 조향으로 튀지 않도록 완만하게 필터링한다."""
+        if self.filtered_wall_error is None:
+            self.filtered_wall_error = error
+        else:
+            alpha = clamp(self.wall_error_filter_alpha, 0.0, 1.0)
+            self.filtered_wall_error = (
+                (1.0 - alpha) * self.filtered_wall_error
+                + alpha * error
+            )
+        return self.filtered_wall_error
+
     def smooth_steering(self, target, fast=False):
         """회피 반응성을 유지하면서 조향 떨림을 제한한다."""
-        max_step = 0.32 if fast else 0.16
+        max_step = 0.22 if fast else 0.08
         # 한 scan callback마다 조향 변화량을 +/-0.16 rad로 제한한다.
         # 급격한 좌우 전환으로 차체가 덜그럭거리는 현상을 줄이는 rate limit이다.
         steering = clamp(
