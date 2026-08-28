@@ -58,6 +58,9 @@ class LidarReactiveDriveNode(Node):
         # 증가: 더 넓은 틈새만 통과, 감소: 좁은 공간도 후보가 됨.
         self.declare_parameter('vehicle_width', 0.30)
 
+        # 조이스틱 없이 launch 즉시 planning을 시작할지 여부.
+        self.declare_parameter('start_autonomous', True)
+
         # 장애물 여유거리 [m]
         # 증가: 장애물에서 멀리 회피, 감소: 좁은 통로 통과 가능.
         self.declare_parameter('safety_margin', 0.25)
@@ -138,7 +141,7 @@ class LidarReactiveDriveNode(Node):
         self.enable_cone_track = bool(
             self.get_parameter('enable_cone_track').value)
 
-        self.auto_mode = False
+        self.auto_mode = bool(self.get_parameter('start_autonomous').value)
         self.joy_active = False
         self.current_speed = 0.0
         self.active_lookahead_distance = self.lookahead_distance

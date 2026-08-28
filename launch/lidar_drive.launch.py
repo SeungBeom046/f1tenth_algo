@@ -37,8 +37,13 @@ def generate_launch_description():
                 ('scan', '/scan'),
             ],
         ),
-        Node(package='joy', executable='joy_node', name='joy_node'),
-        Node(package='my_algo', executable='joy_controller', output='screen'),
+        # Joystick control is disabled for direct autonomous testing.
+        # Node(package='joy', executable='joy_node', name='joy_node'),
+        # Node(
+        #     package='my_algo',
+        #     executable='joy_controller',
+        #     output='screen',
+        # ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(realsense_launch),
         ),
@@ -66,6 +71,7 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'vehicle_width': 0.30,
+                'start_autonomous': True,
                 'safety_margin': 0.25,
                 'target_wall_distance': 0.85,
                 'lookahead_distance': 2.6,
@@ -90,6 +96,7 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'drive_source': 'lidar',
+                'start_autonomous': True,
                 'command_timeout_sec': 1.00,
                 'aeb_ttc_threshold': 0.55,
                 'aeb_vehicle_half_width': 0.15,

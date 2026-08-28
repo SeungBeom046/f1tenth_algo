@@ -56,6 +56,9 @@ class AutonomousDriveNode(Node):
         # 라이다: 현재 실차 기본값, 카메라: 추후 카메라 주행 알고리즘 연결.
         self.declare_parameter('drive_source', 'lidar')
 
+        # 조이스틱 없이 launch 즉시 자율주행을 시작할지 여부.
+        self.declare_parameter('start_autonomous', True)
+
         # 계획 명령 만료 시간 [s]
         # 증가: 느린 계획기 허용, 감소: 계획기 멈춤 시 더 빨리 정지.
         self.declare_parameter('command_timeout_sec', 1.00)
@@ -106,7 +109,7 @@ class AutonomousDriveNode(Node):
         )
 
         # 초기 상태 안정화
-        self.auto_mode = False
+        self.auto_mode = bool(self.get_parameter('start_autonomous').value)
         self.joy_active = False
         self.current_speed = 0.0
         self.latest_scan = None
@@ -140,15 +143,24 @@ class AutonomousDriveNode(Node):
             Float64, '/commands/motor/speed', 10)
         self.servo_pub = self.create_publisher(
             Float64, '/commands/servo/position', 10)
+        self.auto_mode_pub = self.create_publisher(
+            Bool, '/autonomous_mode', 10)
         self.aeb_active_pub = self.create_publisher(
             Bool, '/aeb/active', 10)
         self.aeb_status_pub = self.create_publisher(
             String, '/aeb/status', 10)
         self.control_timer = self.create_timer(0.02, self.control_timer_callback) # 제어 루프 0.02초마다 갱신 (50Hz)
+        self.mode_timer = self.create_timer(0.10, self.publish_auto_mode_heartbeat)
 
         self.get_logger().info(
             f'Autonomous drive ready | mode={self.drive_source}'
         )
+
+    def publish_auto_mode_heartbeat(self):
+        """조이스틱 없이도 planner/logger가 AUTO 상태를 볼 수 있게 주기 발행한다."""
+        msg = Bool()
+        msg.data = bool(self.auto_mode)
+        self.auto_mode_pub.publish(msg)
 
     def auto_mode_callback(self, msg):
         """자율주행 명령 출력을 시작하거나 정지한다."""

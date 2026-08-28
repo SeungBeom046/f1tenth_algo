@@ -37,6 +37,13 @@ class JoyControllerNode(Node):
     def __init__(self):
         super().__init__('joy_controller_node')
 
+        self.declare_parameter('drive_axis_index', 1)
+        self.declare_parameter('steer_axis_indices', [3, 0])
+        self.declare_parameter('auto_toggle_button_indices', [4, 6])
+        self.declare_parameter('emergency_button_indices', [1])
+        self.declare_parameter('invert_drive_axis', False)
+        self.declare_parameter('invert_steer_axis', False)
+
         # ============ 튜닝 파라미터 ============
         self.max_speed = 2.0 * DRIVE_SPEED_SCALE
         self.ERPM_GAIN = ERPM_GAIN
@@ -64,6 +71,20 @@ class JoyControllerNode(Node):
         self.manual_active = False
         self.last_manual_erpm = 0.0
         self.last_manual_servo = self.SERVO_CENTER
+        self.prev_buttons = []
+
+        self.drive_axis_index = int(self.get_parameter('drive_axis_index').value)
+        self.steer_axis_indices = [
+            int(index) for index in self.get_parameter('steer_axis_indices').value
+        ]
+        self.auto_toggle_button_indices = [
+            int(index) for index in self.get_parameter('auto_toggle_button_indices').value
+        ]
+        self.emergency_button_indices = [
+            int(index) for index in self.get_parameter('emergency_button_indices').value
+        ]
+        self.invert_drive_axis = bool(self.get_parameter('invert_drive_axis').value)
+        self.invert_steer_axis = bool(self.get_parameter('invert_steer_axis').value)
 
         # 조이스틱 구독
         self.joy_sub = self.create_subscription(
@@ -87,7 +108,8 @@ class JoyControllerNode(Node):
         self.get_logger().info('Joy Controller Node 시작!')
         self.get_logger().info(
             '조작법:\n'
-            '  LB: 자율주행 모드 토글\n'
+            f'  AUTO toggle buttons: {self.auto_toggle_button_indices}\n'
+            f'  Emergency buttons: {self.emergency_button_indices}\n'
             '  왼쪽 스틱 상하/L3: 전진/후진\n'
             '  LT 축: 눌렀을 때만 속도 리미터(지원되는 패드에서)\n'
             '  오른쪽 스틱 좌우: 조향\n'
@@ -101,6 +123,25 @@ class JoyControllerNode(Node):
 
     def get_button(self, msg, idx):
         return bool(msg.buttons[idx]) if idx < len(msg.buttons) else False
+
+    def get_any_button(self, msg, indices):
+        return any(self.get_button(msg, index) for index in indices)
+
+    def button_edge(self, msg, indices):
+        for index in indices:
+            now_pressed = self.get_button(msg, index)
+            was_pressed = bool(self.prev_buttons[index]) if index < len(self.prev_buttons) else False
+            if now_pressed and not was_pressed:
+                return True
+        return False
+
+    def log_button_edges(self, msg):
+        pressed = [
+            index for index, value in enumerate(msg.buttons)
+            if value and not (index < len(self.prev_buttons) and self.prev_buttons[index])
+        ]
+        if pressed:
+            self.get_logger().info(f'Joy button pressed indices: {pressed}')
 
     def get_left_trigger_scale(self, msg):
         """
@@ -129,9 +170,9 @@ class JoyControllerNode(Node):
         buttons[1]: B (긴급 정지)
         """
 
-        # 버튼 읽기
-        lb = self.get_button(msg, 4)
-        emergency = self.get_button(msg, 1)
+        self.log_button_edges(msg)
+        auto_toggle_edge = self.button_edge(msg, self.auto_toggle_button_indices)
+        emergency = self.get_any_button(msg, self.emergency_button_indices)
 
         # 긴급 정지
         if emergency:
@@ -154,12 +195,12 @@ class JoyControllerNode(Node):
             if self.last_toggle_time is None
             else (now - self.last_toggle_time).nanoseconds / 1e9
         )
-        if lb and not self.prev_lb and since_last_toggle >= self.toggle_debounce_sec:
+        if auto_toggle_edge and since_last_toggle >= self.toggle_debounce_sec:
             self.autonomous_mode = not self.autonomous_mode
             self.last_toggle_time = now
             mode_str = '자율주행' if self.autonomous_mode else '수동'
             print_event_line(f'모드 전환: {mode_str}')
-        self.prev_lb = lb
+        self.prev_buttons = list(msg.buttons)
 
         # 자율주행 모드에서는 autonomous_drive가 VESC 명령을 제어
         if self.autonomous_mode:
@@ -168,8 +209,12 @@ class JoyControllerNode(Node):
             return
 
         # 수동 조이스틱 제어
-        drive_axis = self.get_axis(msg, 1)    # 왼쪽 스틱/L3 상하
+        drive_axis = self.get_axis(msg, self.drive_axis_index)
+        if self.invert_drive_axis:
+            drive_axis *= -1.0
         steer_axis = self.select_steer_axis(msg)
+        if self.invert_steer_axis:
+            steer_axis *= -1.0
         trigger_scale = self.get_left_trigger_scale(msg)
 
         # 수동 속도 공식: 스틱 입력(-1~1) * LT scale(0~1) * 최대속도[m/s].
@@ -217,11 +262,14 @@ class JoyControllerNode(Node):
 
     def select_steer_axis(self, msg):
         """F710 모드 차이를 흡수하기 위해 오른쪽/왼쪽 stick X 중 실제 입력된 축을 고른다."""
-        right_stick_x = self.get_axis(msg, 3)
-        left_stick_x = self.get_axis(msg, 0)
-        if abs(right_stick_x) >= self.steer_deadband:
-            return right_stick_x
-        return left_stick_x
+        candidates = [
+            self.get_axis(msg, index)
+            for index in self.steer_axis_indices
+        ]
+        active = [value for value in candidates if abs(value) >= self.steer_deadband]
+        if active:
+            return max(active, key=abs)
+        return candidates[0] if candidates else 0.0
 
     def publish_manual_command(self, erpm, servo_pos):
         """수동 VESC 명령을 발행하고 마지막 값을 저장한다."""
