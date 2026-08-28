@@ -98,15 +98,21 @@ class AEBSafetyModel:
             self.last_reason = 'clear'
             return False
 
-        # TTC는 상태 로그용으로만 남긴다. 보이는 장애물 회피는 planner가 맡고,
-        # AEB는 앞범퍼 기준 bumper_emergency_distance 안쪽의 임박 충돌에만 개입한다.
+        # 속도가 올라가면 25 cm 고정 정지선만으로는 늦다. 보이는 장애물 회피는
+        # planner가 먼저 맡되, 현재 속도에서 충돌 경로가 제동거리/TTC 안으로
+        # 들어오면 AEB가 마지막 안전망으로 즉시 개입한다.
         ttc = closest_x / max(speed, 1e-3)
         stopping_distance = self.estimate_stopping_distance(speed)
-        emergency = closest_x <= self.bumper_emergency_distance
+        dynamic_emergency_distance = max(
+            self.bumper_emergency_distance,
+            stopping_distance,
+            speed * self.ttc_threshold,
+        )
+        emergency = closest_x <= dynamic_emergency_distance
         self.last_reason = (
             f'ttc={ttc:.2f}s closest={closest_x:.2f}m '
             f'stop={stopping_distance:.2f}m '
-            f'aeb_limit={self.bumper_emergency_distance:.2f}m'
+            f'aeb_limit={dynamic_emergency_distance:.2f}m'
         )
         return emergency
 

@@ -58,7 +58,7 @@ class AutonomousDriveNode(Node):
 
         # 계획 명령 만료 시간 [s]
         # 증가: 느린 계획기 허용, 감소: 계획기 멈춤 시 더 빨리 정지.
-        self.declare_parameter('command_timeout_sec', 0.35)
+        self.declare_parameter('command_timeout_sec', 1.00)
 
         # AEB TTC 임계값 [s]
         # 증가: 더 일찍 정지, 감소: 민감도 완화.

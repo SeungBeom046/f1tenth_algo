@@ -28,6 +28,7 @@
 import math
 
 import rclpy
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import LaserScan
@@ -69,11 +70,24 @@ class LidarReactiveDriveNode(Node):
         # 증가: 더 일찍 회피, 감소: 가까운 장애물에 더 민감.
         self.declare_parameter('lookahead_distance', 2.6)
 
+        # 속도에 따라 추가로 늘릴 전방 계획 거리 [m per m/s].
+        self.declare_parameter('lookahead_speed_gain', 0.90)
+
+        # 속도 적응형 lookahead 상한 [m].
+        self.declare_parameter('max_lookahead_distance', 4.5)
+
         # 현재 진행 띠 안 장애물이 이 거리보다 가까우면 회피 모드로 들어간다.
         self.declare_parameter('obstacle_avoidance_distance', 1.20)
 
         # 이 거리 안에 전방 장애물이 있는데 통과 gap이 없으면 전진하지 않는다.
-        self.declare_parameter('blocked_stop_distance', 0.45)
+        self.declare_parameter('blocked_stop_distance', 0.75)
+
+        # 이 거리 안에서는 gap이 보여도 일단 멈춘다. AEB보다 앞단의 planner 정지선이다.
+        self.declare_parameter('planner_stop_distance', 0.35)
+
+        # 속도 기반 planner 정지선 여유. 증가하면 AEB 전에 더 일찍 멈춘다.
+        self.declare_parameter('planner_stop_time_headway', 0.45)
+        self.declare_parameter('planner_stop_margin', 0.20)
 
         # 최대 조향각 [rad]
         # 증가: 더 급하게 회피, 감소: 조향이 부드러워짐.
@@ -89,6 +103,10 @@ class LidarReactiveDriveNode(Node):
             self.get_parameter('target_wall_distance').value)
         self.lookahead_distance = float(
             self.get_parameter('lookahead_distance').value)
+        self.lookahead_speed_gain = float(
+            self.get_parameter('lookahead_speed_gain').value)
+        self.max_lookahead_distance = float(
+            self.get_parameter('max_lookahead_distance').value)
         self.max_steering = float(self.get_parameter('max_steering').value)
         self.lidar_to_bumper_dist = float(
             self.get_parameter('lidar_to_bumper_dist').value)
@@ -96,9 +114,17 @@ class LidarReactiveDriveNode(Node):
             self.get_parameter('obstacle_avoidance_distance').value)
         self.blocked_stop_distance = float(
             self.get_parameter('blocked_stop_distance').value)
+        self.planner_stop_distance = float(
+            self.get_parameter('planner_stop_distance').value)
+        self.planner_stop_time_headway = float(
+            self.get_parameter('planner_stop_time_headway').value)
+        self.planner_stop_margin = float(
+            self.get_parameter('planner_stop_margin').value)
 
         self.auto_mode = False
         self.joy_active = False
+        self.current_speed = 0.0
+        self.active_lookahead_distance = self.lookahead_distance
         self.current_mode = 'OPEN_SPACE'
         self.mode_started_at = self.get_clock().now()
         self.previous_steering = 0.0
@@ -115,6 +141,8 @@ class LidarReactiveDriveNode(Node):
             Bool, '/autonomous_mode', self.auto_mode_callback, 10)
         self.joy_sub = self.create_subscription(
             Bool, '/joy_active', self.joy_active_callback, 10)
+        self.odom_sub = self.create_subscription(
+            Odometry, '/vesc/odom', self.odom_callback, 10)
         self.command_pub = self.create_publisher(
             String, '/reactive/lidar_command', 10)
 
@@ -130,6 +158,11 @@ class LidarReactiveDriveNode(Node):
         """수동 조이스틱 조작 중에는 autonomous planner 출력을 멈춘다."""
         self.joy_active = msg.data
 
+    def odom_callback(self, msg):
+        """현재 속도로 lookahead/정지선을 속도 적응형으로 조정한다."""
+        speed = math.hypot(msg.twist.twist.linear.x, msg.twist.twist.linear.y)
+        self.current_speed = speed if math.isfinite(speed) else 0.0
+
     def scan_callback(self, scan_msg):
         """최신 scan을 하나의 local reactive drive command로 변환한다."""
         if self.joy_active or not self.auto_mode:
@@ -140,12 +173,27 @@ class LidarReactiveDriveNode(Node):
             self.publish_command(ReactiveDriveCommand(mode='STOP', reason='no_scan'))
             return
 
+        self.active_lookahead_distance = self.adaptive_lookahead_distance()
         gaps = self.find_drivable_gaps(points)
         corridor = self.detect_corridor(points)
         cone_track = self.detect_cone_track(points)
         path_half_width = 0.5 * self.vehicle_width + self.safety_margin
         forward_clearance = self.forward_clearance(points, path_half_width)
-        path_blocked = forward_clearance < self.obstacle_avoidance_distance
+        obstacle_avoidance_distance = self.adaptive_obstacle_avoidance_distance()
+        path_blocked = forward_clearance < obstacle_avoidance_distance
+
+        planner_stop_distance = self.adaptive_planner_stop_distance()
+        if forward_clearance <= planner_stop_distance:
+            command = ReactiveDriveCommand(
+                steering_rad=0.0,
+                rpm=0.0,
+                mode='STOP',
+                confidence=1.0,
+                reason=f'planner_stop_{forward_clearance:.2f}m',
+            )
+            self.publish_command(command)
+            self.print_status(command, corridor, gaps)
+            return
 
         desired_mode = self.select_reactive_mode(
             gaps=gaps,
@@ -173,7 +221,10 @@ class LidarReactiveDriveNode(Node):
                 forward_clearance=forward_clearance,
             )
 
-        command.steering_rad = self.smooth_steering(command.steering_rad)
+        command.steering_rad = self.smooth_steering(
+            command.steering_rad,
+            fast=command.mode in ('OBSTACLE_AVOIDANCE', 'STOP'),
+        )
         command.rpm = sanitize_rpm(command.rpm)
         self.publish_command(command)
         self.print_status(command, corridor, gaps)
@@ -252,7 +303,7 @@ class LidarReactiveDriveNode(Node):
         # 통과 필요 폭 = 차량 실제 폭 + 좌우 안전 여유거리.
         # 예: 0.30 + 2*0.18 = 0.66 m보다 좁은 전방 통로는 막힌 것으로 본다.
         required_width = self.vehicle_width + 2.0 * self.safety_margin
-        lookahead = self.lookahead_distance
+        lookahead = self.active_lookahead_distance
         safe_samples = []
         for point in points:
             # 차량 중심선 기준 좌우 허용 폭. 장애물이 lookahead 안에 있고
@@ -293,7 +344,7 @@ class LidarReactiveDriveNode(Node):
             return None
         # 전방 여유거리 = 좌우 경계 range와 lookahead 중 가장 작은 값.
         # 너무 먼 값에 과신하지 않도록 lookahead_distance로 상한을 둔다.
-        clearance = min(left['range'], right['range'], self.lookahead_distance)
+        clearance = min(left['range'], right['range'], self.active_lookahead_distance)
         return {
             'center_angle': center_angle,
             'width': width,
@@ -314,7 +365,7 @@ class LidarReactiveDriveNode(Node):
         """local centerline을 만들 수 있는 좌우 cone boundary를 감지한다."""
         near = [
             p for p in points
-            if 0.2 <= p['x'] <= self.lookahead_distance and abs(p['y']) <= 1.8
+            if 0.2 <= p['x'] <= self.active_lookahead_distance and abs(p['y']) <= 1.8
         ]
         left = [p for p in near if p['y'] > 0.20]
         right = [p for p in near if p['y'] < -0.20]
@@ -334,7 +385,7 @@ class LidarReactiveDriveNode(Node):
         confidence = clamp((len(left) + len(right)) / 20.0, 0.0, 1.0)
         # 목표 조향각 = atan2(중앙선 y 오차, 전방 lookahead 거리).
         # 즉 lookahead 지점의 중앙선을 향하도록 pure-pursuit와 비슷하게 각도를 만든다.
-        target_angle = math.atan2(center_y, self.lookahead_distance)
+        target_angle = math.atan2(center_y, self.active_lookahead_distance)
         return {
             'confidence': confidence,
             'target_angle': target_angle,
@@ -354,6 +405,10 @@ class LidarReactiveDriveNode(Node):
 
         # ROS 시간 차이는 ns 단위이므로 1e9로 나눠 초 단위로 바꾼다.
         elapsed = (self.get_clock().now() - self.mode_started_at).nanoseconds / 1e9
+        if desired == 'OBSTACLE_AVOIDANCE':
+            self.current_mode = desired
+            self.mode_started_at = self.get_clock().now()
+            return self.current_mode
         if desired != self.current_mode and elapsed < 0.45:
             return self.current_mode
         if desired != self.current_mode:
@@ -402,6 +457,18 @@ class LidarReactiveDriveNode(Node):
         rpm = CRUISE_RPM + (MAX_RPM - CRUISE_RPM) * width_ratio
         # 조향 감속 공식: 최대 조향이면 RPM을 35% 줄이고, 직진이면 줄이지 않는다.
         rpm *= 1.0 - 0.35 * steer_ratio
+        if forward_clearance is not None:
+            clearance_ratio = clamp(
+                (forward_clearance - self.adaptive_planner_stop_distance())
+                / max(
+                    0.1,
+                    self.adaptive_obstacle_avoidance_distance()
+                    - self.adaptive_planner_stop_distance(),
+                ),
+                0.0,
+                1.0,
+            )
+            rpm *= 0.45 + 0.55 * clearance_ratio
         mode = 'OBSTACLE_AVOIDANCE' if aggressive else 'OPEN_SPACE'
         return ReactiveDriveCommand(
             steering_rad=steering,
@@ -416,7 +483,7 @@ class LidarReactiveDriveNode(Node):
         # 폭 점수: 틈새 폭 1.6 m 이상이면 최고점으로 본다.
         width_score = clamp(gap['width'] / 1.6, 0.0, 1.0)
         # 여유거리 점수: lookahead_distance만큼 비어 있으면 최고점.
-        clearance_score = clamp(gap['clearance'] / self.lookahead_distance, 0.0, 1.0)
+        clearance_score = clamp(gap['clearance'] / self.active_lookahead_distance, 0.0, 1.0)
         # 조향 부담: 정면에서 멀리 떨어진 틈새일수록 감점한다.
         steering_penalty = abs(gap['center_angle']) / math.radians(120)
         # 조향 변화 부담: 이전 조향과 차이가 클수록 덜그럭거림을 줄이기 위해 감점한다.
@@ -482,11 +549,37 @@ class LidarReactiveDriveNode(Node):
         """현재 차량 corridor 안에서 가장 가까운 x방향 여유거리를 반환한다."""
         # 차량 진행 폭 안에 들어오는 점들 중 가장 작은 x가 앞범퍼 기준 최근접 장애물 거리다.
         values = [p['x'] for p in points if p['x'] >= 0.0 and abs(p['y']) <= half_width]
-        return min(values) if values else self.lookahead_distance
+        return min(values) if values else self.active_lookahead_distance
 
-    def smooth_steering(self, target):
+    def adaptive_lookahead_distance(self):
+        """속도가 빠를수록 더 먼 장애물을 planning에 반영한다."""
+        return clamp(
+            self.lookahead_distance + self.current_speed * self.lookahead_speed_gain,
+            self.lookahead_distance,
+            self.max_lookahead_distance,
+        )
+
+    def adaptive_obstacle_avoidance_distance(self):
+        """속도가 빠를수록 더 먼 전방 장애물부터 회피 모드로 진입한다."""
+        return clamp(
+            self.obstacle_avoidance_distance
+            + self.current_speed * self.planner_stop_time_headway,
+            self.obstacle_avoidance_distance,
+            self.active_lookahead_distance,
+        )
+
+    def adaptive_planner_stop_distance(self):
+        """현재 속도에서 AEB보다 먼저 멈추기 위한 planner 정지선이다."""
+        dynamic_stop = (
+            self.planner_stop_distance
+            + self.current_speed * self.planner_stop_time_headway
+            + self.planner_stop_margin
+        )
+        return clamp(dynamic_stop, self.planner_stop_distance, 1.50)
+
+    def smooth_steering(self, target, fast=False):
         """회피 반응성을 유지하면서 조향 떨림을 제한한다."""
-        max_step = 0.16
+        max_step = 0.32 if fast else 0.16
         # 한 scan callback마다 조향 변화량을 +/-0.16 rad로 제한한다.
         # 급격한 좌우 전환으로 차체가 덜그럭거리는 현상을 줄이는 rate limit이다.
         steering = clamp(
