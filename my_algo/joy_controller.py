@@ -53,12 +53,15 @@ class JoyControllerNode(Node):
         self.autonomous_mode = False  # 자율주행 모드 여부
         self.emergency_stop = False   # 긴급 정지 상태
         self.prev_lb = False          # LB 버튼 이전 상태 (토글용)
-        self.toggle_debounce_sec = 0.45
+        self.toggle_debounce_sec = 0.70
         self.last_toggle_time = None
         self.last_mode_publish_time = self.get_clock().now()
         self.last_published_joy_active = None
         self.last_published_auto_mode = None
-        self.mode_heartbeat_sec = 0.25
+        self.mode_heartbeat_sec = 0.10
+        self.last_manual_command_time = self.get_clock().now()
+        self.manual_command_timeout_sec = 0.30
+        self.manual_active = False
 
         # 조이스틱 구독
         self.joy_sub = self.create_subscription(
@@ -77,6 +80,7 @@ class JoyControllerNode(Node):
         # 조이스틱 제어 중인지 발행 (자율주행 노드가 양보할지 판단)
         self.joy_active_pub = self.create_publisher(
             Bool, '/joy_active', 10)
+        self.mode_timer = self.create_timer(0.05, self.mode_timer_callback)
 
         self.get_logger().info('Joy Controller Node 시작!')
         self.get_logger().info(
@@ -131,6 +135,7 @@ class JoyControllerNode(Node):
         if emergency:
             self.emergency_stop = True
             self.autonomous_mode = False
+            self.manual_active = True
             self.stop()
             print_event_line('긴급 정지!')
             self._publish_mode(joy_active=True, auto_mode=False)
@@ -156,6 +161,7 @@ class JoyControllerNode(Node):
 
         # 자율주행 모드에서는 autonomous_drive가 VESC 명령을 제어
         if self.autonomous_mode:
+            self.manual_active = False
             self._publish_mode(joy_active=False, auto_mode=True)
             return
 
@@ -187,6 +193,8 @@ class JoyControllerNode(Node):
         )
 
         if active_manual:
+            self.manual_active = True
+            self.last_manual_command_time = self.get_clock().now()
             speed_msg = Float64()
             speed_msg.data = erpm
             self.speed_pub.publish(speed_msg)
@@ -205,8 +213,21 @@ class JoyControllerNode(Node):
                 f'servo={servo_pos:5.3f}'
             )
         else:
+            self.manual_active = False
             self.stop()
             self._publish_mode(joy_active=False, auto_mode=False)
+
+    def mode_timer_callback(self):
+        """joy 메시지가 잠깐 끊겨도 mode/joy_active 상태를 계속 발행한다."""
+        if self.autonomous_mode:
+            self._publish_mode(joy_active=False, auto_mode=True)
+            return
+
+        elapsed = (
+            self.get_clock().now() - self.last_manual_command_time
+        ).nanoseconds / 1e9
+        active = self.manual_active and elapsed <= self.manual_command_timeout_sec
+        self._publish_mode(joy_active=active, auto_mode=False)
 
     def _publish_mode(self, joy_active, auto_mode):
         """모드 상태 발행"""

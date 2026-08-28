@@ -89,6 +89,11 @@ class LidarReactiveDriveNode(Node):
         self.declare_parameter('planner_stop_time_headway', 0.45)
         self.declare_parameter('planner_stop_margin', 0.20)
 
+        # 작은 좌우 흔들림을 줄이기 위한 조향 안정화 파라미터.
+        self.declare_parameter('steering_deadband', 0.055)
+        self.declare_parameter('open_space_steering_gain', 0.70)
+        self.declare_parameter('obstacle_steering_gain', 1.10)
+
         # 최대 조향각 [rad]
         # 증가: 더 급하게 회피, 감소: 조향이 부드러워짐.
         self.declare_parameter('max_steering', 0.78)
@@ -120,6 +125,12 @@ class LidarReactiveDriveNode(Node):
             self.get_parameter('planner_stop_time_headway').value)
         self.planner_stop_margin = float(
             self.get_parameter('planner_stop_margin').value)
+        self.steering_deadband = float(
+            self.get_parameter('steering_deadband').value)
+        self.open_space_steering_gain = float(
+            self.get_parameter('open_space_steering_gain').value)
+        self.obstacle_steering_gain = float(
+            self.get_parameter('obstacle_steering_gain').value)
 
         self.auto_mode = False
         self.joy_active = False
@@ -442,11 +453,16 @@ class LidarReactiveDriveNode(Node):
         best_gap = max(gaps, key=self.score_gap)
         # 조향 목표 = 틈새 중심각. 장애물 회피 모드에서는 1.25배로 더 강하게 돌린다.
         # clamp로 실제 허용 조향각 [-max_steering, +max_steering] 안에 제한한다.
+        steering_gain = (
+            self.obstacle_steering_gain if aggressive else self.open_space_steering_gain
+        )
         steering = clamp(
-            best_gap['center_angle'] * (1.25 if aggressive else 1.0),
+            best_gap['center_angle'] * steering_gain,
             -self.max_steering,
             self.max_steering,
         )
+        if abs(steering) < self.steering_deadband:
+            steering = 0.0
         # steer_ratio: 현재 조향이 최대 조향 대비 몇 %인지 나타낸다.
         # 많이 꺾을수록 속도를 낮추기 위해 0~1 값으로 정규화한다.
         steer_ratio = clamp(abs(steering) / self.max_steering, 0.0, 1.0)
@@ -488,8 +504,15 @@ class LidarReactiveDriveNode(Node):
         steering_penalty = abs(gap['center_angle']) / math.radians(120)
         # 조향 변화 부담: 이전 조향과 차이가 클수록 덜그럭거림을 줄이기 위해 감점한다.
         change_penalty = abs(gap['center_angle'] - self.previous_steering)
-        # 최종 점수 = 폭 가중치 + 여유거리 - 조향 부담 - 조향 변화 부담.
-        return 1.4 * width_score + clearance_score - 0.45 * steering_penalty - 0.25 * change_penalty
+        center_bonus = 1.0 - clamp(abs(gap['center_angle']) / math.radians(45), 0.0, 1.0)
+        # 최종 점수 = 폭/여유거리/중앙 선호 - 조향 부담 - 조향 변화 부담.
+        return (
+            1.2 * width_score
+            + clearance_score
+            + 0.55 * center_bonus
+            - 0.75 * steering_penalty
+            - 0.45 * change_penalty
+        )
 
     def plan_cone_track(self, cone_track):
         """좌우 cone boundary에서 추정한 centerline을 추종한다."""
@@ -498,6 +521,8 @@ class LidarReactiveDriveNode(Node):
             -self.max_steering,
             self.max_steering,
         )
+        if abs(steering) < self.steering_deadband:
+            steering = 0.0
         # cone 추종도 많이 꺾을수록 속도를 줄인다. 최대 조향이면 25% 감속.
         rpm = CRUISE_RPM * (1.0 - 0.25 * abs(steering) / self.max_steering)
         return ReactiveDriveCommand(
@@ -526,7 +551,9 @@ class LidarReactiveDriveNode(Node):
             error = 0.0
         # 단순 P 제어: 조향각 = 0.55 * 거리 오차.
         # 이후 최대 조향각으로 제한해 급격한 명령을 막는다.
-        steering = clamp(0.55 * error, -self.max_steering, self.max_steering)
+        steering = clamp(0.40 * error, -self.max_steering, self.max_steering)
+        if abs(steering) < self.steering_deadband:
+            steering = 0.0
         # 벽 추종에서도 조향량이 클수록 속도를 줄인다. 최대 조향이면 20% 감속.
         rpm = CRUISE_RPM * (1.0 - 0.2 * abs(steering) / self.max_steering)
         return ReactiveDriveCommand(
