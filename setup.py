@@ -22,6 +22,7 @@ setup(
     license='MIT',
     entry_points={
         'console_scripts': [
+            'imu_motion_logger = my_algo.imu_motion_logger:main',
             'lidar_reactive_drive = my_algo.lidar_reactive_drive:main',
             'camera_reactive_drive = my_algo.camera_reactive_drive:main',
             'autonomous_drive = my_algo.autonomous_drive:main',
