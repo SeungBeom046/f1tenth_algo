@@ -1,6 +1,7 @@
 # 구조
 
-관측 공백 속도 계획 실험(exp 모드)과 기존 주행(drive 모드)의 노드 구성. 실행 절차는 [RUNBOOK.md](RUNBOOK.md).
+관측 공백 속도 계획 실험(exp 모드)과 기존 주행(drive 모드)의 노드 구성. 실행 절차는 [RUNBOOK.md](RUNBOOK.md),
+세션별 명령은 [SESSIONS.md](SESSIONS.md). 대상 플랫폼: **ROS2 Foxy, Ubuntu 20.04, Python 3.8** (차량 Jetson 두 대).
 
 ## 1. 설계 원칙
 
@@ -113,5 +114,18 @@ odom ──(vesc_to_odom, publish_tf: true · 또는 EKF 선택)──> base_lin
 | `config/popout.yaml` | #2 속도·정지 조건 | [EXP-FIXED] |
 | `config/imu.yaml` | IMU 단위·바이어스 | [EXP0-MEASURE] |
 | `my_algo/vehicle_utils.py` | ERPM_GAIN, MIN_DRIVING_RPM, 서보 상수 (하드웨어 보정 유일 출처) | 변경 금지 (승인 필요) |
+
+## 8. 드라이버 launch와 Foxy 메모
+
+| launch | 내용 |
+|---|---|
+| `livox_mid360.launch.py` | livox_ros_driver2, `rviz_MID360_launch.py`와 같은 설정(PointCloud2, `livox_frame`), RViz 없음 |
+| `vesc_odom.launch.py` | vesc_to_odom (기본 `vesc_driver_node.launch.py`에 없음). 계수는 `vehicle_utils`·`vehicle_geometry`에서. exp 전용 |
+| `tf.launch.py` / `tf_static.launch.py` | 정적 TF (Foxy 위치 인자 `x y z yaw pitch roll parent child`), EKF 선택 |
+| `car2.launch.py` | #2: `/car2` VESC 드라이버·vesc_to_odom(publish_tf false) + popout 노드 |
+
+Foxy에 맞춘 것: PointCloud2는 `my_algo/pc2.py`로 직접 파싱 (Foxy `sensor_msgs_py`는 튜플 생성기),
+bag은 sqlite3, 재생은 `scripts/bag_player.py`(bag 시간 `/clock`, Foxy `bag play`에 `--clock` 없음),
+분석 bag 읽기는 rosbags 0.9.23, 1회 echo는 `scripts/echo_once.py`, 파라미터 덤프는 `--print`.
 
 태그 전체 목록: [EXP_TAGS.md](EXP_TAGS.md) (`python3 scripts/gen_exp_tags.py`로 재생성).

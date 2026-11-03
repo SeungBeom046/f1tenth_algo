@@ -95,3 +95,50 @@
   (`autonomous_drive.py`, `lidar_reactive_drive.py`, `aeb.py`, `camera_reactive_drive.py`, `joy_controller.py`,
   `autonomous_metrics_logger.py`)은 수정 금지 조건 때문에 기존 docstring 그대로다 (입출력 토픽은 이미 적혀 있음).
   docstring만 고치는 것을 허용하면 같은 형식으로 맞추고 verify_refactor로 불변을 확인한다.
+
+## 6. Foxy 점검 결과 (2026-11-03)
+
+차량 ROS2는 Foxy (Ubuntu 20.04, Python 3.8). Foxy 브랜치 소스(rosbag2, rclpy, ros2cli, geometry2, launch_ros,
+common_interfaces, joystick_drivers foxy-devel, f1tenth/vesc ros2, livox_ros_driver2)를 직접 확인했다.
+
+| 항목 | Foxy 사실 | 조치 |
+|---|---|---|
+| static_transform_publisher | 이름 붙은 인자 없음. 위치 인자 `x y z yaw pitch roll parent child` (소스 `setRPY(args[6], args[5], args[4])`) | `tf_static.launch.py` 위치 인자, 값 불변 |
+| `ros2 bag play` | `--clock` 없음 (`--rate`, `--topics`, `--qos-profile-overrides-path`는 있음) | `scripts/bag_player.py` (sqlite3 직접 읽기 + bag 시간 `/clock`) |
+| `ros2 bag record` | `--use-sim-time` 없음, 기본 sqlite3 | `-s sqlite3`, 오프라인 재생은 `/clock`을 같이 기록해 분석에서 변환 |
+| `rosbag2_py` | Foxy 레포에 없음 | 분석은 rosbags 0.9.23 (Python 3.8 지원 마지막, 0.10+는 3.10 이상) |
+| `ros2 topic echo` | `--once`, `--field` 없음 | `scripts/echo_once.py` |
+| `ros2 param dump` | 기본이 파일 저장, `--print`로 표준출력 | `record_run.sh`, `replay_drive.sh`, `check_vehicle.sh`에 `--print` |
+| `ros2 topic info -v`, `get_publishers_info_by_topic` | 있음 | 그대로 |
+| tf2_tools | `view_frames.py` | 문서 수정 |
+| `sensor_msgs_py.read_points` | 튜플 생성기 (Humble은 numpy 구조화 배열), 설치 여부 불확실 | `my_algo/pc2.py` 직접 파싱, 의존성 제거 |
+| rclpy QoS | `DurabilityPolicy`, `ReliabilityPolicy` 별칭 있음 | 그대로 |
+| rclpy 로거 `throttle_duration_sec`, `rclpy.serialization` | 있음 | 그대로 |
+| launch_ros 파라미터 치환 | 문자열을 YAML로 해석 (`'false'` → bool) | `lidar_drive.launch.py` `use_sim_time` 인자 그대로 |
+| joy_node `autorepeat_rate` | 기본 20 Hz, 입력이 없어도 타임아웃 경로에서 재발행 | 데드맨 동작. 단 무선 패드가 범위를 벗어나도 수신기가 연결돼 있으면 `/joy`가 계속 올 수 있다 (차량 확인) |
+| Python 3.8 문법 | 3.9+ 문법·API 없음 (3.8 문법 파서로 전 파일 확인) | 변경 없음 |
+| numpy | Ubuntu 20.04 apt 1.17.4. 쓰는 API(`default_rng`, `quantile`, `minimum.at` 등)는 1.17에 있음 | 1.17 자체 실행은 미확인 (arm64 Mac용 패키지 없음, 1.21.6으로 테스트) |
+
+### 차량 구성에서 새로 확인한 것 (세션 1에서 확정)
+- **`ros2 launch vesc_driver vesc_driver_node.launch.py`는 vesc_driver만 띄운다** (f1tenth/vesc ros2 브랜치 기준).
+  vesc_to_odom이 없으면 `/vesc/odom`과 odom→base_link TF가 없다. 이 경우 **기존 drive 모드는 속도 0으로 동작해 왔다**
+  (AEB 동적 거리 = max(0.25, 0.20, 0) = 0.25 m 고정, planner lookahead 2.6 m 고정). `~/vesc_ws`가 수정돼 있을 수 있어
+  세션 1 (b) `b_odom_info.txt`로 확정한다. exp 세션은 `vesc_odom.launch.py`로 odom을 낸다 (drive에는 쓰지 않음).
+- vesc_to_odom은 `speed_to_erpm_gain`, `wheelbase`, 서보 계수를 기본값 없이 요구하는데 기본 `vesc_config.yaml`에는 없다.
+  `vesc_odom.launch.py`·`car2.launch.py`는 이 값을 레포의 유일 출처(ERPM_GAIN, SERVO_*, vehicle_geometry, popout.yaml)에서 넘긴다.
+- Livox: `rviz_MID360_launch.py`는 xfer_format 0(PointCloud2), 노드 이름 `livox_lidar_publisher`. Jetson RViz를 빼려고
+  `livox_mid360.launch.py`를 쓴다. 점별 시각 필드 이름·단위는 세션 1 `b_cloud_fields.txt`로 확인 (deskew).
+
+### 로컬에서 검증한 것
+- Python 3.8.20 + numpy 1.21.6 + rosbags 0.9.23 격리 환경에서 단위 테스트 전부 통과, drive 오프라인 비교 일치.
+- 합성 Foxy 형식 bag(rosbags로 기록) → `extract_run.py` 전체 경로 (ΔT, 감속 구간, 충돌 판정 값 확인).
+- `bag_player.py`의 sqlite3 읽기·필터·순서·일정 (rosbags로 기록한 bag 포함).
+- `tf_static.launch.py`가 만드는 인자 목록 (가짜 launch 모듈로 렌더링).
+
+### 차량에서만 확인 가능한 것
+- Foxy에서 모든 launch·노드가 실제로 뜨는지 (로컬에 ROS·Docker 없음).
+- `bag_player.py` 재생이 `ros2 bag play`와 같은 결과를 주는지 → 세션 1 (d)가 이것까지 함께 검증한다.
+- `ros2 bag record` QoS 적응 (Livox BEST_EFFORT 발행 토픽이 빠짐없이 기록되는지), 기록 중 토픽 주기 저하 없음.
+- `/imu` 정지 시 z ≈ 9.8, IMU 축 방향, exp 모드 AEB 단독 정지, RViz 검증, `/joy` 주기와 무선 범위 이탈 동작.
+- numpy 1.17.4에서의 실행.
+- livox_ros_driver2·vesc 패키지 이름·노드 이름·토픽 이름 (4절 TBD 표).

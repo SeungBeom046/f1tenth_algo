@@ -141,7 +141,7 @@
 | [my_algo/speed_layer_node.py:13](../my_algo/speed_layer_node.py#L13) | `v_imp, b1_k                 [EXP-TUNE] (v_imp 하한 = V_MIN)` |
 | [my_algo/speed_policy.py:10](../my_algo/speed_policy.py#L10) | `[EXP-TUNE]    v_imp (하한 = v_min), k` |
 
-## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (28개)
+## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (29개)
 
 | 위치 | 내용 |
 |---|---|
@@ -163,6 +163,7 @@
 | [config/scenario_S3.yaml:8](../config/scenario_S3.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
 | [config/scenario_S4.yaml:8](../config/scenario_S4.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
 | [config/vehicle_geometry.yaml:11](../config/vehicle_geometry.yaml#L11) | `wheel_diameter: 0.0          # A5  [EXP0-MEASURE] 미측정 — odom 보정 검산용` |
+| [launch/car2.launch.py:46](../launch/car2.launch.py#L46) | `# #2 계수는 popout.yaml (#2 실측 [EXP0-MEASURE]), 휠베이스·서보 게인은 에고와 같은 차종으로 가정 (TBD(세션 1))` |
 | [launch/tf_static.launch.py:4](../launch/tf_static.launch.py#L4) | `실측 2026-11-03. 표시된 [EXP0-MEASURE] 값은 아직 가정값이므로 측정 후 교체.` |
 | [launch/tf_static.launch.py:15](../launch/tf_static.launch.py#L15) | `ORIGIN_H = 0.03    # [EXP0-MEASURE] 장착면 -> 점군 원점 O 높이. 임시값(센서 높이 절반).` |
 | [launch/tf_static.launch.py:19](../launch/tf_static.launch.py#L19) | `LIDAR_YAW = 0.0    # [EXP0-MEASURE] B5: 로고가 전방이면 0, 후방이면 3.14159, 좌측 1.5708, 우측 -1.5708` |

@@ -1,16 +1,16 @@
 # 실행 절차 (RUNBOOK)
 
 실험일에 이 순서대로 한다. 각 명령 아래 **정상**은 그 명령이 잘 됐을 때 보여야 하는 것이다.
+차량은 **ROS2 Foxy (Ubuntu 20.04, Python 3.8)**. 세션별로 차 앞에서 그대로 칠 명령은 [SESSIONS.md](SESSIONS.md).
 "TBD(세션 1)"는 차량 세션 1 결과로 확정할 값이다 ([OPEN_ITEMS.md](OPEN_ITEMS.md) 1·4절).
 
 공통 변수 (모든 터미널):
 
 ```bash
-source /opt/ros/$ROS_DISTRO/setup.bash && source ~/f1tenth_ws/install/setup.bash
-export ROS_DOMAIN_ID=<두 차·노트북 같은 값>
-S=$(ros2 pkg prefix my_algo)/share/my_algo/scripts
-export MY_ALGO_REPO=<my_algo 소스 레포 경로>    # meta.json git hash 기록용
+source ~/f1tenth_ws/src/my_algo/scripts/env_ego.sh   # #2는 env_car2.sh. TBD(세션 1): my_algo 소스 경로
 ```
+`env_ego.sh`: Foxy → `~/vesc_ws` → `~/f1tenth_ws` source, `ROS_DOMAIN_ID`(기본 37, 세 기기 같게), `$S`(스크립트 경로),
+`$MY_ALGO_REPO`(meta.json git hash 기록용).
 
 ---
 
@@ -19,7 +19,7 @@ export MY_ALGO_REPO=<my_algo 소스 레포 경로>    # meta.json git hash 기�
 ### 0.1 빌드와 커밋 확인
 ```bash
 cd $MY_ALGO_REPO && git checkout exp/occlusion-speed && git pull && git status --short
-cd ~/f1tenth_ws && colcon build --packages-select my_algo && source install/setup.bash
+cd ~/f1tenth_ws && colcon build --symlink-install --packages-select my_algo && source install/setup.bash
 ```
 정상: `git status --short` 출력 없음 (dirty면 meta.json에 `git_dirty: true`가 남는다), 빌드 `Finished`.
 
@@ -73,13 +73,15 @@ python3 $S/randomize_runs.py --seed <날짜 숫자>        # 정상: 회차 목�
 
 ## 1. 에고 Jetson
 
-### T1 센서 드라이버 + 정적 TF
+### T1 센서 드라이버 + 정적 TF + odom (SESSIONS의 A, B, E 터미널)
 ```bash
-<Livox 드라이버 launch>          # TBD(세션 1): check_vehicle.sh의 노드 목록 기준 명령
-<VESC 드라이버 launch>           # TBD(세션 1). vesc_to_odom publish_tf: true 확인
-ros2 launch my_algo tf.launch.py
+ros2 launch my_algo livox_mid360.launch.py            # A: rviz_MID360_launch.py와 같은 설정(PointCloud2), RViz 없음
+ros2 launch vesc_driver vesc_driver_node.launch.py    # B: vesc_driver만 (vesc_to_odom 없음)
+ros2 launch my_algo tf.launch.py                      # E: 정적 TF
+ros2 launch my_algo vesc_odom.launch.py               # E: odom + odom→base_link TF (세션 1에서 기존 odom 발행자가 없을 때만)
 ```
-정상: `ros2 run tf2_tools view_frames` 결과가 `odom → base_link → livox_frame → livox_imu` 한 줄.
+정상: `ros2 run tf2_tools view_frames.py`(Foxy는 `.py`)의 `frames.pdf`가 `odom → base_link → livox_frame → livox_imu` 한 줄,
+`ros2 topic info -v /tf`의 Publisher가 하나 (vesc_to_odom 또는 EKF).
 
 ### T2 bringup (회차마다 새로 띄운다)
 ```bash
@@ -186,7 +188,8 @@ rviz2 -d $(ros2 pkg prefix my_algo)/share/my_algo/config/exp.rviz
 | AUTO 직후 정지 `joy_timeout` | `ros2 topic hz /joy` | joy_node `autorepeat_rate` 20 Hz, 패드 연결 |
 | `stale_speed` / `stale_perception` | `ros2 topic hz /exp/phantom_d`, `/exp/grid_debug`의 ms | 격자 처리 지연 → 다른 부하 확인, `max_range` 검토(방법 간 동일 유지) |
 | `preflight_failed`로 출발 안 함 | 위 발행자 점검 | |
-| mcap 경고 | `ros2 pkg prefix rosbag2_storage_mcap` | `sudo apt install ros-$ROS_DISTRO-rosbag2-storage-mcap` |
+| Foxy 명령 차이 | — | `view_frames.py`, `ros2 topic echo`에 `--once`·`--field` 없음 → `python3 $S/echo_once.py <토픽> [--field a.b]`, `ros2 param dump <노드> --print`, `ros2 bag play`에 `--clock` 없음 → `python3 $S/bag_player.py` |
+| bag 저장소 | `ros2 bag info <bag>` | Foxy 기본 sqlite3 (`*.db3`). 분석은 rosbags 0.9.23 |
 | 기록 중 점군 주기 저하 | T4 `ros2 topic hz /livox/lidar` 기록 전후 비교 | 카메라 해상도·fps 낮추기, 기록 위치 디스크 확인 |
 
 ---
@@ -212,16 +215,16 @@ ros2 launch my_algo imu.launch.py input_topic:=/livox/imu
 
 ```bash
 ros2 launch my_algo imu.launch.py input_topic:=/livox/imu accel_unit:=g   # 차 정지 상태에서 시작
-ros2 topic echo /imu --field linear_acceleration      # 정상: 정지 시 크기 ≈ 9.8 (z ≈ 9.8)
-ros2 topic echo /imu/status                           # calibrated: true, g_ref_norm ≈ 9.81, tf_ok: true
-ros2 topic echo /imu/linear_accel_base --field vector
+python3 $S/echo_once.py /imu --field linear_acceleration   # 정상: 정지 시 크기 ≈ 9.8 (z ≈ 9.8)
+python3 $S/echo_once.py /imu/status                         # calibrated: true, g_ref_norm ≈ 9.81, tf_ok: true
+ros2 topic echo /imu/linear_accel_base                      # (Foxy echo에는 --field 없음) vector 값을 본다
 ```
 축 방향: 손으로 차를 **앞으로** 짧게 밀었다 멈추면 x가 먼저 양수, 멈출 때 음수. **왼쪽**으로 밀면 y 양수.
 정지 시 x, y, z 모두 ±0.05 m/s² 안. 부호가 반대면 TF가 잘못된 것이다 (노드에서 부호를 뒤집지 말 것).
 
 ## 부록 C. TF·장착 검증 (RViz, fixed frame = base_link)
 
-- [ ] `view_frames`: `odom → base_link → livox_frame → livox_imu` 한 줄, odom→base_link 발행자 하나
+- [ ] `ros2 run tf2_tools view_frames.py`: `odom → base_link → livox_frame → livox_imu` 한 줄, odom→base_link 발행자 하나
 - [ ] 바닥 점이 z ≈ 0에서 평평 (옆에서 보아 기울지 않음)
 - [ ] 직선 벽이 x축과 평행 (yaw 확인)
 - [ ] 앞 끝에서 1 m, 2 m 앞에 둔 박스가 base_link x = 1.41, 2.41 m에 표시

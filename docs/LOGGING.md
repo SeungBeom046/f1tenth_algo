@@ -7,16 +7,16 @@
 
 ```
 ~/exp_logs/YYYYMMDD/<scenario>_<method>_de<d_e>_run<NN>/     예: S1_P_de1.5_run03, S3_B2_dena_run01, E0_B0_dena_run02
-  bag/                 rosbag2 (mcap, 플러그인 없으면 sqlite3 + 경고)
+  bag/                 rosbag2 (sqlite3 `*.db3`, Foxy 기본). 분석은 rosbags 0.9.23
   meta.json            회차 메타데이터 (아래 2절)
-  params.yaml          실제 로드된 파라미터 전체 덤프 (실행 중 exp 노드별 ros2 param dump)
+  params.yaml          실제 로드된 파라미터 전체 덤프 (실행 중 exp 노드별 `ros2 param dump --print`)
   config_snapshot/     기록 시점 common / method / scenario / vehicle_geometry / imu YAML 사본 (분석이 이것을 읽음)
   camera/              천장 카메라 파일(수동 복사, ceiling.mp4), 오프라인 AEB 오버레이 결과
   aeb_events.jsonl     AEB 발동 순간 이벤트 (exp_aeb_node)
   mux_events.jsonl     정지 이벤트 (joy_timeout, foreign_publisher, stop_line, aeb)
   abort.json           폐기 사유 (조이스틱 끊김, 예상 외 발행자) — 있으면 meta.json discard=true
   analysis/            extract_run.py 결과 (metrics.json, speed_vs_s.csv, ceiling.json, offline_compare.json)
-  replay/<method>/     offline_replay.sh 결과 bag
+  replay/<method>/     offline_replay.sh 결과 bag (/clock 포함 — Foxy record에 --use-sim-time이 없어 분석에서 bag 시각으로 변환)
 ~/exp_logs/YYYYMMDD/session.json     세션 정보 (아래 4절)
 ~/exp_logs/analysis/                 summarize.py, plots.py 결과 (summary.csv/md, 그림)
 ~/exp_logs/popout/popout_events.jsonl   #2 Jetson의 #2 기록 (트리거 수신 지연, 도달 시간, 속도)
