@@ -86,6 +86,10 @@ class AutonomousDriveNode(Node):
         # 증가: 앞범퍼 기준 충돌 거리를 더 보수적으로 계산.
         self.declare_parameter('lidar_to_bumper_dist', 0.30)
 
+        # AEB 제동거리 추정 감속도 [m/s^2]와 여유거리 [m]. 기존 aeb.py 하드코딩 값과 같은 기본값.
+        self.declare_parameter('aeb_comfortable_decel', 2.8)
+        self.declare_parameter('aeb_stopping_margin', 0.20)
+
         # 자율주행 최대 조향 [rad]
         # 증가: 더 급회전 가능, 감소: 조향 안정성 증가.
         self.declare_parameter('max_steering', 0.78)
@@ -106,6 +110,8 @@ class AutonomousDriveNode(Node):
                 self.get_parameter('aeb_bumper_emergency_distance').value),
             bumper_overlap_tolerance=float(
                 self.get_parameter('aeb_bumper_overlap_tolerance').value),
+            comfortable_decel=float(self.get_parameter('aeb_comfortable_decel').value),
+            stopping_margin=float(self.get_parameter('aeb_stopping_margin').value),
         )
 
         # 초기 상태 안정화

@@ -48,6 +48,56 @@ from my_algo.vehicle_utils import (
 )
 
 
+# planner 내부 상수 (기본값 = 리팩터링 전 하드코딩 값). drive 모드 동작을 바꾸지 않으려면 그대로 둔다.
+PLANNER_CONSTANTS = {
+    # 전방 점 추출
+    'forward_fov_half_deg': 120.0,      # 전방 점으로 쓰는 반시야각
+    'min_point_x': -0.05,               # 앞범퍼 기준 이보다 뒤의 점은 버림 [m]
+    # corridor(벽) 검출
+    'corridor_sector_min_deg': 45.0,    # 측면 섹터 시작각
+    'corridor_sector_max_deg': 115.0,   # 측면 섹터 끝각
+    'corridor_min_points': 8,           # 한쪽 벽으로 인정할 최소 점 수
+    'corridor_wall_percentile': 0.35,   # 측면 거리 분위값
+    'corridor_width_norm': 2.0,         # 신뢰도 정규화 폭 [m]
+    'corridor_min_confidence': 0.55,    # 한쪽이라도 보이면 보장하는 신뢰도
+    # gap
+    'gap_min_lateral_limit': 0.12,      # 경로 차단 판정 최소 반폭 [m]
+    'gap_full_speed_width': 1.5,        # 이 폭 이상이면 MAX_RPM 쪽으로 포화 [m]
+    'gap_steer_slowdown': 0.35,         # 최대 조향 시 RPM 감소율
+    'clearance_speed_floor': 0.45,      # 전방 여유 0일 때 RPM 배율
+    'clearance_speed_gain': 0.55,       # 전방 여유 최대일 때 추가 배율
+    'clearance_min_span': 0.1,          # 여유 배율 분모 최소값 [m]
+    'open_space_fallback_steer_ratio': 0.55,  # gap 없을 때 최대 조향 대비 비율
+    # gap 점수
+    'score_width_norm': 1.6,
+    'score_width_weight': 1.2,
+    'score_center_weight': 0.55,
+    'score_center_span_deg': 45.0,
+    'score_steer_span_deg': 120.0,
+    'score_steer_weight': 0.75,
+    'score_change_weight': 0.45,
+    # 모드 선택
+    'cone_mode_confidence': 0.55,
+    'wall_follow_confidence': 0.50,
+    'mode_hold_sec': 0.45,              # 모드 전환 최소 유지 시간 (떨림 방지)
+    # cone track (기본 비활성)
+    'cone_min_x': 0.2,
+    'cone_max_abs_y': 1.8,
+    'cone_side_min_y': 0.20,
+    'cone_min_points': 3,
+    'cone_confidence_points': 20.0,
+    'cone_steering_gain': 1.45,
+    'cone_steer_slowdown': 0.25,
+    # wall follow
+    'wall_steer_slowdown': 0.2,
+    # 속도 적응 정지선 상한 [m]
+    'planner_stop_max_distance': 1.50,
+    # 조향 rate limit (떨림 방지) [rad/scan]
+    'steer_rate_limit': 0.08,
+    'steer_rate_limit_fast': 0.22,
+}
+
+
 class LidarReactiveDriveNode(Node):
     """LaserScan으로 wall/gap/cone-track/open-space 반응형 주행을 선택한다."""
 
@@ -111,6 +161,12 @@ class LidarReactiveDriveNode(Node):
         # 라이다-앞범퍼 수평거리 [m]
         # 증가: 앞범퍼 기준 장애물 여유를 더 보수적으로 계산.
         self.declare_parameter('lidar_to_bumper_dist', 0.30)
+
+        # 아래 상수들은 원래 코드 안에 숫자로 박혀 있던 값이다. 기본값은 기존 값과 같고
+        # drive 모드 launch는 이 값을 덮어쓰지 않는다. 의미는 PLANNER_CONSTANTS 주석 참고.
+        for name, value in PLANNER_CONSTANTS.items():
+            self.declare_parameter(name, value)
+            setattr(self, name, self.get_parameter(name).value)
 
         self.vehicle_width = float(self.get_parameter('vehicle_width').value)
         self.safety_margin = float(self.get_parameter('safety_margin').value)
@@ -267,7 +323,7 @@ class LidarReactiveDriveNode(Node):
     def extract_forward_points(self, scan_msg):
         """전방 +/-120도 안의 유효 scan bin을 차량 좌표계 point로 변환한다."""
         points = []
-        half_fov = math.radians(120.0)
+        half_fov = math.radians(self.forward_fov_half_deg)
         angle = scan_msg.angle_min
         for raw_range in scan_msg.ranges:
             vehicle_angle = normalize_angle(angle)
@@ -278,7 +334,7 @@ class LidarReactiveDriveNode(Node):
                 # 따라서 x=0은 라이다 기준이 아니라 앞범퍼 기준 전방 거리다.
                 x = raw_range * math.cos(vehicle_angle) - self.lidar_to_bumper_dist
                 y = raw_range * math.sin(vehicle_angle)
-                if x >= -0.05:
+                if x >= self.min_point_x:
                     points.append({
                         'angle': vehicle_angle,
                         'range': raw_range,
@@ -292,13 +348,15 @@ class LidarReactiveDriveNode(Node):
 
     def detect_corridor(self, points):
         """좌우 벽이 주행 가능한 corridor를 만드는지 추정한다."""
-        left = [p for p in points if math.radians(45) <= p['angle'] <= math.radians(115)]
-        right = [p for p in points if -math.radians(115) <= p['angle'] <= -math.radians(45)]
-        if len(left) < 8 and len(right) < 8:
+        lo = math.radians(self.corridor_sector_min_deg)
+        hi = math.radians(self.corridor_sector_max_deg)
+        left = [p for p in points if lo <= p['angle'] <= hi]
+        right = [p for p in points if -hi <= p['angle'] <= -lo]
+        if len(left) < self.corridor_min_points and len(right) < self.corridor_min_points:
             return {'confidence': 0.0}
 
-        left_dist = self.percentile_abs_y(left, 0.35)
-        right_dist = self.percentile_abs_y(right, 0.35)
+        left_dist = self.percentile_abs_y(left, self.corridor_wall_percentile)
+        right_dist = self.percentile_abs_y(right, self.corridor_wall_percentile)
         available = [d for d in (left_dist, right_dist) if d is not None]
         if not available:
             return {'confidence': 0.0}
@@ -308,9 +366,9 @@ class LidarReactiveDriveNode(Node):
         width = sum(available) if len(available) == 2 else max(available) * 2.0
         # 신뢰도는 "통로 폭이 차량 폭보다 얼마나 여유 있는가"를 0~1로 정규화한다.
         # (width - vehicle_width) / 2.0 이므로 폭 여유가 약 2 m 이상이면 1에 가까워진다.
-        confidence = clamp((width - self.vehicle_width) / 2.0, 0.0, 1.0)
-        if len(left) >= 8 or len(right) >= 8:
-            confidence = max(confidence, 0.55)
+        confidence = clamp((width - self.vehicle_width) / self.corridor_width_norm, 0.0, 1.0)
+        if len(left) >= self.corridor_min_points or len(right) >= self.corridor_min_points:
+            confidence = max(confidence, self.corridor_min_confidence)
         return {
             'confidence': confidence,
             'left_dist': left_dist,
@@ -322,7 +380,7 @@ class LidarReactiveDriveNode(Node):
         """측면 sector point에서 노이즈에 강한 측면 거리를 반환한다."""
         if not points:
             return None
-        values = sorted(abs(point['y']) for point in points if point['x'] > -0.05)
+        values = sorted(abs(point['y']) for point in points if point['x'] > self.min_point_x)
         if not values:
             return None
         index = int(clamp((len(values) - 1) * percentile, 0, len(values) - 1))
@@ -343,7 +401,7 @@ class LidarReactiveDriveNode(Node):
         for point in points:
             # 차량 중심선 기준 좌우 허용 폭. 장애물이 lookahead 안에 있고
             # |y|가 이 값보다 작으면 차량 진행 경로를 막는 점으로 판단한다.
-            lateral_limit = max(required_width * 0.5, 0.12)
+            lateral_limit = max(required_width * 0.5, self.gap_min_lateral_limit)
             blocked = (
                 0.0 <= point['x'] <= lookahead
                 and abs(point['y']) <= lateral_limit
@@ -400,11 +458,12 @@ class LidarReactiveDriveNode(Node):
         """local centerline을 만들 수 있는 좌우 cone boundary를 감지한다."""
         near = [
             p for p in points
-            if 0.2 <= p['x'] <= self.active_lookahead_distance and abs(p['y']) <= 1.8
+            if self.cone_min_x <= p['x'] <= self.active_lookahead_distance
+            and abs(p['y']) <= self.cone_max_abs_y
         ]
-        left = [p for p in near if p['y'] > 0.20]
-        right = [p for p in near if p['y'] < -0.20]
-        if len(left) < 3 or len(right) < 3:
+        left = [p for p in near if p['y'] > self.cone_side_min_y]
+        right = [p for p in near if p['y'] < -self.cone_side_min_y]
+        if len(left) < self.cone_min_points or len(right) < self.cone_min_points:
             return {'confidence': 0.0}
 
         left_y = self.mean([p['y'] for p in left])
@@ -417,7 +476,7 @@ class LidarReactiveDriveNode(Node):
         # center_y는 좌우 경계의 중앙선 y 위치다.
         center_y = 0.5 * (left_y + right_y)
         # 감지된 좌우 점 개수를 20개 기준으로 0~1 신뢰도로 정규화한다.
-        confidence = clamp((len(left) + len(right)) / 20.0, 0.0, 1.0)
+        confidence = clamp((len(left) + len(right)) / self.cone_confidence_points, 0.0, 1.0)
         # 목표 조향각 = atan2(중앙선 y 오차, 전방 lookahead 거리).
         # 즉 lookahead 지점의 중앙선을 향하도록 pure-pursuit와 비슷하게 각도를 만든다.
         target_angle = math.atan2(center_y, self.active_lookahead_distance)
@@ -431,9 +490,9 @@ class LidarReactiveDriveNode(Node):
         """mode chattering을 줄이기 위해 hysteresis를 두고 주행 전략을 선택한다."""
         if path_blocked and gaps:
             desired = 'OBSTACLE_AVOIDANCE'
-        elif cone_track.get('confidence', 0.0) > 0.55:
+        elif cone_track.get('confidence', 0.0) > self.cone_mode_confidence:
             desired = 'CONE_TRACK'
-        elif corridor.get('confidence', 0.0) > 0.50 and not path_blocked:
+        elif corridor.get('confidence', 0.0) > self.wall_follow_confidence and not path_blocked:
             desired = 'WALL_FOLLOW'
         else:
             desired = 'OPEN_SPACE'
@@ -444,7 +503,7 @@ class LidarReactiveDriveNode(Node):
             self.current_mode = desired
             self.mode_started_at = self.get_clock().now()
             return self.current_mode
-        if desired != self.current_mode and elapsed < 0.45:
+        if desired != self.current_mode and elapsed < self.mode_hold_sec:
             return self.current_mode
         if desired != self.current_mode:
             self.current_mode = desired
@@ -491,24 +550,24 @@ class LidarReactiveDriveNode(Node):
         # 많이 꺾을수록 속도를 낮추기 위해 0~1 값으로 정규화한다.
         steer_ratio = clamp(abs(steering) / self.max_steering, 0.0, 1.0)
         # width_ratio: 틈새 폭이 1.5 m 이상이면 넓다고 보고 1로 포화한다.
-        width_ratio = clamp(best_gap['width'] / 1.5, 0.0, 1.0)
+        width_ratio = clamp(best_gap['width'] / self.gap_full_speed_width, 0.0, 1.0)
         # 기본 RPM 공식: CRUISE_RPM에서 시작해 틈새가 넓을수록 MAX_RPM에 가까워진다.
         # CRUISE_RPM/MAX_RPM은 현재 실차 테스트용 70% 스케일 값이다.
         rpm = CRUISE_RPM + (MAX_RPM - CRUISE_RPM) * width_ratio
         # 조향 감속 공식: 최대 조향이면 RPM을 35% 줄이고, 직진이면 줄이지 않는다.
-        rpm *= 1.0 - 0.35 * steer_ratio
+        rpm *= 1.0 - self.gap_steer_slowdown * steer_ratio
         if forward_clearance is not None:
             clearance_ratio = clamp(
                 (forward_clearance - self.adaptive_planner_stop_distance())
                 / max(
-                    0.1,
+                    self.clearance_min_span,
                     self.adaptive_obstacle_avoidance_distance()
                     - self.adaptive_planner_stop_distance(),
                 ),
                 0.0,
                 1.0,
             )
-            rpm *= 0.45 + 0.55 * clearance_ratio
+            rpm *= self.clearance_speed_floor + self.clearance_speed_gain * clearance_ratio
         mode = 'OBSTACLE_AVOIDANCE' if aggressive else 'OPEN_SPACE'
         return ReactiveDriveCommand(
             steering_rad=steering,
@@ -521,34 +580,35 @@ class LidarReactiveDriveNode(Node):
     def score_gap(self, gap):
         """폭, 여유거리, 조향 부드러움을 사용해 gap 점수를 계산한다."""
         # 폭 점수: 틈새 폭 1.6 m 이상이면 최고점으로 본다.
-        width_score = clamp(gap['width'] / 1.6, 0.0, 1.0)
+        width_score = clamp(gap['width'] / self.score_width_norm, 0.0, 1.0)
         # 여유거리 점수: lookahead_distance만큼 비어 있으면 최고점.
         clearance_score = clamp(gap['clearance'] / self.active_lookahead_distance, 0.0, 1.0)
         # 조향 부담: 정면에서 멀리 떨어진 틈새일수록 감점한다.
-        steering_penalty = abs(gap['center_angle']) / math.radians(120)
+        steering_penalty = abs(gap['center_angle']) / math.radians(self.score_steer_span_deg)
         # 조향 변화 부담: 이전 조향과 차이가 클수록 덜그럭거림을 줄이기 위해 감점한다.
         change_penalty = abs(gap['center_angle'] - self.previous_steering)
-        center_bonus = 1.0 - clamp(abs(gap['center_angle']) / math.radians(45), 0.0, 1.0)
+        center_bonus = 1.0 - clamp(
+            abs(gap['center_angle']) / math.radians(self.score_center_span_deg), 0.0, 1.0)
         # 최종 점수 = 폭/여유거리/중앙 선호 - 조향 부담 - 조향 변화 부담.
         return (
-            1.2 * width_score
+            self.score_width_weight * width_score
             + clearance_score
-            + 0.55 * center_bonus
-            - 0.75 * steering_penalty
-            - 0.45 * change_penalty
+            + self.score_center_weight * center_bonus
+            - self.score_steer_weight * steering_penalty
+            - self.score_change_weight * change_penalty
         )
 
     def plan_cone_track(self, cone_track):
         """좌우 cone boundary에서 추정한 centerline을 추종한다."""
         steering = clamp(
-            cone_track['target_angle'] * 1.45,
+            cone_track['target_angle'] * self.cone_steering_gain,
             -self.max_steering,
             self.max_steering,
         )
         if abs(steering) < self.steering_deadband:
             steering = 0.0
         # cone 추종도 많이 꺾을수록 속도를 줄인다. 최대 조향이면 25% 감속.
-        rpm = CRUISE_RPM * (1.0 - 0.25 * abs(steering) / self.max_steering)
+        rpm = CRUISE_RPM * (1.0 - self.cone_steer_slowdown * abs(steering) / self.max_steering)
         return ReactiveDriveCommand(
             steering_rad=steering,
             rpm=rpm,
@@ -578,7 +638,7 @@ class LidarReactiveDriveNode(Node):
         if abs(steering) < self.steering_deadband:
             steering = 0.0
         # 벽 추종에서도 조향량이 클수록 속도를 줄인다. 최대 조향이면 20% 감속.
-        rpm = CRUISE_RPM * (1.0 - 0.2 * abs(steering) / self.max_steering)
+        rpm = CRUISE_RPM * (1.0 - self.wall_steer_slowdown * abs(steering) / self.max_steering)
         return ReactiveDriveCommand(
             steering_rad=steering,
             rpm=rpm,
@@ -593,7 +653,7 @@ class LidarReactiveDriveNode(Node):
         right = self.mean([p['range'] for p in points if p['angle'] < 0.0])
         direction = 1.0 if left > right else -1.0
         # 열린 공간이 더 큰 쪽으로 최대 조향의 55%만 사용해 과격한 회피를 막는다.
-        return direction * self.max_steering * 0.55
+        return direction * self.max_steering * self.open_space_fallback_steer_ratio
 
     def forward_clearance(self, points, half_width):
         """현재 차량 corridor 안에서 가장 가까운 x방향 여유거리를 반환한다."""
@@ -625,7 +685,7 @@ class LidarReactiveDriveNode(Node):
             + self.current_speed * self.planner_stop_time_headway
             + self.planner_stop_margin
         )
-        return clamp(dynamic_stop, self.planner_stop_distance, 1.50)
+        return clamp(dynamic_stop, self.planner_stop_distance, self.planner_stop_max_distance)
 
     def filter_wall_error(self, error):
         """복도 벽 거리 잡음이 바로 좌우 조향으로 튀지 않도록 완만하게 필터링한다."""
@@ -641,7 +701,7 @@ class LidarReactiveDriveNode(Node):
 
     def smooth_steering(self, target, fast=False):
         """회피 반응성을 유지하면서 조향 떨림을 제한한다."""
-        max_step = 0.22 if fast else 0.08
+        max_step = self.steer_rate_limit_fast if fast else self.steer_rate_limit
         # 한 scan callback마다 조향 변화량을 +/-0.16 rad로 제한한다.
         # 급격한 좌우 전환으로 차체가 덜그럭거리는 현상을 줄이는 rate limit이다.
         steering = clamp(
