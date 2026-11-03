@@ -11,3 +11,6 @@ publisher_guard_node:
       - "/livox/imu|/livox_lidar_publisher|1|1"                  # TBD(세션 1)
       - "/commands/motor/speed|/exp_drive_mux,/joy_controller|1|2"
       - "/tf_static|/tf_base_to_livox,/tf_livox_to_imu,/camera/camera|2|3"  # TBD(세션 1) realsense 노드 이름
+      # odom→base_link TF 발행자는 정확히 하나 (vesc_to_odom 또는 EKF). 둘이면 TF가 튄다
+      - "/tf|/vesc_to_odom_node,/ekf_odom|1|1"                   # TBD(세션 1) 기존 vesc_to_odom 노드 이름
+      - "/vesc/odom|/vesc_to_odom_node|1|1"                      # TBD(세션 1) odom 토픽·노드 이름

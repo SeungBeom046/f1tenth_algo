@@ -26,7 +26,7 @@ command -v chronyc >/dev/null && { run chronyc tracking; run chronyc sources -v;
 
 section "패키지 존재 여부"
 ros2 pkg list 2>/dev/null | grep -E \
-  'livox|vesc|pointcloud_to_laserscan|robot_localization|tf2_tools|tf2_ros|rosbag2_storage_mcap|realsense|image_transport|compressed_image_transport|sensor_msgs_py' \
+  'livox|vesc|pointcloud_to_laserscan|robot_localization|tf2_tools|tf2_ros|rosbag2|realsense|image_transport|compressed_image_transport|sensor_msgs_py|joy|vesc_ackermann' \
   || echo "(해당 패키지 없음)"
 
 section "노드 목록"
@@ -55,7 +55,8 @@ for t in $PC_TOPICS $LIVOX_CUSTOM $IMU_TOPICS $ODOM_TOPICS $VESC_TOPICS $SCAN_TO
 done
 
 section "IMU 원본 1회 echo"
-for t in $IMU_TOPICS; do run ros2 topic echo --once "$t"; done
+ECHO="python3 $(cd "$(dirname "$0")" && pwd)/echo_once.py"   # Foxy topic echo에는 --once가 없다
+for t in $IMU_TOPICS; do run $ECHO "$t"; done
 
 section "IMU 정지 통계 (단위 판정: |a| 평균 ~1.0 = g, ~9.8 = m/s^2)"
 for t in $IMU_TOPICS; do
@@ -120,14 +121,14 @@ done
 section "TF 발행 노드"
 run ros2 topic info -v /tf
 run ros2 topic info -v /tf_static
-run ros2 topic echo --once /tf_static
+run $ECHO /tf_static --transient-local
 echo "--- odom -> base_link (3 s)"
 timeout -s INT 4 ros2 run tf2_ros tf2_echo odom base_link 2>&1 | head -n 12
 
 section "드라이버 파라미터 (livox / vesc / odom / laserscan 노드)"
 for n in $(timeout 10 ros2 node list 2>/dev/null | grep -Ei 'livox|vesc|odom|ackermann|laserscan'); do
   echo "--- $n"
-  timeout 15 ros2 param dump "$n" 2>&1
+  timeout 15 ros2 param dump "$n" --print 2>&1
 done
 
 section "속도 환산 계수 (명령 ERPM_GAIN vs odom speed_to_erpm_gain)"
@@ -143,10 +144,10 @@ echo "설정 파일 위치 (speed_to_erpm_gain 검색):"
 grep -rn --include='*.yaml' --include='*.py' 'speed_to_erpm_gain' ~ /opt/ros 2>/dev/null | grep -v '/build/\|/log/' | head -n 20
 
 section "VESC 상태 토픽 1회 echo (속도, 전압 필드 확인)"
-for t in $VESC_TOPICS; do run ros2 topic echo --once "$t"; done
+for t in $VESC_TOPICS; do run $ECHO "$t"; done
 
 section "Odometry 1회 echo (frame_id, child_frame_id 확인)"
-for t in $ODOM_TOPICS; do run ros2 topic echo --once "$t"; done
+for t in $ODOM_TOPICS; do run $ECHO "$t"; done
 
 section "프로세스와 부하 (YOLO, python 노드)"
 ps -eo pid,pcpu,pmem,etime,args --sort=-pcpu | grep -Ei 'ros|python|yolo|livox|vesc|realsense' | grep -v grep | head -n 30
@@ -155,6 +156,8 @@ command -v tegrastats >/dev/null && timeout 3 tegrastats --interval 1000 | head 
 section "디스크 (rosbag 기록 위치)"
 df -h ~ /tmp 2>/dev/null
 ros2 bag record --help 2>/dev/null | grep -A2 -- '--storage' | head -n 6
+echo "ROS_DISTRO=$ROS_DISTRO (Foxy 기대). python3 --version: $(python3 --version 2>&1)"
+python3 -c "import numpy; print('numpy', numpy.__version__)" 2>&1
 
 echo
 echo "완료. 로그: $LOG"

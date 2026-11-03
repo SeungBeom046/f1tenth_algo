@@ -17,10 +17,10 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2
-from sensor_msgs_py import point_cloud2
 from tf2_ros import Buffer, TransformListener
 
 from my_algo.deskew import deskew_points
+from my_algo.pc2 import read_cloud, write_cloud
 from my_algo.ros_util import lookup_pose2d
 
 
@@ -52,7 +52,7 @@ class DeskewNode(Node):
                 self.warned = True
             self.pub.publish(msg)
             return
-        pts = point_cloud2.read_points(msg, skip_nans=True)
+        pts = read_cloud(msg)
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         t = pts[self.time_field].astype(np.float64) * self.time_scale
         if self.time_mode == 'offset':
@@ -72,7 +72,7 @@ class DeskewNode(Node):
         out = deskew_points(xyz, t, t0, pose0, t1, pose1, t_ref=stamp)
         pts = pts.copy()
         pts['x'], pts['y'], pts['z'] = out[:, 0], out[:, 1], out[:, 2]
-        cloud = point_cloud2.create_cloud(msg.header, msg.fields, pts)
+        cloud = write_cloud(msg, pts)
         self.pub.publish(cloud)
 
 

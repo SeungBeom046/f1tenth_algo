@@ -3,8 +3,8 @@
 # 리팩터링 전(baseline 태그)과 후에 같은 bag으로 한 번씩 실행하고 verify_refactor.py compare로 비교.
 #
 #   bash replay_drive.sh <bag 경로> <출력 csv> [재생 배속, 기본 0.5]
-#   예) git checkout baseline-pre-refactor && colcon build ... && bash replay_drive.sh ~/bags/drive1 baseline_cmd.csv
-#       git checkout exp/occlusion-speed   && colcon build ... && bash replay_drive.sh ~/bags/drive1 after_cmd.csv
+#   이 스크립트·bag_player.py·verify_refactor.py는 현재 브랜치 사본(예: ~/session1/tools/)에서 실행한다.
+#   기준선 태그의 replay_drive.sh는 Humble의 --clock을 써서 Foxy에서 안 돈다 (docs/SESSIONS.md 세션 1 d).
 #       python3 verify_refactor.py compare baseline_cmd.csv after_cmd.csv
 #
 # 토픽 이름은 check_vehicle.sh로 확정 전까지 환경변수로 바꿀 수 있다.
@@ -33,12 +33,13 @@ sleep 5
 
 # 파라미터도 함께 남겨 리팩터링 전후 값이 같은지 비교할 수 있게 한다.
 for n in /lidar_reactive_drive /autonomous_drive /pointcloud_to_laserscan; do
-  ros2 param dump "$n" > "${OUT%.csv}_params_$(basename $n).yaml" 2>&1 || true
+  ros2 param dump "$n" --print > "${OUT%.csv}_params_$(basename $n).yaml" 2>&1 || true   # Foxy: --print로 표준출력
 done
 
 python3 "$HERE/verify_refactor.py" record --output "$OUT" &
 REC_PID=$!
 sleep 2
-ros2 bag play "$BAG" --clock --rate "$RATE" --topics "$CLOUD_TOPIC" "$ODOM_TOPIC"
+# Foxy ros2 bag play에는 --clock이 없다 → bag 시간으로 /clock을 내는 bag_player.py로 재생
+python3 "$HERE/bag_player.py" "$BAG" --rate "$RATE" --topics "$CLOUD_TOPIC" "$ODOM_TOPIC"
 wait $REC_PID
 echo "완료: $OUT (파라미터 덤프: ${OUT%.csv}_params_*.yaml)"

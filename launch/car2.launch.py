@@ -17,11 +17,14 @@
 """
 import os
 
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+from my_algo.vehicle_utils import SERVO_GAIN
 
 
 def nodes(context):
@@ -33,7 +36,19 @@ def nodes(context):
     if not vesc_config or not os.path.exists(os.path.expanduser(vesc_config)):
         raise RuntimeError(f'vesc_config 파일 없음: {vesc_config!r}')
     vesc_config = os.path.expanduser(vesc_config)
-    popout = os.path.join(get_package_share_directory('my_algo'), 'config', 'popout.yaml')
+    share = get_package_share_directory('my_algo')
+    popout = os.path.join(share, 'config', 'popout.yaml')
+    with open(popout, encoding='utf-8') as f:
+        pp = yaml.safe_load(f)['/**']['ros__parameters']
+    with open(os.path.join(share, 'config', 'vehicle_geometry.yaml'), encoding='utf-8') as f:
+        wheelbase = float(yaml.safe_load(f)['vehicle_geometry']['ros__parameters']['wheelbase'])
+    # vesc_to_odom은 아래 계수가 없으면 시작하지 못한다 (f1tenth/vesc 기본 vesc_config.yaml에 없음).
+    # #2 계수는 popout.yaml (#2 실측 [EXP0-MEASURE]), 휠베이스·서보 게인은 에고와 같은 차종으로 가정 (TBD(세션 1))
+    odom_params = {'publish_tf': False, 'odom_frame': 'car2_odom', 'base_frame': 'car2_base_link',
+                   'use_servo_cmd_to_calc_angular_velocity': True,
+                   'speed_to_erpm_gain': float(pp['erpm_gain']), 'speed_to_erpm_offset': 0.0,
+                   'steering_angle_to_servo_gain': -SERVO_GAIN,
+                   'steering_angle_to_servo_offset': float(pp['servo_center']), 'wheelbase': wheelbase}
     popout_params = [popout]
     if arg('v_popout'):   # Exp0 #2 단독 시험 (0.8 / 0.9 m/s). 확정 후에는 popout.yaml 값을 바꾼다
         popout_params.append({'v_popout': float(arg('v_popout'))})
@@ -42,7 +57,7 @@ def nodes(context):
              name='vesc_driver_node', namespace=ns, output='screen', parameters=[vesc_config]),
         Node(package=arg('vesc_odom_pkg'), executable=arg('vesc_odom_exe'),
              name='vesc_to_odom_node', namespace=ns, output='screen',
-             parameters=[vesc_config, {'publish_tf': False}]),   # /tf는 namespace가 안 붙는다
+             parameters=[vesc_config, odom_params]),   # publish_tf False: /tf는 namespace가 안 붙는다
         Node(package='my_algo', executable='popout_vehicle_node', name='popout_vehicle_node',
              namespace=ns, output='screen', parameters=popout_params),
     ]

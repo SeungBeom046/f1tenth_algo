@@ -14,7 +14,6 @@ METHODS=(B1 B2 P)
 CLOUD_TOPIC="${CLOUD_TOPIC:-$(python3 -c "import json;print(json.load(open('$RUN_DIR/meta.json')).get('cloud_topic','/livox/lidar'))")}"
 ODOM_TOPIC="$(python3 -c "import json;print(json.load(open('$RUN_DIR/meta.json')).get('odom_topic','/vesc/odom'))")"
 SCENARIO="$(python3 -c "import json;print(json.load(open('$RUN_DIR/meta.json'))['scenario'])")"
-QOS="$(ros2 pkg prefix my_algo)/share/my_algo/config/replay_qos.yaml"
 mkdir -p "$RUN_DIR/replay"
 for M in "${METHODS[@]}"; do
   OUT="$RUN_DIR/replay/$M"
@@ -23,11 +22,12 @@ for M in "${METHODS[@]}"; do
     cloud_topic:="$CLOUD_TOPIC" > "$RUN_DIR/replay/${M}_launch.log" 2>&1 &
   L=$!
   sleep 4
-  ros2 bag record -o "$OUT" /exp/v_raw /exp/v_cap /exp/v_cmd /exp/phantom_d /exp/rho /exp/phantoms \
-    --use-sim-time > /dev/null 2>&1 &
+  # Foxy record에는 --use-sim-time이 없다 → /clock을 같이 기록해 분석에서 bag 시간으로 되돌린다
+  ros2 bag record -s sqlite3 -o "$OUT" /exp/v_raw /exp/v_cap /exp/v_cmd /exp/phantom_d /exp/rho /exp/phantoms \
+    /clock > /dev/null 2>&1 &
   R=$!
   sleep 2
-  ros2 bag play "$RUN_DIR/bag" --clock --qos-profile-overrides-path "$QOS" \
+  python3 "$(dirname "$0")/bag_player.py" "$RUN_DIR/bag" \
     --topics "$CLOUD_TOPIC" "$ODOM_TOPIC" /tf /tf_static /autonomous_mode
   sleep 1
   kill -INT $R $L 2>/dev/null || true

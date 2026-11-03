@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 회차 기록: meta.json + params.yaml + rosbag2(mcap). bringup을 먼저 띄운 뒤 실행한다.
+# 회차 기록: meta.json + params.yaml + rosbag2(sqlite3, Foxy 기본). bringup을 먼저 띄운 뒤 실행한다.
 #
 #   bash record_run.sh <mode> <method> <scenario> <d_e|na> <run_id>
 #   예) bash record_run.sh exp P S1 1.5 3
@@ -34,15 +34,10 @@ echo "회차 폴더: $RUN_DIR"
 : > "$RUN_DIR/params.yaml"
 for n in $(ros2 node list 2>/dev/null | grep -E 'occupancy_grid_node|phantom_node|speed_layer_node|exp_aeb_node|exp_steering_node|exp_drive_mux|trigger_node|deskew_node|imu_republisher|pointcloud_to_laserscan|lidar_reactive_drive|autonomous_drive'); do
   echo "# ---- $n" >> "$RUN_DIR/params.yaml"
-  ros2 param dump "$n" >> "$RUN_DIR/params.yaml" 2>&1 || echo "# dump 실패: $n" >> "$RUN_DIR/params.yaml"
+  ros2 param dump "$n" --print >> "$RUN_DIR/params.yaml" 2>&1 || echo "# dump 실패: $n" >> "$RUN_DIR/params.yaml"   # Foxy: --print
 done
 
-if ros2 pkg prefix rosbag2_storage_mcap >/dev/null 2>&1; then
-  STORAGE=(-s mcap)
-else
-  echo "경고: rosbag2_storage_mcap 없음 → 기본 저장소(sqlite3)로 기록. sudo apt install ros-\$ROS_DISTRO-rosbag2-storage-mcap" >&2
-  STORAGE=()
-fi
+STORAGE=(-s sqlite3)   # Foxy 기본 저장소. 분석은 rosbags 0.9.23 (analysis/requirements.txt)
 
 TOPICS=(
   "$CLOUD_TOPIC" "$ODOM_TOPIC" "$RAW_IMU_TOPIC" /imu /imu/linear_accel_base /imu/status

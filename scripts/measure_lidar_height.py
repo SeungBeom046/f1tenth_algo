@@ -18,16 +18,9 @@ import numpy as np
 import rclpy
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import PointCloud2
-from sensor_msgs_py import point_cloud2
 
 from my_algo.floor_plane import measure
-
-
-def cloud_to_xyz(msg):
-    pts = point_cloud2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True)
-    if isinstance(pts, np.ndarray) and pts.dtype.names:
-        return np.column_stack([pts['x'], pts['y'], pts['z']]).astype(np.float64)
-    return np.array([tuple(p) for p in pts], dtype=np.float64).reshape(-1, 3)
+from my_algo.pc2 import read_xyz
 
 
 def main():
@@ -48,7 +41,7 @@ def main():
 
     def callback(msg):
         if len(clouds) < args.frames:
-            clouds.append(cloud_to_xyz(msg))
+            clouds.append(read_xyz(msg))
             frame_ids.add(msg.header.frame_id)
 
     node.create_subscription(PointCloud2, args.topic, callback, qos_profile_sensor_data)

@@ -29,7 +29,6 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2
-from sensor_msgs_py import point_cloud2
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 
@@ -37,6 +36,7 @@ from my_algo.occupancy import (
     GridSpec, OccupancyAccumulator, crop, height_band_mask, occlusion_boundary,
     out_of_band_free_ratio, raycast, single_frame_grid,
 )
+from my_algo.pc2 import read_xyz
 from my_algo.ros_util import lookup_matrix, publish_string
 
 
@@ -84,8 +84,7 @@ class OccupancyGridNode(Node):
             self.get_logger().warn('TF 없음 (odom/base_link <- lidar): 프레임 건너뜀',
                                    throttle_duration_sec=2.0)
             return
-        pts = point_cloud2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True)
-        xyz = np.column_stack([pts['x'], pts['y'], pts['z']]).astype(np.float64)
+        xyz = read_xyz(msg)
         if len(xyz) == 0:
             return
         hom = np.column_stack([xyz, np.ones(len(xyz))])

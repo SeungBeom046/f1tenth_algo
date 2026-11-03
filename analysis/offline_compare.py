@@ -15,7 +15,7 @@ import numpy as np
 import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from bag_io import read_bag, stamp  # noqa: E402
+from bag_io import clock_mapper, read_bag, stamp  # noqa: E402
 
 from my_algo import metrics as M  # noqa: E402
 
@@ -43,7 +43,9 @@ def main():
     for method in sorted(os.listdir(replay_root)) if os.path.isdir(replay_root) else []:
         bag_dir = os.path.join(replay_root, method)
         if os.path.exists(os.path.join(bag_dir, 'metadata.yaml')):
-            sources[f'{method} (replay)'] = read_bag(bag_dir, ['/exp/v_raw']).get('/exp/v_raw', [])
+            rb = read_bag(bag_dir, ['/exp/v_raw', '/clock'])
+            to_sim = clock_mapper(rb)   # 재생 기록은 wall 시각 → /clock으로 bag 시각
+            sources[f'{method} (replay)'] = [(float(to_sim(t)), m) for t, m in rb.get('/exp/v_raw', [])]
     for name, msgs in sources.items():
         msgs = [(t, m) for t, m in msgs if t >= t_auto]
         if not msgs:

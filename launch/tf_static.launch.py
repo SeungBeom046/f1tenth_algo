@@ -25,15 +25,13 @@ IMU_X, IMU_Y, IMU_Z = 0.011, 0.02329, -0.04412
 
 
 def static_tf(name, parent, child, x, y, z, roll=0.0, pitch=0.0, yaw=0.0):
+    # Foxy static_transform_publisher는 이름 붙은 인자(--x 등)를 지원하지 않는다.
+    # 위치 인자 순서: x y z yaw pitch roll parent child (yaw·pitch·roll 순서 주의, 단위 rad)
     return Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         name=name,
-        arguments=[
-            '--x', str(x), '--y', str(y), '--z', str(z),
-            '--roll', str(roll), '--pitch', str(pitch), '--yaw', str(yaw),
-            '--frame-id', parent, '--child-frame-id', child,
-        ],
+        arguments=[str(x), str(y), str(z), str(yaw), str(pitch), str(roll), parent, child],
     )
 
 
