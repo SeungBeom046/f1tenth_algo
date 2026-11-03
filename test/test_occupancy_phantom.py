@@ -147,7 +147,7 @@ class GeometryTest(unittest.TestCase):
         self.assertEqual(point_polygon_distance(0.0, 0.0, fp), 0.0)
         self.assertAlmostEqual(point_polygon_distance(1.41, 0.0, fp), 1.0)
         self.assertAlmostEqual(point_polygon_distance(0.0, 0.335, fp), 0.2)
-        g = VehicleGeometry(0.33, 0.41, 0.09, 0.27, fp)
+        g = VehicleGeometry(0.33, 0.41, 0.09, 0.27, fp, 0.28)
         self.assertAlmostEqual(g.half_width, 0.135)
 
 

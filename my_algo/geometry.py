@@ -13,6 +13,7 @@ class VehicleGeometry:
     rear_axle_to_rear: float
     body_width: float
     footprint: tuple  # ((x, y), ...) base_link 기준 다각형, 반시계
+    lidar_to_front_edge: float  # 라이다 원점 -> 차체 앞 끝 [m]. exp AEB·조향의 앞 끝 기준
 
     @property
     def half_width(self):
@@ -33,6 +34,7 @@ def load_geometry(path):
         rear_axle_to_rear=float(p['rear_axle_to_rear']),
         body_width=float(p['body_width']),
         footprint=tuple(zip(flat[0::2], flat[1::2])),
+        lidar_to_front_edge=float(p['lidar_to_front_edge']),
     )
 
 
