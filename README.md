@@ -513,6 +513,16 @@ SCRIPTS=$(ros2 pkg prefix my_algo)/share/my_algo/scripts   # 설치된 스크립
 평소처럼 Livox 드라이버, VESC 드라이버(+vesc_to_odom), 필요하면 카메라 드라이버를 띄운다.
 차는 **바퀴가 땅에 닿은 채 정지** 상태로 둔다. 자율주행 launch는 아직 띄우지 않는다.
 
+VESC 설정 YAML의 `vesc_to_odom`에 `publish_tf: true`가 있어야 odom→base_link TF가 나온다
+(자세한 내용은 README_experiment.md 3절).
+
+### 2-1. TF 실행 (터미널 3)
+
+```bash
+ros2 launch my_algo tf.launch.py
+ros2 run tf2_tools view_frames      # frames_*.pdf: odom → base_link → livox_frame → livox_imu
+```
+
 ### 3. 차량 점검 (터미널 2, 약 2–3분)
 
 ```bash
@@ -550,13 +560,15 @@ ros2 topic hz /imu                                   # ≈ 200 Hz
 ```
 
 - `calibrated`가 계속 false면 단위가 틀린 것이다. `accel_unit:=mps2`로 다시 실행해 본다.
-- `tf_ok: false`는 아직 정상이다 (TF 파일 반영 전). 이때 `/imu/linear_accel_base`는 나오지 않는다.
+- `tf_ok: false`면 2-1번 TF launch가 안 떠 있는 것이다. 이때 `/imu/linear_accel_base`는 나오지 않는다.
+- 축 방향 확인: `ros2 topic echo /imu/linear_accel_base --field vector`를 켜고 차를 앞으로 살짝 밀면 x가 양수.
 
 ### 6. 전달할 것
 
 1. `check_vehicle_*.log` 파일
 2. `measure_lidar_height.py` 출력
 3. 5번에서 `calibrated`가 true가 된 `accel_unit` 값과 `g_ref_norm`
+4. `view_frames`로 생성된 `frames_*.pdf` (또는 연결이 끊긴 위치)
 
 ### 문제 해결
 

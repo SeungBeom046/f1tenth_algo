@@ -63,7 +63,38 @@ ros2 topic echo /imu/status                         # g_ref_norm ≈ 9.81
 5. 정지 시 x, y, z 모두 ±0.05 m/s² 안쪽
 6. 부호가 반대면 TF(livox_frame/livox_imu 회전)가 잘못된 것이다. 노드에서 부호를 뒤집지 말 것.
 
-## 3. TF 검증 (첨부 tf_static.launch.py 반영 후)
+## 3. TF
+
+```bash
+ros2 launch my_algo tf.launch.py                 # 정적 TF, odom->base_link는 vesc_to_odom
+ros2 launch my_algo tf.launch.py use_ekf:=true   # 선택: EKF가 odom->base_link 발행
+```
+
+| TF | 발행 | 값 |
+|---|---|---|
+| base_link → livox_frame | tf_static.launch.py | x 0.13, y −0.005, z 0.24 (=0.21+0.03 임시), rpy 0 |
+| livox_frame → livox_imu | tf_static.launch.py | (0.011, 0.02329, −0.04412), 회전 없음 (Mid-360 매뉴얼) |
+| odom → base_link | vesc_to_odom (기본) 또는 EKF | 동적 |
+
+측정 후 값은 launch 인자로 바로 바꿔 볼 수 있다:
+`ros2 launch my_algo tf.launch.py lidar_z:=0.243 lidar_roll:=0.004 lidar_pitch:=-0.012`.
+확정되면 `launch/tf_static.launch.py` 위쪽 상수를 교체한다.
+
+### odom → base_link (vesc_to_odom)
+vesc_to_odom은 이 패키지가 아니라 VESC 쪽 bringup이 띄운다. 그 설정 YAML의
+`vesc_to_odom` 항목에서 다음을 맞춘다 (값은 check_vehicle.sh의 param dump로 확인):
+
+```yaml
+publish_tf: true
+odom_frame: odom
+base_frame: base_link
+```
+
+EKF(`use_ekf:=true`)를 쓸 때는 반대로 `publish_tf: false`로 둔다. 두 노드가 동시에
+odom→base_link를 내면 TF가 튄다. EKF는 휠 odom의 vx, vy와 `/imu` yaw rate만 쓰고 가속도는 쓰지 않는다
+(`sudo apt install ros-$ROS_DISTRO-robot-localization` 필요).
+
+### TF 검증
 
 - `ros2 run tf2_tools view_frames` → `odom → base_link → livox_frame → livox_imu` 한 줄로 연결
 - `/tf`에 odom→base_link를 내는 노드가 하나뿐인지 `ros2 topic info -v /tf`로 확인
@@ -80,3 +111,4 @@ ros2 topic echo /imu/status                         # g_ref_norm ≈ 9.81
 |---|---|---|
 | [EXP0-MEASURE] | config/imu.yaml `gyro_bias` | 실험일마다 재측정 |
 | [EXP0-MEASURE] | scripts/measure_lidar_height.py | livox_frame z, roll, pitch |
+| [EXP0-MEASURE] | launch/tf_static.launch.py | LIDAR_Z (원점높이 임시 0.03), LIDAR_ROLL/PITCH/YAW |
