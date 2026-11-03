@@ -21,6 +21,10 @@
 | 좌측 벽 목표 거리 | 0.355 | 좌측 벽 ~ 차선 왼쪽 경계 거리 실측 → 식은 `common.yaml` 주석 | `config/common.yaml` `target_wall_distance` |
 | 점별 시각 필드 (deskew) | `timestamp`, 1e-9, absolute | `check_vehicle.sh` 점군 필드 목록 | `config/common.yaml` `time_field`, `time_scale`, `time_mode` |
 
+| #2 속도 | 0.8 m/s | Exp0 e: 0.8·0.9 각 5회, 판정 규칙은 EXPERIMENT_PLAN 5절 | `config/popout.yaml` `v_popout` (+ EXPERIMENT_PLAN 8절 기록) |
+| #2 출발 → 차선 경계 거리 | 0.3 m | 트랙 마킹 후 줄자 | `config/popout.yaml` `lane_boundary_distance` |
+| E0 정지선 | 4.5 m | 트랙 길이에 맞춤 | `config/scenario_E0.yaml` `stop_distance` |
+
 ## 2. 속도 환산 일관성 (확인 대기)
 
 - 명령용 `ERPM_GAIN` = **4614** (`my_algo/vehicle_utils.py`, drive·exp 공통 유일 출처)
@@ -60,3 +64,34 @@
    바꾸면 이 값도 함께 바꿔야 한다.
 9. **AEB는 장애물 상대속도를 쓰지 않는다** (drive와 같은 정의). 분석의 최소 TTC는 상대속도 기반과
    에고 속도 기반(`min_ego_ttc`)을 둘 다 낸다.
+
+## 4. TBD(세션 1) — 차량 세션 1 결과로 확정할 이름·값
+
+문서에서 "TBD(세션 1)"로 표시한 곳은 모두 여기로 모인다. 출처는 `scripts/vehicle_session_1.md`의 파일.
+
+| 항목 | 현재 기본값 (추정) | 출처 | 바꿀 곳 |
+|---|---|---|---|
+| 점군 토픽 | `/livox/lidar` | b `check_vehicle_*.log` | bringup `cloud_topic`, `record_run.sh` `CLOUD_TOPIC`, `config/preflight.yaml`, `config/exp.rviz` |
+| 원본 IMU 토픽 | `/livox/imu` | b | bringup `imu_topic`, `config/imu.yaml`, `RAW_IMU_TOPIC`, `config/preflight.yaml` |
+| odom 토픽 | `/vesc/odom` | b | bringup `odom_topic`, `ODOM_TOPIC` |
+| VESC 상태 토픽·전압 필드 | `/sensors/core`, `state.voltage_input` | b (VESC 상태 echo) | `VESC_STATE_TOPIC`, `VESC_VOLTAGE_FIELD` |
+| 압축 카메라 토픽 | `/camera/camera/color/image_raw/compressed` | b (토픽 목록) | `CAMERA_TOPIC` |
+| Livox 드라이버 노드 이름 | `/livox_lidar_publisher` | b, b2 | `config/preflight.yaml` |
+| realsense 노드 이름 (`/tf_static` 발행) | `/camera/camera` | b2 | `config/preflight.yaml` |
+| vesc_to_odom 노드 이름, `publish_tf` | 자동 탐색 (이름에 odom) | b | `VESC_ODOM_NODE`, VESC 설정 YAML |
+| `speed_to_erpm_gain` | 미확인 | b | 2절 |
+| 점별 시각 필드 | `timestamp` | b (점군 필드) | `config/common.yaml` `time_field` 등 |
+| VESC 패키지·실행 파일 이름 (#2) | `vesc_driver/vesc_driver_node`, `vesc_ackermann/vesc_to_odom_node` | b (패키지 목록) | `car2.launch.py` 인자 기본값 |
+| Livox·VESC 드라이버 실행 명령 (RUNBOOK T1) | — | 평소 쓰는 명령 | `docs/RUNBOOK.md` 1절 |
+| `/joy` 재발행 주기 | 20 Hz 기대 | b2 `b2_joy_hz.txt` | 안 나오면 joy_node 설정 |
+| 배터리 셀 수·교체 기준 전압 | — | 팀 결정 | `docs/RUNBOOK.md` 0.2 |
+| 물리 전원 차단 위치 | — | 차량 | `docs/RUNBOOK.md` 2절 |
+| 회차당 bag 크기 | 약 0.6 GB 추정 | 첫 회차 `meta.json` `bag_bytes` | `docs/LOGGING.md` 6절 |
+| drive 모드 리팩터 불변 (rosbag) | 오프라인 비교만 완료 | d `d_verify.txt` | 차이 나면 3단계 중단 |
+
+## 5. 문서 요구사항 중 남은 것
+
+- 4.1 형식 docstring: exp 노드와 `imu_republisher`는 형식을 갖췄다. **drive 모드 노드 파일**
+  (`autonomous_drive.py`, `lidar_reactive_drive.py`, `aeb.py`, `camera_reactive_drive.py`, `joy_controller.py`,
+  `autonomous_metrics_logger.py`)은 수정 금지 조건 때문에 기존 docstring 그대로다 (입출력 토픽은 이미 적혀 있음).
+  docstring만 고치는 것을 허용하면 같은 형식으로 맞추고 verify_refactor로 불변을 확인한다.

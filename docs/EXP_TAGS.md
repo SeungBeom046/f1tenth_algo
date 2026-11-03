@@ -15,9 +15,9 @@
 | [config/scenario_S2.yaml:1](../config/scenario_S2.yaml#L1) | `# [EXP-VAR] 시나리오 S2: 틈 0.45 m, 돌출 없음 (정당한 감속 비용)` |
 | [config/scenario_S3.yaml:1](../config/scenario_S3.yaml#L1) | `# [EXP-VAR] 시나리오 S3: 틈 0.15 m (통과 불가), 돌출 없음 (B2 대비 P의 불필요 감속)` |
 | [config/scenario_S4.yaml:1](../config/scenario_S4.yaml#L1) | `# [EXP-VAR] 시나리오 S4: 우측도 연속 벽, 돌출 없음 (B1 과잉 감속)` |
-| [launch/bringup.launch.py:127](../launch/bringup.launch.py#L127) | `DeclareLaunchArgument('method', default_value='B0', description='[EXP-VAR] B0 \| B1 \| B2 \| P'),` |
-| [launch/bringup.launch.py:128](../launch/bringup.launch.py#L128) | `DeclareLaunchArgument('scenario', default_value='S2', description='[EXP-VAR] S1 \| S2 \| S3 \| S4'),` |
-| [launch/bringup.launch.py:129](../launch/bringup.launch.py#L129) | `DeclareLaunchArgument('d_e', default_value='', description='[EXP-VAR] S1 돌출 시점 1.0 \| 1.5 \| 2.0'),` |
+| [launch/bringup.launch.py:132](../launch/bringup.launch.py#L132) | `DeclareLaunchArgument('method', default_value='B0', description='[EXP-VAR] B0 \| B1 \| B2 \| P'),` |
+| [launch/bringup.launch.py:133](../launch/bringup.launch.py#L133) | `DeclareLaunchArgument('scenario', default_value='S2', description='[EXP-VAR] S1 \| S2 \| S3 \| S4'),` |
+| [launch/bringup.launch.py:134](../launch/bringup.launch.py#L134) | `DeclareLaunchArgument('d_e', default_value='', description='[EXP-VAR] S1 돌출 시점 1.0 \| 1.5 \| 2.0'),` |
 | [my_algo/phantom_node.py:11](../my_algo/phantom_node.py#L11) | `파라미터: method ([EXP-VAR], config/method_*.yaml), ROI·w_min 등은 config/common.yaml,` |
 | [my_algo/speed_layer_node.py:16](../my_algo/speed_layer_node.py#L16) | `method                      [EXP-VAR] config/method_*.yaml` |
 | [my_algo/trigger_node.py:14](../my_algo/trigger_node.py#L14) | `d_e [EXP-VAR] (launch 인자), collision_x (config/scenario_S1.yaml)` |
@@ -26,7 +26,6 @@
 
 | 위치 | 내용 |
 |---|---|
-| [README_experiment.md:131](../README_experiment.md#L131) | `\| [EXP-FIXED] \| launch/tf_static.launch.py, config/vehicle_geometry.yaml \| 장착 위치·차량 치수 전부 \|` |
 | [config/common.yaml:6](../config/common.yaml#L6) | `#   [EXP-FIXED]    방법 간에 절대 바꾸면 안 되는 값. 바꾸면 비교가 무효가 되는 이유를 옆에 적음` |
 | [config/common.yaml:14](../config/common.yaml#L14) | `v_ref: 2.0              # [EXP-FIXED] 목표 속도. 방법마다 다르면 손실 ΔT의 기준이 달라져 비교 불가` |
 | [config/common.yaml:15](../config/common.yaml#L15) | `t_r: 0.15               # [EXP-FIXED][EXP0-MEASURE] 반응시간 [s]. v_cap 식 공통. Exp0 급제동으로 측정` |
@@ -84,6 +83,7 @@
 | [config/scenario_S4.yaml:11](../config/scenario_S4.yaml#L11) | `accel_end_x: 2.5           # [EXP-FIXED] 가속 구간 끝 (v_ref 도달 판정 위치) [m]` |
 | [config/scenario_S4.yaml:12](../config/scenario_S4.yaml#L12) | `test_x_start: 2.5          # [EXP-FIXED] 시험 구간 (손실 ΔT 적분 범위) [m]` |
 | [config/vehicle_geometry.yaml:3](../config/vehicle_geometry.yaml#L3) | `# 모든 방법(B0/B1/B2/P)이 이 파일 하나를 공유한다.  [EXP-FIXED]` |
+| [launch/bringup.launch.py:69](../launch/bringup.launch.py#L69) | `# Exp0 odom 보정·Exp1 저속 주행 전용. v_ref는 [EXP-FIXED]라 방법 비교(Exp2·Exp3) 회차에는 쓰지 않는다.` |
 | [launch/tf_static.launch.py:3](../launch/tf_static.launch.py#L3) | `base_link 원점 = 뒤축 중심, z = 0 바닥.  모든 값 [EXP-FIXED].` |
 | [my_algo/deskew_node.py:11](../my_algo/deskew_node.py#L11) | `실험 관련: deskew on/off는 모든 방법 동일 [EXP-FIXED]. 점별 시각 필드가 없으면 노드가 경고 후 원본을 그대로 넘긴다.` |
 | [my_algo/exp_aeb_node.py:15](../my_algo/exp_aeb_node.py#L15) | `[EXP-FIXED] config/common.yaml. 값은 drive 모드 launch(lidar_drive.launch.py)와 같다.` |
@@ -104,7 +104,7 @@
 | [my_algo/phantom.py:30](../my_algo/phantom.py#L30) | `front: float                 # rear_axle_to_front (vehicle_geometry.yaml) [EXP-FIXED]` |
 | [my_algo/phantom.py:31](../my_algo/phantom.py#L31) | `roi_x_max: float = 6.0       # phantom 탐색 앞쪽 한계, base_link x [m] [EXP-FIXED]` |
 | [my_algo/phantom.py:32](../my_algo/phantom.py#L32) | `roi_half_y: float = 1.5      # phantom 탐색 좌우 한계 \|y\| [m] [EXP-FIXED]` |
-| [my_algo/popout_vehicle_node.py:13](../my_algo/popout_vehicle_node.py#L13) | `파라미터 ([EXP-FIXED], config/popout.yaml):` |
+| [my_algo/popout_vehicle_node.py:14](../my_algo/popout_vehicle_node.py#L14) | `파라미터 ([EXP-FIXED], config/popout.yaml):` |
 | [my_algo/speed_layer_node.py:12](../my_algo/speed_layer_node.py#L12) | `v_ref, t_r, a_b, s_m        [EXP-FIXED] (t_r, a_b는 [EXP0-MEASURE])` |
 | [my_algo/speed_layer_node.py:14](../my_algo/speed_layer_node.py#L14) | `min_speed_policy, restart_margin   [EXP-FIXED]` |
 | [my_algo/speed_policy.py:9](../my_algo/speed_policy.py#L9) | `[EXP-FIXED]   t_r, a_b, s_m, v_ref, 최소 속도 정책 → config/common.yaml (3단계)` |
@@ -128,7 +128,7 @@
 | [launch/bringup.launch.py:7](../launch/bringup.launch.py#L7) | `# 민감도 분석: [EXP-TUNE] 값만 개별 인자로 덮어쓰기 허용` |
 | [launch/bringup.launch.py:15](../launch/bringup.launch.py#L15) | `파라미터 우선순위: common.yaml < method_*.yaml < scenario_*.yaml < 회차 인자(d_e, run_id) < [EXP-TUNE] 인자.` |
 | [launch/bringup.launch.py:29](../launch/bringup.launch.py#L29) | `# 개별 인자로 덮어쓸 수 있는 [EXP-TUNE] 값과 타입. 이 밖의 값은 YAML로만 바꾼다.` |
-| [launch/bringup.launch.py:138](../launch/bringup.launch.py#L138) | `] + [DeclareLaunchArgument(k, default_value='', description='[EXP-TUNE] 덮어쓰기')` |
+| [launch/bringup.launch.py:145](../launch/bringup.launch.py#L145) | `] + [DeclareLaunchArgument(k, default_value='', description='[EXP-TUNE] 덮어쓰기')` |
 | [my_algo/occupancy.py:103](../my_algo/occupancy.py#L103) | `known_on  [EXP-TUNE]: unknown 칸이 known이 되려면 최근 N 프레임 중 이 수 이상 관측` |
 | [my_algo/occupancy.py:104](../my_algo/occupancy.py#L104) | `known_off [EXP-TUNE]: known 칸이 unknown으로 돌아가는 기준 (관측 수 < known_off). 1 <= off <= on <= N` |
 | [my_algo/occupancy_grid_node.py:16](../my_algo/occupancy_grid_node.py#L16) | `n_frames, known_on, known_off                              [EXP-TUNE] 누적·히스테리시스` |
@@ -139,14 +139,10 @@
 | [my_algo/speed_layer_node.py:13](../my_algo/speed_layer_node.py#L13) | `v_imp, b1_k                 [EXP-TUNE] (v_imp 하한 = V_MIN)` |
 | [my_algo/speed_policy.py:10](../my_algo/speed_policy.py#L10) | `[EXP-TUNE]    v_imp (하한 = v_min), k` |
 
-## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (30개)
+## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (28개)
 
 | 위치 | 내용 |
 |---|---|
-| [README_experiment.md:19](../README_experiment.md#L19) | `## 1. 장착 측정 [EXP0-MEASURE]` |
-| [README_experiment.md:128](../README_experiment.md#L128) | `\| [EXP0-MEASURE] \| config/imu.yaml `gyro_bias` \| 실험일마다 재측정 \|` |
-| [README_experiment.md:129](../README_experiment.md#L129) | `\| [EXP0-MEASURE] \| launch/tf_static.launch.py \| ORIGIN_H (임시 0.03), LIDAR_YAW, LIDAR_ROLL, LIDAR_PITCH \|` |
-| [README_experiment.md:130](../README_experiment.md#L130) | `\| [EXP0-MEASURE] \| config/vehicle_geometry.yaml \| wheel_diameter (미측정) \|` |
 | [config/common.yaml:8](../config/common.yaml#L8) | `#   [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (docs/OPEN_ITEMS.md)` |
 | [config/common.yaml:15](../config/common.yaml#L15) | `t_r: 0.15               # [EXP-FIXED][EXP0-MEASURE] 반응시간 [s]. v_cap 식 공통. Exp0 급제동으로 측정` |
 | [config/common.yaml:16](../config/common.yaml#L16) | `a_b: 3.0                # [EXP-FIXED][EXP0-MEASURE] 최대 감속 [m/s^2]. v_cap 식 공통. Exp0에서 /imu로 측정` |
@@ -159,6 +155,7 @@
 | [config/popout.yaml:10](../config/popout.yaml#L10) | `lane_boundary_distance: 0.3        # [EXP0-MEASURE] #2 출발 위치 → 차선 경계 거리 [m] (진입 시간 기록용)` |
 | [config/popout.yaml:14](../config/popout.yaml#L14) | `erpm_gain: 4614.0                  # [EXP0-MEASURE] #2 차량의 m/s -> ERPM. 에고 값과 다를 수 있음. #2에서 실측` |
 | [config/popout.yaml:15](../config/popout.yaml#L15) | `servo_center: 0.5                  # [EXP0-MEASURE] #2 직진 서보값` |
+| [config/scenario_E0.yaml:9](../config/scenario_E0.yaml#L9) | `stop_distance: 4.5         # [EXP0-MEASURE] 제동 시작 위치 = v_ref 도달 후. 트랙 끝까지 정지거리(약 1 m) + 여유 확보` |
 | [config/scenario_S1.yaml:8](../config/scenario_S1.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
 | [config/scenario_S2.yaml:8](../config/scenario_S2.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
 | [config/scenario_S3.yaml:8](../config/scenario_S3.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
@@ -169,6 +166,7 @@
 | [launch/tf_static.launch.py:19](../launch/tf_static.launch.py#L19) | `LIDAR_YAW = 0.0    # [EXP0-MEASURE] B5: 로고가 전방이면 0, 후방이면 3.14159, 좌측 1.5708, 우측 -1.5708` |
 | [launch/tf_static.launch.py:20](../launch/tf_static.launch.py#L20) | `LIDAR_ROLL = 0.0   # [EXP0-MEASURE] C1: 정지 IMU 평균 roll = atan2(ay, az)` |
 | [launch/tf_static.launch.py:21](../launch/tf_static.launch.py#L21) | `LIDAR_PITCH = 0.0  # [EXP0-MEASURE] C1: 정지 IMU 평균 pitch = atan2(-ax, sqrt(ay^2 + az^2))` |
+| [my_algo/imu_republisher.py:12](../my_algo/imu_republisher.py#L12) | `파라미터 (config/imu.yaml): accel_unit (기본 g), gyro_unit, gyro_bias [EXP0-MEASURE], gravity_ref,` |
 | [my_algo/speed_layer_node.py:12](../my_algo/speed_layer_node.py#L12) | `v_ref, t_r, a_b, s_m        [EXP-FIXED] (t_r, a_b는 [EXP0-MEASURE])` |
 | [my_algo/speed_policy.py:11](../my_algo/speed_policy.py#L11) | `[EXP0-MEASURE] t_r, a_b` |
 | [my_algo/trigger_node.py:15](../my_algo/trigger_node.py#L15) | `trigger_latency, popout_enter_time [EXP0-MEASURE] (config/common.yaml)` |
