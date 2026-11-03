@@ -21,6 +21,11 @@ RAW_IMU_TOPIC="${RAW_IMU_TOPIC:-/livox/imu}"
 export VESC_STATE_TOPIC="${VESC_STATE_TOPIC:-/sensors/core}"
 CAMERA_TOPIC="${CAMERA_TOPIC:-/camera/camera/color/image_raw/compressed}"
 
+# 발행자 점검: 예상 외 발행자(#2 등)가 있으면 회차 시작 거부 (exp 모드)
+if [ "$MODE" = exp ]; then
+  python3 "$HERE/check_preflight.py" || exit 1
+fi
+
 RUN_DIR=$(python3 "$HERE/run_meta.py" start "$MODE" "$METHOD" "$SCENARIO" "$DE" "$RUN_ID" | tail -n 1)
 echo "회차 폴더: $RUN_DIR"
 

@@ -45,7 +45,7 @@ def load_runs(dirs):
                 continue
             with open(os.path.join(adir, 'metrics.json'), encoding='utf-8') as f:
                 m = json.load(f)
-            if m['discard']:
+            if m['discard'] or m.get('aeb_malfunction'):   # 폐기·AEB 오작동 회차는 효율 그림에서 제외
                 continue
             with open(os.path.join(adir, 'speed_vs_s.csv'), encoding='utf-8') as f:
                 rows = list(csv.DictReader(f))

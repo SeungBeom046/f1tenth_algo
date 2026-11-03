@@ -37,7 +37,7 @@ class PhantomParams:
     row_y_max: float = 1.20      # P 주차열 |y| 상한 [m]
     row_link_dist: float = 0.10  # P 같은 군집으로 묶는 x 간격 상한 [m]
     row_end_margin: float = 0.5  # P ROI 앞쪽 경계에서 이 거리 안에서 끝나는 열은 시야 밖으로 이어진 것으로 봄 [m]
-    row_face_tol: float = 0.10   # P 주차열 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m].
+    row_face_tol: float = 0.10   # [EXP-TUNE] P 주차열 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m].
                                  #   틈 안에 숨은 물체(면보다 더 들어가 있음)가 두 박스를 잇지 않게 한다
     p_lateral_filter: float = 0.0  # P 선택 필터: |y| > 이 값인 phantom 제외 (0 = 끔)
 

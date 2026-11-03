@@ -6,6 +6,7 @@
     run_meta.py discard <run_dir> <사유>                               → 수동 폐기 표시 (예: battery_low)
 
 meta.json 필드: mode, method, scenario, d_e, run_id, 시작/종료 시각, 시작 배터리 전압,
+    AEB 발동 여부·횟수·첫 발동 시각·위치·원인 점(aeb), S2–S4 발동 시 aeb_malfunction=true,
     git commit hash(+dirty), common.yaml sha256과 세션 첫 회차 일치 여부,
     ERPM_GAIN, MIN_DRIVING_RPM, V_MIN, VESC speed_to_erpm_gain, 폐기 여부·사유.
 확인 전 이름은 환경변수로 바꾼다:
@@ -166,11 +167,26 @@ def finish(rdir):
     if os.path.exists(events):
         with open(events, encoding='utf-8') as f:
             meta['mux_events'] = [json.loads(line) for line in f if line.strip()]
+    aeb_path = os.path.join(rdir, 'aeb_events.jsonl')
+    aeb_events = []
+    if os.path.exists(aeb_path):
+        with open(aeb_path, encoding='utf-8') as f:
+            aeb_events = [json.loads(line) for line in f if line.strip()]
+    in_run = [e for e in aeb_events if e.get('auto')]
+    first = in_run[0] if in_run else None
+    meta['aeb'] = {'triggered': bool(in_run), 'count': len(in_run),
+                   'first_time': None if first is None else first['ros_time'],
+                   'first_travel_m': None if first is None else first['travel_m'],
+                   'first_cause_point': None if first is None else first['cause_point'],
+                   'events': aeb_events}
+    # 돌출이 없는 시나리오에서 AEB가 걸리면 오작동: 효율 지표에서 빼고 방법별로 따로 센다
+    meta['aeb_malfunction'] = bool(in_run) and meta['scenario'] != 'S1'
     bag = os.path.join(rdir, 'bag')
     meta['bag_bytes'] = sum(os.path.getsize(os.path.join(dp, fn))
                             for dp, _, fns in os.walk(bag) for fn in fns) if os.path.isdir(bag) else 0
     write_json(path, meta)
     print(f'{rdir}: discard={meta["discard"]} reason={meta["discard_reason"]} '
+          f'aeb={meta["aeb"]["count"]} malfunction={meta["aeb_malfunction"]} '
           f'bag={meta["bag_bytes"] / 1e6:.1f} MB')
 
 

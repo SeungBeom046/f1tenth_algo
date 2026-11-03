@@ -130,6 +130,7 @@ class ExpSteeringTest(unittest.TestCase):
 class ExpDriveMuxTest(unittest.TestCase):
     def setUp(self):
         self.m = make(mux_mod.ExpDriveMux, stop_distance=5.0)
+        self.m.subs['/exp/preflight_ok'](Bool(True))
 
     def feed(self, v=1.5, steer=0.1, joy=True):
         self.m.subs['/exp/v_cmd'](Float64(v))
@@ -188,6 +189,20 @@ class ExpDriveMuxTest(unittest.TestCase):
         self.m.subs['/vesc/odom'](odom(1.0, x=5.1))
         self.feed()
         self.assertEqual(self.tick(), ([0.0], ['stop_line']))
+
+    def test_preflight_refuses_start_then_discards_mid_run(self):
+        m = make(mux_mod.ExpDriveMux, stop_distance=5.0)
+        m.subs['/autonomous_mode'](Bool(True))
+        self.m = m
+        self.feed()
+        self.assertEqual(self.tick(), ([0.0], ['preflight_failed']))   # 점검 전: 출발 거부
+        m.subs['/exp/preflight_ok'](Bool(True))
+        self.feed()
+        self.assertEqual(self.tick()[1], [''])                          # 통과 후 주행
+        m.subs['/exp/preflight_ok'](Bool(False))                       # 주행 중 다른 발행자 등장
+        self.feed()
+        self.assertEqual(self.tick(), ([0.0], ['foreign_publisher']))
+        self.assertIn('foreign_publisher', mux_mod.DISCARD_REASONS)
 
     def test_stale_speed_stops(self):
         self.m.subs['/autonomous_mode'](Bool(True))

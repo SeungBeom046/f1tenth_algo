@@ -8,6 +8,7 @@
     - 명령 기준(dT_cmd)과 실측 기준(dT_meas)을 따로 낸다. 논문 주장의 핵심 근거는 명령 기준.
     - 폐기 회차(v_ref 미도달, 조이스틱 끊김, 수동 폐기)는 통계에서 빼고 폐기 수와 사유를 함께 낸다.
     - S1은 d_e별로 나눈다. 안전 지표: 무충돌 비율, 최소 TTC, 최소 거리.
+    - S2–S4에서 AEB가 발동한 회차는 'AEB 오작동'으로 방법별로 따로 세고, 효율 통계에서 빼며 뺀 수를 함께 낸다.
 """
 
 import argparse
@@ -50,11 +51,18 @@ def summarize(runs):
                                          key=lambda kv: (kv[0][0], kv[0][1], METHODS.index(kv[0][2]))):
         kept = [r for r in rs if not r['discard']]
         reasons = collections.Counter(r['discard_reason'] for r in rs if r['discard'])
-        row = {'scenario': scen, 'd_e': de, 'method': method, 'n_total': len(rs), 'n_used': len(kept),
+        malfunction = [r for r in kept if r.get('aeb_malfunction')]
+        eff = [r for r in kept if not r.get('aeb_malfunction')]
+        row = {'scenario': scen, 'd_e': de, 'method': method, 'n_total': len(rs), 'n_used': len(eff),
                'n_discarded': len(rs) - len(kept),
+               'n_aeb_malfunction': len(malfunction),
                'discard_reasons': ';'.join(f'{k}:{v}' for k, v in reasons.items())}
-        keys = EFFICIENCY + RQ4 + (SAFETY if scen == 'S1' else [])
-        for k in keys:
+        for k in EFFICIENCY + RQ4:
+            mean, half, n = mean_ci95([r.get(k) for r in eff])
+            row[k] = mean
+            row[f'{k}_ci95'] = half
+            row[f'{k}_n'] = n
+        for k in (SAFETY if scen == 'S1' else []):
             mean, half, n = mean_ci95([r.get(k) for r in kept])
             row[k] = mean
             row[f'{k}_ci95'] = half
@@ -99,10 +107,10 @@ def write(rows, out_dir):
                              f'{fmt(r["dT_cmd"], r["dT_cmd_ci95"])} | {fmt(r["dT_meas"], r["dT_meas_ci95"])} | '
                              f'{r["discard_reasons"] or "–"} |')
         else:
-            lines += ['| 방법 | 사용/전체 | ΔT cmd | ΔT meas | 최저 속도 cmd | 감속 구간 cmd [m] | jerk RMS | 폐기 사유 |',
-                      '|---|---|---|---|---|---|---|---|']
+            lines += ['| 방법 | 사용/전체 | AEB 오작동(제외) | ΔT cmd | ΔT meas | 최저 속도 cmd | 감속 구간 cmd [m] | jerk RMS | 폐기 사유 |',
+                      '|---|---|---|---|---|---|---|---|---|']
             for r in sel:
-                lines.append(f'| {r["method"]} | {r["n_used"]}/{r["n_total"]} | '
+                lines.append(f'| {r["method"]} | {r["n_used"]}/{r["n_total"]} | {r["n_aeb_malfunction"]} | '
                              f'{fmt(r["dT_cmd"], r["dT_cmd_ci95"])} | {fmt(r["dT_meas"], r["dT_meas_ci95"])} | '
                              f'{fmt(r["min_speed_cmd"], r["min_speed_cmd_ci95"])} | '
                              f'{fmt(r["decel_length_cmd"], r["decel_length_cmd_ci95"])} | '
@@ -110,6 +118,12 @@ def write(rows, out_dir):
         lines.append('')
     total = sum(r['n_discarded'] for r in rows)
     lines.append(f'폐기 회차 총 {total}개 (v_ref 미도달 포함).')
+    lines += ['', '## AEB 오작동 (S2–S4, 돌출 없는데 AEB 발동) — 효율 통계에서 제외', '',
+              '| 방법 | S2 | S3 | S4 | 합계 |', '|---|---|---|---|---|']
+    for m in METHODS:
+        counts = [sum(r['n_aeb_malfunction'] for r in rows if r['method'] == m and r['scenario'] == s)
+                  for s in ('S2', 'S3', 'S4')]
+        lines.append(f'| {m} | ' + ' | '.join(map(str, counts)) + f' | {sum(counts)} |')
     with open(os.path.join(out_dir, 'summary.md'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
     print('\n'.join(lines))

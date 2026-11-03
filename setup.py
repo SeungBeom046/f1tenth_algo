@@ -39,6 +39,7 @@ setup(
             'exp_drive_mux = my_algo.exp_drive_mux:main',
             'trigger_node = my_algo.trigger_node:main',
             'popout_vehicle_node = my_algo.popout_vehicle_node:main',
+            'publisher_guard_node = my_algo.publisher_guard_node:main',
         ],
     },
 )

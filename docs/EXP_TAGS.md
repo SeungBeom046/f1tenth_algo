@@ -15,14 +15,14 @@
 | [config/scenario_S2.yaml:1](../config/scenario_S2.yaml#L1) | `# [EXP-VAR] 시나리오 S2: 틈 0.45 m, 돌출 없음 (정당한 감속 비용)` |
 | [config/scenario_S3.yaml:1](../config/scenario_S3.yaml#L1) | `# [EXP-VAR] 시나리오 S3: 틈 0.15 m (통과 불가), 돌출 없음 (B2 대비 P의 불필요 감속)` |
 | [config/scenario_S4.yaml:1](../config/scenario_S4.yaml#L1) | `# [EXP-VAR] 시나리오 S4: 우측도 연속 벽, 돌출 없음 (B1 과잉 감속)` |
-| [launch/bringup.launch.py:123](../launch/bringup.launch.py#L123) | `DeclareLaunchArgument('method', default_value='B0', description='[EXP-VAR] B0 \| B1 \| B2 \| P'),` |
-| [launch/bringup.launch.py:124](../launch/bringup.launch.py#L124) | `DeclareLaunchArgument('scenario', default_value='S2', description='[EXP-VAR] S1 \| S2 \| S3 \| S4'),` |
-| [launch/bringup.launch.py:125](../launch/bringup.launch.py#L125) | `DeclareLaunchArgument('d_e', default_value='', description='[EXP-VAR] S1 돌출 시점 1.0 \| 1.5 \| 2.0'),` |
+| [launch/bringup.launch.py:127](../launch/bringup.launch.py#L127) | `DeclareLaunchArgument('method', default_value='B0', description='[EXP-VAR] B0 \| B1 \| B2 \| P'),` |
+| [launch/bringup.launch.py:128](../launch/bringup.launch.py#L128) | `DeclareLaunchArgument('scenario', default_value='S2', description='[EXP-VAR] S1 \| S2 \| S3 \| S4'),` |
+| [launch/bringup.launch.py:129](../launch/bringup.launch.py#L129) | `DeclareLaunchArgument('d_e', default_value='', description='[EXP-VAR] S1 돌출 시점 1.0 \| 1.5 \| 2.0'),` |
 | [my_algo/phantom_node.py:11](../my_algo/phantom_node.py#L11) | `파라미터: method ([EXP-VAR], config/method_*.yaml), ROI·w_min 등은 config/common.yaml,` |
 | [my_algo/speed_layer_node.py:16](../my_algo/speed_layer_node.py#L16) | `method                      [EXP-VAR] config/method_*.yaml` |
 | [my_algo/trigger_node.py:14](../my_algo/trigger_node.py#L14) | `d_e [EXP-VAR] (launch 인자), collision_x (config/scenario_S1.yaml)` |
 
-## [EXP-FIXED] 통제변인 — 방법 간 절대 바꾸지 말 것 (82개)
+## [EXP-FIXED] 통제변인 — 방법 간 절대 바꾸지 말 것 (84개)
 
 | 위치 | 내용 |
 |---|---|
@@ -44,32 +44,33 @@
 | [config/common.yaml:47](../config/common.yaml#L47) | `roi_half_y: 1.5         # [EXP-FIXED] phantom 탐색 좌우 한계 [m]` |
 | [config/common.yaml:51](../config/common.yaml#L51) | `row_y_min: 0.30         # [EXP-FIXED] P 주차열로 보는 occupied 칸의 \|y\| 범위 [m]` |
 | [config/common.yaml:53](../config/common.yaml#L53) | `row_link_dist: 0.10     # [EXP-FIXED] P 같은 열로 묶는 x 간격 [m]` |
-| [config/common.yaml:54](../config/common.yaml#L54) | `row_face_tol: 0.10      # [EXP-FIXED] P 열의 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m]` |
-| [config/common.yaml:55](../config/common.yaml#L55) | `row_end_margin: 0.5     # [EXP-FIXED] ROI 앞 경계 이 거리 안에서 끝나는 열은 끝으로 보지 않음 [m]` |
-| [config/common.yaml:56](../config/common.yaml#L56) | `p_lateral_filter: 0.0   # [EXP-FIXED] P 선택 필터 (\|y\| 상한, 0 = 끔)` |
-| [config/common.yaml:59](../config/common.yaml#L59) | `aeb_ttc_threshold: 0.55             # [EXP-FIXED] 방법마다 다르면 안전 결과를 비교할 수 없음` |
-| [config/common.yaml:60](../config/common.yaml#L60) | `aeb_path_margin: 0.15               # [EXP-FIXED]` |
-| [config/common.yaml:61](../config/common.yaml#L61) | `aeb_bumper_emergency_distance: 0.25 # [EXP-FIXED]` |
-| [config/common.yaml:62](../config/common.yaml#L62) | `aeb_bumper_overlap_tolerance: 0.10  # [EXP-FIXED]` |
-| [config/common.yaml:63](../config/common.yaml#L63) | `aeb_comfortable_decel: 2.8          # [EXP-FIXED] 제동거리 추정 감속도 (aeb.py 기존값)` |
-| [config/common.yaml:64](../config/common.yaml#L64) | `aeb_stopping_margin: 0.20           # [EXP-FIXED]` |
-| [config/common.yaml:67](../config/common.yaml#L67) | `joy_timeout: 0.5        # [EXP-FIXED] /joy 끊김 감시 [s]. 끊기면 정지 + 회차 폐기` |
-| [config/common.yaml:68](../config/common.yaml#L68) | `require_joy: true       # [EXP-FIXED] 데드맨 사용` |
-| [config/common.yaml:69](../config/common.yaml#L69) | `aeb_latch: true         # [EXP-FIXED] AEB 작동 후 회차 끝까지 정지 유지` |
-| [config/common.yaml:70](../config/common.yaml#L70) | `input_timeout: 0.3      # [EXP-FIXED] 조향/속도 입력 끊김 [s]` |
-| [config/common.yaml:71](../config/common.yaml#L71) | `max_steering: 0.78      # [EXP-FIXED] 조향 제한 [rad] (drive와 같음)` |
-| [config/common.yaml:78](../config/common.yaml#L78) | `deskew: false           # [EXP-FIXED] 모든 방법 동일. Exp1에서 on/off 비교 후 결정.` |
-| [config/common.yaml:90](../config/common.yaml#L90) | `# [EXP-FIXED] 좌측 벽 목표 거리 = 라이다 프레임에서 본 좌측 벽 \|y\|.` |
-| [config/common.yaml:97](../config/common.yaml#L97) | `exp_lookahead_distance: 4.4     # [EXP-FIXED] exp에서 lookahead 고정 (v_ref 2.0 기준 2.6+0.9*2.0)` |
-| [config/common.yaml:103](../config/common.yaml#L103) | `steering_deadband: 0.055        # [EXP-FIXED] 조향 게인류는 방법마다 같아야 궤적이 같다` |
-| [config/common.yaml:107](../config/common.yaml#L107) | `wall_follow_gain: 0.30          # [EXP-FIXED]` |
-| [config/common.yaml:108](../config/common.yaml#L108) | `wall_error_filter_alpha: 0.25   # [EXP-FIXED]` |
-| [config/common.yaml:110](../config/common.yaml#L110) | `max_steering: 0.78              # [EXP-FIXED]` |
-| [config/common.yaml:112](../config/common.yaml#L112) | `# AEB와 조향이 쓰는 /scan. 값은 lidar_drive.launch.py와 같다 [EXP-FIXED].` |
+| [config/common.yaml:57](../config/common.yaml#L57) | `row_end_margin: 0.5     # [EXP-FIXED] ROI 앞 경계 이 거리 안에서 끝나는 열은 끝으로 보지 않음 [m]` |
+| [config/common.yaml:58](../config/common.yaml#L58) | `p_lateral_filter: 0.0   # [EXP-FIXED] P 선택 필터 (\|y\| 상한, 0 = 끔)` |
+| [config/common.yaml:61](../config/common.yaml#L61) | `aeb_ttc_threshold: 0.55             # [EXP-FIXED] 방법마다 다르면 안전 결과를 비교할 수 없음` |
+| [config/common.yaml:62](../config/common.yaml#L62) | `aeb_path_margin: 0.15               # [EXP-FIXED]` |
+| [config/common.yaml:63](../config/common.yaml#L63) | `aeb_bumper_emergency_distance: 0.25 # [EXP-FIXED]` |
+| [config/common.yaml:64](../config/common.yaml#L64) | `aeb_bumper_overlap_tolerance: 0.10  # [EXP-FIXED]` |
+| [config/common.yaml:65](../config/common.yaml#L65) | `aeb_comfortable_decel: 2.8          # [EXP-FIXED] 제동거리 추정 감속도 (aeb.py 기존값)` |
+| [config/common.yaml:66](../config/common.yaml#L66) | `aeb_stopping_margin: 0.20           # [EXP-FIXED]` |
+| [config/common.yaml:69](../config/common.yaml#L69) | `joy_timeout: 0.5        # [EXP-FIXED] /joy 끊김 감시 [s]. 끊기면 정지 + 회차 폐기` |
+| [config/common.yaml:70](../config/common.yaml#L70) | `require_joy: true       # [EXP-FIXED] 데드맨 사용` |
+| [config/common.yaml:71](../config/common.yaml#L71) | `aeb_latch: true         # [EXP-FIXED] AEB 작동 후 회차 끝까지 정지 유지` |
+| [config/common.yaml:72](../config/common.yaml#L72) | `input_timeout: 0.3      # [EXP-FIXED] 조향/속도 입력 끊김 [s]` |
+| [config/common.yaml:73](../config/common.yaml#L73) | `max_steering: 0.78      # [EXP-FIXED] 조향 제한 [rad] (drive와 같음)` |
+| [config/common.yaml:74](../config/common.yaml#L74) | `require_preflight: true # [EXP-FIXED] 발행자 점검(publisher_guard_node) 통과 전 출발 거부` |
+| [config/common.yaml:81](../config/common.yaml#L81) | `deskew: false           # [EXP-FIXED] 모든 방법 동일. Exp1에서 on/off 비교 후 결정.` |
+| [config/common.yaml:93](../config/common.yaml#L93) | `# [EXP-FIXED] 좌측 벽 목표 거리 = 라이다 프레임에서 본 좌측 벽 \|y\|.` |
+| [config/common.yaml:100](../config/common.yaml#L100) | `exp_lookahead_distance: 4.4     # [EXP-FIXED] exp에서 lookahead 고정 (v_ref 2.0 기준 2.6+0.9*2.0)` |
+| [config/common.yaml:106](../config/common.yaml#L106) | `steering_deadband: 0.055        # [EXP-FIXED] 조향 게인류는 방법마다 같아야 궤적이 같다` |
+| [config/common.yaml:110](../config/common.yaml#L110) | `wall_follow_gain: 0.30          # [EXP-FIXED]` |
+| [config/common.yaml:111](../config/common.yaml#L111) | `wall_error_filter_alpha: 0.25   # [EXP-FIXED]` |
+| [config/common.yaml:113](../config/common.yaml#L113) | `max_steering: 0.78              # [EXP-FIXED]` |
+| [config/common.yaml:115](../config/common.yaml#L115) | `# AEB와 조향이 쓰는 /scan. 값은 lidar_drive.launch.py와 같다 [EXP-FIXED].` |
 | [config/popout.yaml:1](../config/popout.yaml#L1) | `# 돌출 차량 #2 (popout_vehicle_node). 모든 방법·회차 동일 [EXP-FIXED].` |
-| [config/popout.yaml:8](../config/popout.yaml#L8) | `v_popout: 0.8                      # [EXP-FIXED] 돌출 속도 [m/s]` |
-| [config/popout.yaml:9](../config/popout.yaml#L9) | `stop_distance: 1.0                 # [EXP-FIXED] 출발 후 이 거리에서 정지 [m] (차선 반대편 전에 멈추도록 트랙에 맞춰 교체)` |
-| [config/popout.yaml:11](../config/popout.yaml#L11) | `max_time: 3.0                      # [EXP-FIXED] 무조건 정지 [s]` |
+| [config/popout.yaml:8](../config/popout.yaml#L8) | `v_popout: 0.8                      # [EXP-FIXED] 돌출 속도 [m/s]. 모든 시나리오·방법 공통.` |
+| [config/popout.yaml:11](../config/popout.yaml#L11) | `stop_distance: 1.0                 # [EXP-FIXED] 출발 후 이 거리에서 정지 [m] (차선 반대편 전에 멈추도록 트랙에 맞춰 교체)` |
+| [config/popout.yaml:13](../config/popout.yaml#L13) | `max_time: 3.0                      # [EXP-FIXED] 무조건 정지 [s]` |
+| [config/preflight.yaml:7](../config/preflight.yaml#L7) | `mode: enforce            # [EXP-FIXED] enforce = 위반 시 회차 거부 \| warn = 경고만` |
 | [config/scenario_S1.yaml:9](../config/scenario_S1.yaml#L9) | `stop_distance: 7.5         # [EXP-FIXED] 소프트웨어 정지선: AUTO 후 주행 거리 > 이 값이면 0 명령 [m]` |
 | [config/scenario_S1.yaml:11](../config/scenario_S1.yaml#L11) | `accel_end_x: 2.5           # [EXP-FIXED] 가속 구간 끝 (v_ref 도달 판정 위치) [m]` |
 | [config/scenario_S1.yaml:12](../config/scenario_S1.yaml#L12) | `test_x_start: 2.5          # [EXP-FIXED] 시험 구간 (손실 ΔT 적분 범위) [m]` |
@@ -85,11 +86,12 @@
 | [config/vehicle_geometry.yaml:3](../config/vehicle_geometry.yaml#L3) | `# 모든 방법(B0/B1/B2/P)이 이 파일 하나를 공유한다.  [EXP-FIXED]` |
 | [launch/tf_static.launch.py:3](../launch/tf_static.launch.py#L3) | `base_link 원점 = 뒤축 중심, z = 0 바닥.  모든 값 [EXP-FIXED].` |
 | [my_algo/deskew_node.py:11](../my_algo/deskew_node.py#L11) | `실험 관련: deskew on/off는 모든 방법 동일 [EXP-FIXED]. 점별 시각 필드가 없으면 노드가 경고 후 원본을 그대로 넘긴다.` |
-| [my_algo/exp_aeb_node.py:12](../my_algo/exp_aeb_node.py#L12) | `[EXP-FIXED] config/common.yaml. 값은 drive 모드 launch(lidar_drive.launch.py)와 같다.` |
-| [my_algo/exp_aeb_node.py:13](../my_algo/exp_aeb_node.py#L13) | `vehicle_geometry_file: lidar_to_front_edge, body_width/2 [EXP-FIXED]` |
-| [my_algo/exp_drive_mux.py:6](../my_algo/exp_drive_mux.py#L6) | `2. 조이스틱 끊김 감시(데드맨): /joy가 joy_timeout 이상 안 오면 0 명령, 회차 폐기 기록 [EXP-FIXED]` |
-| [my_algo/exp_drive_mux.py:7](../my_algo/exp_drive_mux.py#L7) | `3. 소프트웨어 정지선: AUTO 시작 후 odom 주행 거리 > stop_distance 이면 0 명령 (래치) [EXP-FIXED]` |
-| [my_algo/exp_drive_mux.py:8](../my_algo/exp_drive_mux.py#L8) | `4. AEB: /aeb/active=true → 0 명령 (aeb_latch=true면 회차 끝까지 유지) [EXP-FIXED]` |
+| [my_algo/exp_aeb_node.py:15](../my_algo/exp_aeb_node.py#L15) | `[EXP-FIXED] config/common.yaml. 값은 drive 모드 launch(lidar_drive.launch.py)와 같다.` |
+| [my_algo/exp_aeb_node.py:16](../my_algo/exp_aeb_node.py#L16) | `vehicle_geometry_file: lidar_to_front_edge, body_width/2 [EXP-FIXED]` |
+| [my_algo/exp_drive_mux.py:7](../my_algo/exp_drive_mux.py#L7) | `주행을 시작한 뒤 위반이 생기면 정지 + 회차 폐기 ('foreign_publisher') [EXP-FIXED]` |
+| [my_algo/exp_drive_mux.py:8](../my_algo/exp_drive_mux.py#L8) | `2. 조이스틱 끊김 감시(데드맨): /joy가 joy_timeout 이상 안 오면 0 명령, 회차 폐기 기록 [EXP-FIXED]` |
+| [my_algo/exp_drive_mux.py:9](../my_algo/exp_drive_mux.py#L9) | `3. 소프트웨어 정지선: AUTO 시작 후 odom 주행 거리 > stop_distance 이면 0 명령 (래치) [EXP-FIXED]` |
+| [my_algo/exp_drive_mux.py:10](../my_algo/exp_drive_mux.py#L10) | `4. AEB: /aeb/active=true → 0 명령 (aeb_latch=true면 회차 끝까지 유지) [EXP-FIXED]` |
 | [my_algo/exp_steering_node.py:14](../my_algo/exp_steering_node.py#L14) | `파라미터 (config/common.yaml, 전부 [EXP-FIXED], 방법 간 동일):` |
 | [my_algo/geometry.py:3](../my_algo/geometry.py#L3) | `노드 안에 치수를 하드코딩하지 않기 위한 단일 진입점. [EXP-FIXED]` |
 | [my_algo/metrics.py:20](../my_algo/metrics.py#L20) | `JERK_CUTOFF_HZ = 5.0     # [EXP-FIXED] jerk 저역통과 차단주파수. 방법 간 상대 비교 전용, 문서에 명시` |
@@ -109,7 +111,7 @@
 | [my_algo/speed_policy.py:56](../my_algo/speed_policy.py#L56) | `"""목표 속도를 플랫폼이 낼 수 있는 속도로 바꾼다. 모든 방법에 같은 정책을 쓴다. [EXP-FIXED]` |
 | [my_algo/trigger_node.py:16](../my_algo/trigger_node.py#L16) | `v_ref [EXP-FIXED] (config/common.yaml)` |
 
-## [EXP-TUNE] 민감도 분석 대상 — bringup 인자로 덮어쓰기 허용 (21개)
+## [EXP-TUNE] 민감도 분석 대상 — bringup 인자로 덮어쓰기 허용 (23개)
 
 | 위치 | 내용 |
 |---|---|
@@ -122,20 +124,22 @@
 | [config/common.yaml:48](../config/common.yaml#L48) | `b1_roi_length: 3.0      # [EXP-TUNE] B1 ROI 길이 (앞 끝부터) [m]. 권장 2–4` |
 | [config/common.yaml:49](../config/common.yaml#L49) | `b1_roi_half_width: 1.0  # [EXP-TUNE] B1 ROI 반폭 [m]. 권장 0.6–1.2` |
 | [config/common.yaml:50](../config/common.yaml#L50) | `w_min: 0.35             # [EXP-TUNE] P 최소 틈 폭 [m]. 돌출 차량 폭 0.30 + 여유. 권장 0.25–0.45` |
+| [config/common.yaml:54](../config/common.yaml#L54) | `row_face_tol: 0.10      # [EXP-TUNE] P 열의 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m].` |
 | [launch/bringup.launch.py:7](../launch/bringup.launch.py#L7) | `# 민감도 분석: [EXP-TUNE] 값만 개별 인자로 덮어쓰기 허용` |
-| [launch/bringup.launch.py:14](../launch/bringup.launch.py#L14) | `파라미터 우선순위: common.yaml < method_*.yaml < scenario_*.yaml < 회차 인자(d_e, run_id) < [EXP-TUNE] 인자.` |
-| [launch/bringup.launch.py:28](../launch/bringup.launch.py#L28) | `# 개별 인자로 덮어쓸 수 있는 [EXP-TUNE] 값과 타입. 이 밖의 값은 YAML로만 바꾼다.` |
-| [launch/bringup.launch.py:134](../launch/bringup.launch.py#L134) | `] + [DeclareLaunchArgument(k, default_value='', description='[EXP-TUNE] 덮어쓰기')` |
+| [launch/bringup.launch.py:15](../launch/bringup.launch.py#L15) | `파라미터 우선순위: common.yaml < method_*.yaml < scenario_*.yaml < 회차 인자(d_e, run_id) < [EXP-TUNE] 인자.` |
+| [launch/bringup.launch.py:29](../launch/bringup.launch.py#L29) | `# 개별 인자로 덮어쓸 수 있는 [EXP-TUNE] 값과 타입. 이 밖의 값은 YAML로만 바꾼다.` |
+| [launch/bringup.launch.py:138](../launch/bringup.launch.py#L138) | `] + [DeclareLaunchArgument(k, default_value='', description='[EXP-TUNE] 덮어쓰기')` |
 | [my_algo/occupancy.py:103](../my_algo/occupancy.py#L103) | `known_on  [EXP-TUNE]: unknown 칸이 known이 되려면 최근 N 프레임 중 이 수 이상 관측` |
 | [my_algo/occupancy.py:104](../my_algo/occupancy.py#L104) | `known_off [EXP-TUNE]: known 칸이 unknown으로 돌아가는 기준 (관측 수 < known_off). 1 <= off <= on <= N` |
 | [my_algo/occupancy_grid_node.py:16](../my_algo/occupancy_grid_node.py#L16) | `n_frames, known_on, known_off                              [EXP-TUNE] 누적·히스테리시스` |
 | [my_algo/phantom.py:33](../my_algo/phantom.py#L33) | `b1_roi_length: float = 3.0   # B1 ROI: 앞 끝부터 길이 [m] [EXP-TUNE]` |
 | [my_algo/phantom.py:34](../my_algo/phantom.py#L34) | `b1_roi_half_width: float = 1.0  # B1 ROI 반폭 [m] [EXP-TUNE]` |
 | [my_algo/phantom.py:35](../my_algo/phantom.py#L35) | `w_min: float = 0.35          # P 최소 틈 폭 [m] [EXP-TUNE]` |
+| [my_algo/phantom.py:40](../my_algo/phantom.py#L40) | `row_face_tol: float = 0.10   # [EXP-TUNE] P 주차열 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m].` |
 | [my_algo/speed_layer_node.py:13](../my_algo/speed_layer_node.py#L13) | `v_imp, b1_k                 [EXP-TUNE] (v_imp 하한 = V_MIN)` |
 | [my_algo/speed_policy.py:10](../my_algo/speed_policy.py#L10) | `[EXP-TUNE]    v_imp (하한 = v_min), k` |
 
-## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (29개)
+## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (30개)
 
 | 위치 | 내용 |
 |---|---|
@@ -146,14 +150,15 @@
 | [config/common.yaml:8](../config/common.yaml#L8) | `#   [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (docs/OPEN_ITEMS.md)` |
 | [config/common.yaml:15](../config/common.yaml#L15) | `t_r: 0.15               # [EXP-FIXED][EXP0-MEASURE] 반응시간 [s]. v_cap 식 공통. Exp0 급제동으로 측정` |
 | [config/common.yaml:16](../config/common.yaml#L16) | `a_b: 3.0                # [EXP-FIXED][EXP0-MEASURE] 최대 감속 [m/s^2]. v_cap 식 공통. Exp0에서 /imu로 측정` |
-| [config/common.yaml:74](../config/common.yaml#L74) | `trigger_latency: 0.05   # [EXP0-MEASURE] 트리거 발행 → #2 출발 지연 [s]. Exp0 측정` |
-| [config/common.yaml:75](../config/common.yaml#L75) | `popout_enter_time: 0.2  # [EXP0-MEASURE] #2 출발 → 앞부분이 차선 경계에 닿는 시간 [s]. Exp0 측정` |
-| [config/common.yaml:80](../config/common.yaml#L80) | `time_field: timestamp   # [EXP0-MEASURE] 점별 시각 필드 이름 (check_vehicle.sh 로그로 확정)` |
-| [config/common.yaml:81](../config/common.yaml#L81) | `time_scale: 1.0e-9      # [EXP0-MEASURE] 필드 값 → 초` |
-| [config/common.yaml:82](../config/common.yaml#L82) | `time_mode: absolute     # [EXP0-MEASURE] absolute \| offset` |
+| [config/common.yaml:77](../config/common.yaml#L77) | `trigger_latency: 0.05   # [EXP0-MEASURE] 트리거 발행 → #2 출발 지연 [s]. Exp0 측정` |
+| [config/common.yaml:78](../config/common.yaml#L78) | `popout_enter_time: 0.2  # [EXP0-MEASURE] #2 출발 → 앞부분이 차선 경계에 닿는 시간 [s]. Exp0 측정` |
+| [config/common.yaml:83](../config/common.yaml#L83) | `time_field: timestamp   # [EXP0-MEASURE] 점별 시각 필드 이름 (check_vehicle.sh 로그로 확정)` |
+| [config/common.yaml:84](../config/common.yaml#L84) | `time_scale: 1.0e-9      # [EXP0-MEASURE] 필드 값 → 초` |
+| [config/common.yaml:85](../config/common.yaml#L85) | `time_mode: absolute     # [EXP0-MEASURE] absolute \| offset` |
 | [config/imu.yaml:18](../config/imu.yaml#L18) | `# [EXP0-MEASURE] 자이로 바이어스 [rad/s]. 실험일마다 imu_static_calib.py로 재측정 후 교체.` |
-| [config/popout.yaml:12](../config/popout.yaml#L12) | `erpm_gain: 4614.0                  # [EXP0-MEASURE] #2 차량의 m/s -> ERPM. 에고 값과 다를 수 있음. #2에서 실측` |
-| [config/popout.yaml:13](../config/popout.yaml#L13) | `servo_center: 0.5                  # [EXP0-MEASURE] #2 직진 서보값` |
+| [config/popout.yaml:10](../config/popout.yaml#L10) | `lane_boundary_distance: 0.3        # [EXP0-MEASURE] #2 출발 위치 → 차선 경계 거리 [m] (진입 시간 기록용)` |
+| [config/popout.yaml:14](../config/popout.yaml#L14) | `erpm_gain: 4614.0                  # [EXP0-MEASURE] #2 차량의 m/s -> ERPM. 에고 값과 다를 수 있음. #2에서 실측` |
+| [config/popout.yaml:15](../config/popout.yaml#L15) | `servo_center: 0.5                  # [EXP0-MEASURE] #2 직진 서보값` |
 | [config/scenario_S1.yaml:8](../config/scenario_S1.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
 | [config/scenario_S2.yaml:8](../config/scenario_S2.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
 | [config/scenario_S3.yaml:8](../config/scenario_S3.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |

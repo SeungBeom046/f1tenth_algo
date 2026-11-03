@@ -12,6 +12,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ACTIVE = False
 
 EXTRA = {
+    'rclpy/qos.py': '''
+class QoSProfile:
+    def __init__(self, **kw): pass
+class QoSHistoryPolicy: KEEP_LAST = 1
+class QoSReliabilityPolicy: BEST_EFFORT = 2; RELIABLE = 1
+class DurabilityPolicy: TRANSIENT_LOCAL = 1; VOLATILE = 2
+qos_profile_sensor_data = None
+''',
     'rclpy/node.py_extra': '''
 _Pub.topic_name = property(lambda self: self.topic)
 ''',

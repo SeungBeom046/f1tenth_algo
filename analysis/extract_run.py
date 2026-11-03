@@ -143,6 +143,10 @@ def extract(run_dir):
     v_at = np.interp(t_d, t_o, v_meas) if len(t_d) else np.empty(0)
     out.update(M.safety_metrics(t_d, dist, v_at) if len(t_d) else {})
     out['aeb_triggered'] = any(m.data for _, m in bag.get('/aeb/active', []) if _ >= t_auto)
+    # S2–S4(돌출 없음)에서 AEB 발동 = 오작동. 효율 통계에서 빼고 방법별로 따로 센다 (summarize.py)
+    out['aeb_malfunction'] = bool(out['aeb_triggered'] or meta.get('aeb_malfunction')) \
+        and meta['scenario'] != 'S1'
+    out['aeb_first_cause_point'] = (meta.get('aeb') or {}).get('first_cause_point')
     flags = [m.data for _, m in bag.get('/exp/min_speed_flag', [])]
     out['clamped_to_vmin_ratio'] = (flags.count('clamped_to_vmin') / len(flags)) if flags else None
     out.update(rq4(bag, None))

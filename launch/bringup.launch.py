@@ -9,6 +9,7 @@
 
 exp 모드 실행 노드: pointcloud_to_laserscan, imu_republisher, (deskew_node), occupancy_grid_node,
     phantom_node, speed_layer_node, exp_aeb_node, exp_steering_node, exp_drive_mux, trigger_node,
+    publisher_guard_node (#2 등 예상 외 발행자 점검, config/preflight.yaml),
     joy_node + joy_controller (비상 정지), (realsense 녹화용, depth 끔). YOLO(camera_reactive_drive)는 띄우지 않는다.
 정적 TF와 센서 드라이버는 T1 터미널에서 따로 띄운다 (docs/RUNBOOK.md). include_tf:=true면 여기서 같이 띄운다.
 파라미터 우선순위: common.yaml < method_*.yaml < scenario_*.yaml < 회차 인자(d_e, run_id) < [EXP-TUNE] 인자.
@@ -27,7 +28,8 @@ from my_algo.run_paths import METHODS, SCENARIOS, run_dir
 
 # 개별 인자로 덮어쓸 수 있는 [EXP-TUNE] 값과 타입. 이 밖의 값은 YAML로만 바꾼다.
 TUNE_ARGS = {'v_imp': float, 'w_min': float, 'n_frames': int, 'known_on': int, 'known_off': int,
-             'b1_k': float, 'b1_roi_length': float, 'b1_roi_half_width': float}
+             'b1_k': float, 'b1_roi_length': float, 'b1_roi_half_width': float,
+             'row_face_tol': float}
 
 
 def share(*parts):
@@ -89,6 +91,8 @@ def exp(context):
                                          ('/vesc/odom', odom), ('/scan', scan)]),
         node('exp_drive_mux', {'odom_topic': odom}),
         node('trigger_node', {'odom_topic': odom}),
+        Node(package='my_algo', executable='publisher_guard_node', name='publisher_guard_node',
+             output='screen', parameters=[share('config', 'preflight.yaml')]),
         Node(package='joy', executable='joy_node', name='joy_node',
              parameters=[{'autorepeat_rate': 20.0}]),  # 입력이 없어도 20 Hz로 재발행 → 데드맨 감시가 동작
         Node(package='my_algo', executable='joy_controller', name='joy_controller', output='screen'),

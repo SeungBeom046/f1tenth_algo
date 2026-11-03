@@ -5,7 +5,9 @@
     odom_topic: odom                   # 상대 이름 → /car2/odom 등 (#2 드라이버 실제 이름 확인)
     motor_topic: commands/motor/speed  # 상대 이름 → /car2/commands/motor/speed
     servo_topic: commands/servo/position
-    v_popout: 0.8                      # [EXP-FIXED] 돌출 속도 [m/s]
+    v_popout: 0.8                      # [EXP-FIXED] 돌출 속도 [m/s]. 모든 시나리오·방법 공통.
+                                       #   Exp0 #2 단독 시험에서 0.8이 불안정하면 0.9로 바꾸고 EXPERIMENT_PLAN 변경 사항에 기록
+    lane_boundary_distance: 0.3        # [EXP0-MEASURE] #2 출발 위치 → 차선 경계 거리 [m] (진입 시간 기록용)
     stop_distance: 1.0                 # [EXP-FIXED] 출발 후 이 거리에서 정지 [m] (차선 반대편 전에 멈추도록 트랙에 맞춰 교체)
     stop_time: 0.0                     # 0 = 시간 정지 끔 (거리 정지 사용)
     max_time: 3.0                      # [EXP-FIXED] 무조건 정지 [s]

@@ -13,6 +13,9 @@
 파라미터 ([EXP-FIXED], config/popout.yaml):
     v_popout 0.8, stop_distance, stop_time, max_time, erpm_gain(#2 실측), servo_center(#2)
     #2 명령에는 에고의 최소 RPM 규칙(sanitize_rpm)을 적용하지 않는다 (0.8 m/s = 3691 ERPM < 4000).
+    lane_boundary_distance: 출발 위치 → 차선 경계까지 거리. 이 거리에 닿은 시각을 기록 (Exp0 진입 시간)
+Exp0 #2 단독 시험: ros2 topic pub --once /trigger std_msgs/msg/Header "{frame_id: exp0}" 로 출발시키고
+    /popout/status 또는 popout_events.jsonl의 reach_lane_s, speed_mean, speed_std를 기록한다.
 """
 
 import json
@@ -36,6 +39,7 @@ class PopoutVehicleNode(Node):
                     ('motor_topic', 'commands/motor/speed'), ('servo_topic', 'commands/servo/position'),
                     ('v_popout', 0.8), ('stop_distance', 1.0), ('stop_time', 0.0), ('max_time', 3.0),
                     ('erpm_gain', ERPM_GAIN), ('servo_center', SERVO_CENTER),
+                    ('lane_boundary_distance', 0.3),
                     ('rate_hz', 50.0), ('log_dir', '~/exp_logs/popout')]
         for k, v in defaults:
             self.declare_parameter(k, v)
@@ -47,6 +51,8 @@ class PopoutVehicleNode(Node):
         self.erpm_gain = float(gp('erpm_gain'))
         self.servo_center = float(gp('servo_center'))
         self.log_dir = os.path.expanduser(gp('log_dir'))
+        self.lane_boundary_distance = float(gp('lane_boundary_distance'))
+        self.speeds = []
         self.state = 'idle'
         self.start = None
         self.travel = 0.0
@@ -76,12 +82,16 @@ class PopoutVehicleNode(Node):
         self.state = 'running'
         self.start = recv
         self.travel, self.last_xy = 0.0, None
+        self.speeds = []
         self.get_logger().info(f'트리거 수신: 지연 {recv - sent:+.4f} s (두 Jetson 시간 동기 전제)')
 
     def on_odom(self, msg):
         p = msg.pose.pose.position
         if self.state == 'running' and self.last_xy is not None:
             self.travel += math.hypot(p.x - self.last_xy[0], p.y - self.last_xy[1])
+            self.speeds.append(math.hypot(msg.twist.twist.linear.x, msg.twist.twist.linear.y))
+            if 'reach_lane_s' not in self.event and self.travel >= self.lane_boundary_distance:
+                self.event['reach_lane_s'] = self.ros_now() - self.start
         self.last_xy = (p.x, p.y)
 
     def tick(self):
@@ -111,7 +121,12 @@ class PopoutVehicleNode(Node):
     def finish(self, reason, elapsed):
         self.command(0.0)
         self.state = 'stopped'
-        self.event.update(stop_reason=reason, elapsed_s=elapsed, travel_m=self.travel)
+        # 정상 속도 구간(최대값의 50% 이상) 통계: 출발 가속 구간을 빼고 속도 편차를 본다
+        cruise = [v for v in self.speeds if self.speeds and v >= 0.5 * max(self.speeds)]
+        mean = sum(cruise) / len(cruise) if cruise else None
+        std = (math.sqrt(sum((v - mean) ** 2 for v in cruise) / len(cruise)) if cruise else None)
+        self.event.update(stop_reason=reason, elapsed_s=elapsed, travel_m=self.travel,
+                          v_command=self.v, speed_mean=mean, speed_std=std)
         publish_string(self.status_pub, json.dumps(self.event))
         self.get_logger().info(f'#2 정지: {self.event}')
         try:

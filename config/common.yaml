@@ -51,7 +51,9 @@
     row_y_min: 0.30         # [EXP-FIXED] P 주차열로 보는 occupied 칸의 |y| 범위 [m]
     row_y_max: 1.20
     row_link_dist: 0.10     # [EXP-FIXED] P 같은 열로 묶는 x 간격 [m]
-    row_face_tol: 0.10      # [EXP-FIXED] P 열의 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m]
+    row_face_tol: 0.10      # [EXP-TUNE] P 열의 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m].
+                            #   틈 안에 숨은 물체(면보다 깊이 있음)가 두 박스를 하나의 열로 잇지 않게 한다.
+                            #   작으면 면 노이즈로 열이 끊겨 가짜 틈, 크면 숨은 물체가 틈을 메움. 권장 0.05 / 0.10 / 0.15
     row_end_margin: 0.5     # [EXP-FIXED] ROI 앞 경계 이 거리 안에서 끝나는 열은 끝으로 보지 않음 [m]
     p_lateral_filter: 0.0   # [EXP-FIXED] P 선택 필터 (|y| 상한, 0 = 끔)
 
@@ -69,6 +71,7 @@
     aeb_latch: true         # [EXP-FIXED] AEB 작동 후 회차 끝까지 정지 유지
     input_timeout: 0.3      # [EXP-FIXED] 조향/속도 입력 끊김 [s]
     max_steering: 0.78      # [EXP-FIXED] 조향 제한 [rad] (drive와 같음)
+    require_preflight: true # [EXP-FIXED] 발행자 점검(publisher_guard_node) 통과 전 출발 거부
 
     # ---------- 트리거 (trigger_node) ----------
     trigger_latency: 0.05   # [EXP0-MEASURE] 트리거 발행 → #2 출발 지연 [s]. Exp0 측정

@@ -3,6 +3,8 @@
 역할 (우선순위 높은 순):
     1. 비상 정지: /autonomous_mode=false 또는 /joy_active=true → 명령 발행 중단 (joy_controller가 0을 냄)
        autonomous_drive와 같은 규칙. 조이스틱 B 버튼이 속도 계층·AEB보다 우선한다.
+    1-1. 발행자 점검: /exp/preflight_ok가 true가 아니면 출발 거부 (0 명령, 'preflight_failed').
+       주행을 시작한 뒤 위반이 생기면 정지 + 회차 폐기 ('foreign_publisher') [EXP-FIXED]
     2. 조이스틱 끊김 감시(데드맨): /joy가 joy_timeout 이상 안 오면 0 명령, 회차 폐기 기록 [EXP-FIXED]
     3. 소프트웨어 정지선: AUTO 시작 후 odom 주행 거리 > stop_distance 이면 0 명령 (래치) [EXP-FIXED]
     4. AEB: /aeb/active=true → 0 명령 (aeb_latch=true면 회차 끝까지 유지) [EXP-FIXED]
@@ -10,11 +12,13 @@
     6. 정상: 속도 = /exp/v_cmd, 조향 = /exp/steering_command
 파이프라인 위치: [speed_layer_node, exp_aeb_node, exp_steering_node, joy_controller] → (exp_drive_mux) → [VESC]
 구독: /exp/v_cmd (Float64), /exp/steering_command (String JSON), /aeb/active (Bool),
+      /exp/preflight_ok (Bool, transient_local),
       /autonomous_mode (Bool), /joy_active (Bool), /joy (sensor_msgs/Joy), odom_topic (Odometry)
 발행 (50 Hz):
     /commands/motor/speed (Float64 ERPM), /commands/servo/position (Float64)
     /exp/final_cmd (Float64 m/s, 실제로 보낸 속도), /exp/stop_reason (String), /exp/abort (String JSON, 폐기 사유)
-파라미터 (config/common.yaml): joy_timeout, require_joy, aeb_latch, input_timeout, max_steering
+파라미터 (config/common.yaml): joy_timeout, require_joy, aeb_latch, input_timeout, max_steering,
+          require_preflight
           (config/scenario_*.yaml): stop_distance
           run_dir: 폐기 사유를 <run_dir>/abort.json에 기록 (record_run.sh가 meta.json에 합침)
 변환: ERPM = vehicle_utils.speed_to_erpm (ERPM_GAIN 단일 출처), sanitize_rpm 최소 속도 규칙 그대로.
@@ -28,6 +32,7 @@ import time
 import rclpy
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Float64, String
 
@@ -37,7 +42,7 @@ from my_algo.vehicle_utils import (
 )
 
 
-DISCARD_REASONS = ('joy_timeout',)
+DISCARD_REASONS = ('joy_timeout', 'foreign_publisher')
 
 
 class ExpDriveMux(Node):
@@ -47,7 +52,8 @@ class ExpDriveMux(Node):
                     ('motor_topic', '/commands/motor/speed'), ('servo_topic', '/commands/servo/position'),
                     ('rate_hz', 50.0), ('joy_timeout', 0.5), ('require_joy', True),
                     ('aeb_latch', True), ('input_timeout', 0.3), ('max_steering', 0.78),
-                    ('stop_distance', 7.5), ('start_autonomous', False), ('run_dir', '')]
+                    ('stop_distance', 7.5), ('start_autonomous', False), ('run_dir', ''),
+                    ('require_preflight', True)]
         for k, v in defaults:
             self.declare_parameter(k, v)
         gp = lambda k: self.get_parameter(k).value  # noqa: E731
@@ -58,6 +64,9 @@ class ExpDriveMux(Node):
         self.max_steering = float(gp('max_steering'))
         self.stop_distance = float(gp('stop_distance'))
         self.run_dir = gp('run_dir')
+        self.require_preflight = bool(gp('require_preflight'))
+        self.preflight_ok = False
+        self.has_driven = False
 
         self.auto_mode = bool(gp('start_autonomous'))
         self.joy_active = False
@@ -75,6 +84,8 @@ class ExpDriveMux(Node):
         self.create_subscription(Bool, '/autonomous_mode', self.on_auto, 10)
         self.create_subscription(Bool, '/joy_active', self.on_joy_active, 10)
         self.create_subscription(Joy, gp('joy_topic'), self.on_joy, 10)
+        self.create_subscription(Bool, '/exp/preflight_ok', self.on_preflight,
+                                 QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_subscription(Odometry, gp('odom_topic'), self.on_odom, 10)
         self.motor_pub = self.create_publisher(Float64, gp('motor_topic'), 10)
         self.servo_pub = self.create_publisher(Float64, gp('servo_topic'), 10)
@@ -110,6 +121,9 @@ class ExpDriveMux(Node):
 
     def on_joy_active(self, msg):
         self.joy_active = bool(msg.data)
+
+    def on_preflight(self, msg):
+        self.preflight_ok = bool(msg.data)
 
     def on_joy(self, msg):
         self.last_joy = self.now_s()
@@ -151,6 +165,13 @@ class ExpDriveMux(Node):
                 self.was_running = False
             return
         self.was_running = True
+        # 1-1. 발행자 점검
+        if self.require_preflight and not self.preflight_ok:
+            if self.has_driven:
+                self.abort('foreign_publisher')
+            elif not self.latched:
+                self.send(0.0, 0.0, 'preflight_failed')
+                return
         # 2. 데드맨
         if self.require_joy and (self.last_joy is None or now - self.last_joy > self.joy_timeout):
             self.abort('joy_timeout')
@@ -174,6 +195,7 @@ class ExpDriveMux(Node):
             self.send(0.0, 0.0, 'stale_steering')
             return
         # 6. 정상
+        self.has_driven = True
         self.send(self.v_cmd, self.steer, '')
 
     def send(self, speed, steering, reason):
