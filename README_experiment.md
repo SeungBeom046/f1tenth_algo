@@ -1,7 +1,7 @@
 # 관측 공백 속도 계획 실험 (exp/occlusion-speed)
 
 기존 주행 스택(`lidar_drive.launch.py`)은 바꾸지 않는다. 이 문서는 실험용으로 추가한 것만 다룬다.
-진행 상태: **TF/IMU/점검 단계**. 인지, phantom, v_cap, 로깅, 분석은 차량 측정값을 받은 뒤 진행한다.
+진행 상태: **2단계(정리·리팩터링·TF·IMU 통합) 완료**. 인지, phantom, v_cap 노드, 로깅, 분석은 3단계.
 
 ## 0. 차량 점검 (가장 먼저)
 
@@ -16,18 +16,34 @@ bash $(ros2 pkg prefix my_algo)/share/my_algo/scripts/check_vehicle.sh
 `/tf` 발행 노드, vesc_to_odom 파라미터, VESC 상태 토픽의 전압 필드, chrony 상태.
 읽기 전용이며 아무 명령도 발행하지 않는다.
 
-## 1. 라이다 높이와 roll/pitch 측정 [EXP0-MEASURE]
+## 1. 장착 측정 [EXP0-MEASURE]
 
-평평한 바닥, 차 주변 0.4–4 m에 물체가 없는 곳에서:
+`launch/tf_static.launch.py`의 가정값(ORIGIN_H, LIDAR_ROLL/PITCH/YAW)을 측정값으로 바꾸는 절차.
+모두 평평한 바닥, 라이다 켜고 **5분 이상 예열** 후.
+
+### C1. IMU 정지 캘리브레이션 (roll, pitch, 자이로 바이어스, 단위)
 
 ```bash
-python3 $(ros2 pkg prefix my_algo)/share/my_algo/scripts/measure_lidar_height.py --topic <점군 토픽> --frames 10
+S=$(ros2 pkg prefix my_algo)/share/my_algo/scripts
+python3 $S/imu_static_calib.py 10 --topic <IMU 토픽>   # 차 전방 방향
+# 차를 제자리에서 180° 돌려 놓고 한 번 더
+python3 $S/imu_static_calib.py 10 --topic <IMU 토픽>
 ```
 
-- `height_m` = base_link(바닥 z=0) 기준 livox_frame z
-- `roll`, `pitch` = livox_frame 장착 각도 (tf2 static_transform_publisher 규약, Rz·Ry·Rx)
-- `보정 후 바닥 z 평균`이 `-height_m`과 같고 std가 1 cm 안쪽이어야 정상
-- yaw는 바닥으로 알 수 없다. RViz 벽 평행 검사(아래 3절)로 확인한다.
+- 두 회 roll/pitch 평균 → `LIDAR_ROLL`, `LIDAR_PITCH` (바닥 기울기는 180° 회전으로 상쇄)
+- `gyro bias` 평균 → `config/imu.yaml`의 `gyro_bias` (실험일마다)
+- `가속도 단위` → `config/imu.yaml`의 `accel_unit` (g면 `g`)
+
+### C2. 라이다 원점 높이 (교차 확인 포함)
+
+```bash
+python3 $S/measure_lidar_height.py --topic <점군 토픽> --frames 10
+```
+
+- `height_m` = 바닥에서 점군 원점까지 높이 → `ORIGIN_H = height_m − MOUNT_Z(0.21)`
+- 여기서 나온 roll/pitch는 바닥 평면 기준이라 C1과 같은 규약(Rz·Ry·Rx)이다.
+  C1과 0.3° 이상 다르면 바닥이 기울었거나 IMU-라이다 축이 어긋난 것이므로 보고.
+- yaw는 바닥으로 알 수 없다. 로고 방향(B5)과 RViz 벽 평행 검사(3절)로 확인한다.
 
 ## 2. IMU (/imu)
 
@@ -72,13 +88,13 @@ ros2 launch my_algo tf.launch.py use_ekf:=true   # 선택: EKF가 odom->base_lin
 
 | TF | 발행 | 값 |
 |---|---|---|
-| base_link → livox_frame | tf_static.launch.py | x 0.13, y −0.005, z 0.24 (=0.21+0.03 임시), rpy 0 |
+| base_link → livox_frame | tf_static.launch.py | x 0.13, y −0.005, z 0.24 (=MOUNT_Z 0.21 + ORIGIN_H 0.03 임시), rpy 0 |
 | livox_frame → livox_imu | tf_static.launch.py | (0.011, 0.02329, −0.04412), 회전 없음 (Mid-360 매뉴얼) |
 | odom → base_link | vesc_to_odom (기본) 또는 EKF | 동적 |
 
-측정 후 값은 launch 인자로 바로 바꿔 볼 수 있다:
-`ros2 launch my_algo tf.launch.py lidar_z:=0.243 lidar_roll:=0.004 lidar_pitch:=-0.012`.
-확정되면 `launch/tf_static.launch.py` 위쪽 상수를 교체한다.
+base_link→livox_frame을 발행하는 것은 `tf_static.launch.py`(실측 원본) 하나뿐이다.
+측정값이 나오면 그 파일 위쪽 상수(ORIGIN_H, LIDAR_ROLL/PITCH/YAW)를 교체하고 다시 빌드한다.
+차량 치수는 `config/vehicle_geometry.yaml` 하나에서 모든 노드가 읽는다.
 
 ### odom → base_link (vesc_to_odom)
 vesc_to_odom은 이 패키지가 아니라 VESC 쪽 bringup이 띄운다. 그 설정 YAML의
@@ -110,5 +126,6 @@ odom→base_link를 내면 TF가 튄다. EKF는 휠 odom의 vx, vy와 `/imu` yaw
 | 태그 | 위치 | 항목 |
 |---|---|---|
 | [EXP0-MEASURE] | config/imu.yaml `gyro_bias` | 실험일마다 재측정 |
-| [EXP0-MEASURE] | scripts/measure_lidar_height.py | livox_frame z, roll, pitch |
-| [EXP0-MEASURE] | launch/tf_static.launch.py | LIDAR_Z (원점높이 임시 0.03), LIDAR_ROLL/PITCH/YAW |
+| [EXP0-MEASURE] | launch/tf_static.launch.py | ORIGIN_H (임시 0.03), LIDAR_YAW, LIDAR_ROLL, LIDAR_PITCH |
+| [EXP0-MEASURE] | config/vehicle_geometry.yaml | wheel_diameter (미측정) |
+| [EXP-FIXED] | launch/tf_static.launch.py, config/vehicle_geometry.yaml | 장착 위치·차량 치수 전부 |

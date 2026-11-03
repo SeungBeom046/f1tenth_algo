@@ -1,0 +1,18 @@
+# 차량 치수 (실측 2026-11-03, 단위 m)
+# base_link 원점 = 뒤축 중심, z = 0 은 바닥
+# 모든 방법(B0/B1/B2/P)이 이 파일 하나를 공유한다.  [EXP-FIXED]
+vehicle_geometry:
+  ros__parameters:
+    wheelbase: 0.33              # A1
+    rear_axle_to_front: 0.41     # A2  — AEB TTC, 최소 거리, v_cap 의 d 는 이 앞 끝 기준
+    rear_axle_to_rear: 0.09      # A3
+    body_length: 0.50            # A2 + A3
+    body_width: 0.27             # A4
+    wheel_diameter: 0.0          # A5  [EXP0-MEASURE] 미측정 — odom 보정 검산용
+
+    # footprint (base_link 기준 다각형, 반시계)
+    footprint: [0.41, 0.135, -0.09, 0.135, -0.09, -0.135, 0.41, -0.135]
+
+    # 라이다 기준 파생값 (참고용)
+    lidar_to_front_edge: 0.28    # A2 - B1
+    lidar_to_rear_edge: 0.22     # B1 + A3

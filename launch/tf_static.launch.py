@@ -1,64 +1,46 @@
-"""정적 TF: base_link -> livox_frame -> livox_imu.
+"""정적 TF: base_link -> livox_frame -> livox_imu
 
-base_link 원점 = 뒤축 중심, z = 0 바닥 (REP-103: x 전방, y 좌측, z 위).
-값은 모두 launch 인자로 덮어쓸 수 있다. 측정 후에는 기본값을 교체한다.
-
-    ros2 launch my_algo tf_static.launch.py
-    ros2 launch my_algo tf_static.launch.py lidar_z:=0.243 lidar_pitch:=0.012
-
-livox_frame은 livox_ros_driver2 점군의 frame_id와 같아야 한다 (check_vehicle.sh로 확인).
+base_link 원점 = 뒤축 중심, z = 0 바닥.  모든 값 [EXP-FIXED].
+실측 2026-11-03. 표시된 [EXP0-MEASURE] 값은 아직 가정값이므로 측정 후 교체.
 """
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-# base_link -> livox_frame (실측)
-LIDAR_X = '0.13'          # 뒤축 중심 -> 라이다 원점 [m]
-LIDAR_Y = '-0.005'
-# [EXP0-MEASURE] z = 0.21(차체 기준 실측) + 원점높이 0.03(임시). measure_lidar_height.py의 height_m으로 교체
-LIDAR_Z = '0.24'
-# [EXP0-MEASURE] 장착 각도 가정값 0. roll/pitch는 measure_lidar_height.py, yaw는 RViz 벽 평행 검사로 교체 [rad]
-LIDAR_ROLL = '0.0'
-LIDAR_PITCH = '0.0'
-LIDAR_YAW = '0.0'
+# ---- base_link -> livox_frame ---------------------------------------------
+LIDAR_X = 0.13     # B1: 뒤축 중심 -> 라이다 중심 (전방 +)
+LIDAR_Y = -0.005   # B2: 왼쪽 끝까지 14 cm, 오른쪽 끝까지 13 cm
+                   #     -> 중심선에서 오른쪽으로 0.5 cm (ROS 는 왼쪽이 +y)
+                   #     측정 정밀도(±5 mm) 수준이라 0 으로 둬도 무방
+MOUNT_Z = 0.21     # B3: 바닥 -> 라이다 장착면 (B4 - B3 = 6 cm, 스펙 60 mm 와 일치)
+ORIGIN_H = 0.03    # [EXP0-MEASURE] 장착면 -> 점군 원점 O 높이. 임시값(센서 높이 절반).
+                   #     C2(평평한 바닥 점군의 z 평균)로 교체할 것.
+LIDAR_Z = MOUNT_Z + ORIGIN_H
 
-# livox_frame -> livox_imu (Livox Mid-360 매뉴얼, 회전 없음)
-IMU_X = '0.011'
-IMU_Y = '0.02329'
-IMU_Z = '-0.04412'
+LIDAR_YAW = 0.0    # [EXP0-MEASURE] B5: 로고가 전방이면 0, 후방이면 3.14159, 좌측 1.5708, 우측 -1.5708
+LIDAR_ROLL = 0.0   # [EXP0-MEASURE] C1: 정지 IMU 평균 roll = atan2(ay, az)
+LIDAR_PITCH = 0.0  # [EXP0-MEASURE] C1: 정지 IMU 평균 pitch = atan2(-ax, sqrt(ay^2 + az^2))
+
+# ---- livox_frame -> livox_imu (Livox 매뉴얼 값, 회전 없음) ------------------
+IMU_X, IMU_Y, IMU_Z = 0.011, 0.02329, -0.04412
 
 
-def static_tf(name, parent, child, x, y, z, roll, pitch, yaw):
+def static_tf(name, parent, child, x, y, z, roll=0.0, pitch=0.0, yaw=0.0):
     return Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         name=name,
         arguments=[
-            '--x', x, '--y', y, '--z', z,
-            '--roll', roll, '--pitch', pitch, '--yaw', yaw,
+            '--x', str(x), '--y', str(y), '--z', str(z),
+            '--roll', str(roll), '--pitch', str(pitch), '--yaw', str(yaw),
             '--frame-id', parent, '--child-frame-id', child,
         ],
     )
 
 
 def generate_launch_description():
-    args = [
-        DeclareLaunchArgument('base_frame', default_value='base_link'),
-        DeclareLaunchArgument('lidar_frame', default_value='livox_frame'),
-        DeclareLaunchArgument('imu_frame', default_value='livox_imu'),
-        DeclareLaunchArgument('lidar_x', default_value=LIDAR_X),
-        DeclareLaunchArgument('lidar_y', default_value=LIDAR_Y),
-        DeclareLaunchArgument('lidar_z', default_value=LIDAR_Z),
-        DeclareLaunchArgument('lidar_roll', default_value=LIDAR_ROLL),
-        DeclareLaunchArgument('lidar_pitch', default_value=LIDAR_PITCH),
-        DeclareLaunchArgument('lidar_yaw', default_value=LIDAR_YAW),
-    ]
-    c = LaunchConfiguration
-    return LaunchDescription(args + [
-        static_tf('tf_base_to_lidar', c('base_frame'), c('lidar_frame'),
-                  c('lidar_x'), c('lidar_y'), c('lidar_z'),
-                  c('lidar_roll'), c('lidar_pitch'), c('lidar_yaw')),
-        static_tf('tf_lidar_to_imu', c('lidar_frame'), c('imu_frame'),
-                  IMU_X, IMU_Y, IMU_Z, '0', '0', '0'),
+    return LaunchDescription([
+        static_tf('tf_base_to_livox', 'base_link', 'livox_frame',
+                  LIDAR_X, LIDAR_Y, LIDAR_Z, LIDAR_ROLL, LIDAR_PITCH, LIDAR_YAW),
+        static_tf('tf_livox_to_imu', 'livox_frame', 'livox_imu',
+                  IMU_X, IMU_Y, IMU_Z),
     ])
