@@ -47,7 +47,20 @@ source ~/f1tenth_ws/src/my_algo/scripts/env_ego.sh     # TBD(세션 1): my_algo 
 
 목적: 토픽·노드 이름 확정, drive 모드 리팩터 불변 검증(rosbag), 장착값 측정. 결과물은 `~/session1/`.
 
-순서는 터미널 상태가 같은 것끼리 묶었다: **(a) → (b) → (b2) → (c) → (e) → (f) → (g) → (d)**.
+> **⚠ 모든 터미널(A, B, C, D, E, F, #2의 A2)은 반드시 env 스크립트로 시작한다.**
+> 에고: `source ~/f1tenth_ws/src/my_algo/scripts/env_ego.sh` / #2: `source ~/f1tenth_ws/src/my_algo/scripts/env_car2.sh`
+> 한 터미널이라도 빠지면 그 터미널만 다른 `ROS_DOMAIN_ID`(기본 0)로 떠서 서로 안 보인다.
+>
+> | 증상 | 원인 |
+> |---|---|
+> | `ros2 topic list`에 드라이버 토픽이 안 보임, `echo_once.py`가 `토픽 없음`·시간 초과 | 그 터미널의 도메인이 다르다 |
+> | 노드는 떠 있는데 다른 노드가 데이터를 못 받음 (예: bringup은 떴는데 `/livox/lidar` 수신 없음) | 드라이버 터미널과 알고리즘 터미널의 도메인이 다르다 |
+> | `ros2 node list`에 #2(`/car2/...`)가 안 보이거나, 반대로 다른 사람 장비 노드가 보임 | 두 차 도메인 불일치, 또는 근처 장비와 도메인이 겹침 |
+>
+> 확인: 각 터미널에서 `echo $ROS_DOMAIN_ID $ROS_DISTRO` → 모두 `37 foxy`(기본값)여야 한다.
+> 이미 띄운 노드는 도메인을 바꿀 수 없으니, 틀린 터미널은 Ctrl+C → env 다시 source → 다시 실행.
+
+순서는 터미널 상태가 같은 것끼리 묶었다: **(a) → (a2) → (b) → (b1) → (b2) → (c) → (e) → (f) → (g) → (d)**.
 라이다를 켜 둔 상태에서 할 일(b, b2, c, e, f)을 먼저 끝내고, 드라이버를 모두 끄는 재생 검증(d)을 마지막에 한다.
 (b)부터 라이다가 켜져 있어 (e) 시점에는 예열 5분이 지나 있다.
 
@@ -71,6 +84,17 @@ mkdir -p ~/session1/tools && cp $MY_ALGO_REPO/scripts/*.py $MY_ALGO_REPO/scripts
 - 저장: `~/session1/a_git.txt`
 - 보낼 것: `a_git.txt`
 
+### (a2) numpy 1.17.4 호환 확인 — 에고 D (2분)
+
+Jetson 기본 numpy(Ubuntu 20.04 apt 1.17.4)로 순수 모듈(격자, phantom, 지표, 바닥 평면, deskew, PointCloud2, IMU, 제동 분석)
+단위 테스트를 돌린다. ROS 노드 테스트는 실제 rclpy가 있으면 자동으로 건너뛴다.
+```bash
+cd $MY_ALGO_REPO && python3 -c "import sys, numpy; print(sys.version.split()[0], 'numpy', numpy.__version__)" | tee ~/session1/a2_numpy.txt && PYTHONPATH=.:test python3 -m unittest discover -s test 2>&1 | tail -n 4 | tee -a ~/session1/a2_numpy.txt
+```
+- 정상: `3.8.x numpy 1.17.4`, 마지막 줄 `OK` (`skipped=N`은 정상 — 가짜 rclpy·rosbags 테스트).
+- `FAILED`나 `AttributeError`가 나오면 (b)로 넘어가도 되지만 `a2_numpy.txt`를 꼭 보낸다 (해당 노드가 차량에서 죽을 수 있음).
+- 보낼 것: `a2_numpy.txt`
+
 ### (b) 차량 점검 — 에고 A, B, D (10분)
 
 | 켜져 있어야 함 | 꺼야 함 |
@@ -90,10 +114,25 @@ ros2 topic info -v /vesc/odom | tee b_odom_info.txt                             
 ```
 - 정상: `check_vehicle_<host>_<시각>.log` 생성. 로그 "IMU 정지 통계"에서 `|a|` ≈ 1.0(g 단위) 또는 ≈ 9.8.
   `b_cloud_fields.txt`에 `x y z intensity tag line timestamp` 같은 필드 목록.
-- `b_odom_info.txt`의 `Publisher count: 0`이면 **기존 주행에는 odom이 없다** → 기존 drive AEB·planner는 속도 0으로 동작해 왔다는 뜻.
-  세션 2부터 E에서 `vesc_odom.launch.py`를 띄운다 (drive 모드에는 쓰지 않는다).
 - 저장: `check_vehicle_*.log`, `b_nodes.txt`, `b_cloud_fields.txt`, `b_odom_info.txt`
 - 보낼 것: 네 파일 전부
+
+### (b1) `/vesc/odom` 존재 여부 판정 — 에고 D (1분, 이후 단계가 갈린다)
+
+```bash
+cd ~/session1
+N=$(ros2 topic info /vesc/odom 2>/dev/null | sed -n 's/^Publisher count: //p'); echo "vesc_odom_publishers=${N:-0}" | tee b1_odom_verdict.txt
+ros2 topic list | grep -i odom | tee -a b1_odom_verdict.txt      # 다른 이름(/odom 등)으로 나오는지
+```
+
+| 결과 | 판정 | 이후 |
+|---|---|---|
+| `vesc_odom_publishers=1` | 기존 주행에 odom 있음 | (c) 그대로. 세션 2의 E에서 `vesc_odom.launch.py`는 **띄우지 않는다** (발행자 중복) |
+| `vesc_odom_publishers=0`이고 다른 odom 토픽도 없음 | **기존 drive 모드는 odom 없이 동작해 왔다** — drive AEB가 속도와 무관하게 앞 끝 0.25 m 고정, planner 정지선·lookahead도 속도 0 기준 | (c)는 `vesc_odom.launch.py` **없이** 지금 상태 그대로 녹화 (drive 모드 불변 유지). 아래 (c) 안전 주의를 지킨다. 세션 2부터 exp 세션에만 E에서 `vesc_odom.launch.py` |
+| 다른 이름(예: `/odom`)으로 있음 | odom은 있지만 이름이 다름 | (c) 그대로 녹화하되 그 토픽도 기록에 추가 (`ODOM_TOPIC=<이름>`). 이름 확정은 보고 후 |
+
+- 보낼 것: `b1_odom_verdict.txt`
+- odom이 없던 것으로 확인되면 OPEN_ITEMS 7절에 기록하고, drive 모드는 고치지 않는다 (별도 과제).
 
 ### (b2) 두 차 같은 도메인 발행자 확인 + 발행자 점검(warn) + /joy 주기 — 에고 D, #2 A2 (10분)
 
@@ -155,6 +194,9 @@ ros2 launch my_algo lidar_drive.launch.py
 ros2 bag info drive_bag | tee c_bag_info.txt
 ```
 - 안전: drive 모드는 조이스틱이 없다. 정지 = C Ctrl+C 또는 물리 전원. 트랙을 비우고 짧게.
+- 안전 (b1에서 odom 없음으로 판정된 경우): **drive AEB가 속도와 무관하게 앞 끝 0.25 m에서만 걸릴 수 있다.**
+  2 m/s면 0.25 m 안에서 멈추지 못한다. **저속 구간 위주로, 장애물 없는 넓은 곳에서**, 사람·물건과 충분히 떨어져 주행한다.
+  벽·박스로 직진하는 경로를 만들지 않는다. 녹화 목적은 drive 명령 기록이지 AEB 시험이 아니다.
 - 정상: `c_bag_info.txt`에 `/livox/lidar` 약 10 Hz × 시간. `/vesc/odom`이 0개여도 그대로 둔다 (그게 현재 drive 상태).
 - 토픽 이름이 (b)와 다르면 실제 이름으로 바꿔 기록한다.
 - 보낼 것: `c_bag_info.txt` (bag 자체는 보관만)
@@ -230,7 +272,9 @@ cd ~ && tar czf session1.tgz --exclude='session1/drive_bag' --exclude='session1/
 | 단계 | 파일 | 확정되는 것 |
 |---|---|---|
 | a | `a_git.txt` | 커밋, 빌드 |
+| a2 | `a2_numpy.txt` | numpy 1.17.4 호환 |
 | b | `check_vehicle_*.log`, `b_nodes.txt`, `b_cloud_fields.txt`, `b_odom_info.txt` | 토픽·노드 이름, IMU 단위, 점별 시각 필드(deskew), odom 유무, speed_to_erpm_gain |
+| b1 | `b1_odom_verdict.txt` | 기존 주행 odom 유무 (세션 2의 E 구성, drive AEB 동작 해석) |
 | b2 | `b2_domain_check.txt`, `b2_preflight.txt`, `b2_joy_hz.txt` | #2 격리, 발행자 점검 허용 이름, /joy 주기 |
 | c | `c_bag_info.txt` | drive bag 내용 |
 | d | `d_verify.txt` | drive 모드 불변 (차이 나면 3단계 중단) |
@@ -259,7 +303,7 @@ cd ~ && tar czf session1.tgz --exclude='session1/drive_bag' --exclude='session1/
 ros2 launch my_algo livox_mid360.launch.py
 # B
 ros2 launch vesc_driver vesc_driver_node.launch.py
-# E (정적 TF + odom. 세션 1 b에서 /vesc/odom 발행자가 없었을 때만 vesc_odom)
+# E (정적 TF + odom. 세션 1 b1 판정이 'odom 없음'일 때만 vesc_odom)
 ros2 launch my_algo tf.launch.py &
 ros2 launch my_algo vesc_odom.launch.py
 # F

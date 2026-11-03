@@ -142,3 +142,15 @@ common_interfaces, joystick_drivers foxy-devel, f1tenth/vesc ros2, livox_ros_dri
 - `/imu` 정지 시 z ≈ 9.8, IMU 축 방향, exp 모드 AEB 단독 정지, RViz 검증, `/joy` 주기와 무선 범위 이탈 동작.
 - numpy 1.17.4에서의 실행.
 - livox_ros_driver2·vesc 패키지 이름·노드 이름·토픽 이름 (4절 TBD 표).
+
+## 7. 별도 과제 (drive 모드, 이 브랜치에서 고치지 않음)
+
+### 7.1 기존 drive 모드의 odom 부재 — 세션 1 (b1) 판정 대기
+- 판정 결과: **TBD(세션 1)** (`b1_odom_verdict.txt`)
+- `vesc_odom_publishers=0`으로 확인되면 아래를 확정 기록으로 바꾼다:
+  > 기존 drive 모드는 odom 없이 튜닝됐다. drive 모드 AEB는 속도와 무관하게 앞 끝 0.25 m
+  > (`aeb_bumper_emergency_distance`)에서만 작동한다 (제동거리·TTC 항이 속도 0이라 0). planner의 속도 적응
+  > (lookahead 2.6 + 0.9 v, 회피·정지 거리)도 속도 0 기준으로만 동작해 왔다.
+- **drive 모드는 수정하지 않는다.** 떨림 방지·최소 속도 튜닝이 이 상태에서 맞춰졌으므로, odom을 붙이면 drive 동작이 달라진다.
+  odom을 붙인 drive 모드 재튜닝은 별도 과제로 남긴다 (승인 필요, verify_refactor 기준선 다시 잡기).
+- exp 모드는 영향 없음: `vesc_odom.launch.py`로 odom을 내고, exp AEB·트리거·지표는 odom 속도를 쓴다.
