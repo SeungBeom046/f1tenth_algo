@@ -45,6 +45,7 @@ class AEBSafetyModel:
         lidar_to_bumper_dist=0.30,
         vehicle_half_width=0.15,
         path_margin=0.15,
+        comfortable_decel=2.8,
     ):
         self.ttc_threshold = ttc_threshold
         self.stopping_margin = stopping_margin
@@ -53,6 +54,8 @@ class AEBSafetyModel:
         self.lidar_to_bumper_dist = lidar_to_bumper_dist
         self.vehicle_half_width = vehicle_half_width
         self.path_margin = path_margin
+        # 제동거리 추정용 감속도 [m/s^2]. 기본값은 기존 하드코딩 값과 같다.
+        self.comfortable_decel = comfortable_decel
         self.last_reason = 'clear'
 
     def check_emergency_braking(self, scan_msg, speed_mps, requested_command):
@@ -123,7 +126,6 @@ class AEBSafetyModel:
         계수는 현장 튜닝이 쉽도록 단순하게 유지한다. 현재 바닥에서 실제
         제동거리가 더 길면 stopping_margin을 키운다.
         """
-        comfortable_decel = 2.8
         # 등가속도 정지거리 공식: d = v^2 / (2*a).
         # 여기에 센서 지연, 바닥 미끄러짐, VESC 반응 지연을 위한 margin을 더한다.
-        return (speed_mps * speed_mps) / (2.0 * comfortable_decel) + self.stopping_margin
+        return (speed_mps * speed_mps) / (2.0 * self.comfortable_decel) + self.stopping_margin
