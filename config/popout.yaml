@@ -1,0 +1,14 @@
+# 돌출 차량 #2 (popout_vehicle_node). 모든 방법·회차 동일 [EXP-FIXED].
+/**:
+  ros__parameters:
+    trigger_topic: /trigger            # 에고 trigger_node와 공유 (절대 이름)
+    odom_topic: odom                   # 상대 이름 → /car2/odom 등 (#2 드라이버 실제 이름 확인)
+    motor_topic: commands/motor/speed  # 상대 이름 → /car2/commands/motor/speed
+    servo_topic: commands/servo/position
+    v_popout: 0.8                      # [EXP-FIXED] 돌출 속도 [m/s]
+    stop_distance: 1.0                 # [EXP-FIXED] 출발 후 이 거리에서 정지 [m] (차선 반대편 전에 멈추도록 트랙에 맞춰 교체)
+    stop_time: 0.0                     # 0 = 시간 정지 끔 (거리 정지 사용)
+    max_time: 3.0                      # [EXP-FIXED] 무조건 정지 [s]
+    erpm_gain: 4614.0                  # [EXP0-MEASURE] #2 차량의 m/s -> ERPM. 에고 값과 다를 수 있음. #2에서 실측
+    servo_center: 0.5                  # [EXP0-MEASURE] #2 직진 서보값
+    log_dir: ~/exp_logs/popout

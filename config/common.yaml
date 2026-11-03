@@ -1,0 +1,125 @@
+# exp 모드 공통 파라미터. 네 방법(B0/B1/B2/P)이 모두 이 파일 하나를 쓴다.
+# bringup.launch.py가 my_algo exp 노드에만 넘긴다 (realsense, joy 같은 외부 노드에는 넘기지 않음).
+# 이 파일의 sha256이 세션 첫 회차와 다르면 record_run.sh가 경고한다.
+#
+# 태그 규칙
+#   [EXP-FIXED]    방법 간에 절대 바꾸면 안 되는 값. 바꾸면 비교가 무효가 되는 이유를 옆에 적음
+#   [EXP-TUNE]     민감도 분석 대상. bringup 인자로 개별 덮어쓰기 허용. 권장 탐색 범위 기재
+#   [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (docs/OPEN_ITEMS.md)
+# 차량 치수는 vehicle_geometry.yaml, 하드웨어 변환(ERPM_GAIN, MIN_DRIVING_RPM)은 vehicle_utils.py가 유일한 출처.
+
+/**:
+  ros__parameters:
+    # ---------- 속도 계층 (speed_layer_node, trigger_node) ----------
+    v_ref: 2.0              # [EXP-FIXED] 목표 속도. 방법마다 다르면 손실 ΔT의 기준이 달라져 비교 불가
+    t_r: 0.15               # [EXP-FIXED][EXP0-MEASURE] 반응시간 [s]. v_cap 식 공통. Exp0 급제동으로 측정
+    a_b: 3.0                # [EXP-FIXED][EXP0-MEASURE] 최대 감속 [m/s^2]. v_cap 식 공통. Exp0에서 /imu로 측정
+    s_m: 0.2                # [EXP-FIXED] 정지 여유 [m]. v_cap 식 공통
+    v_imp: 0.867            # [EXP-TUNE] 허용 충돌속도 [m/s]. 하한 = V_MIN(=4000/4614=0.867, 플랫폼 최소 안정 속도).
+                            #   이보다 낮추면 speed_layer_node가 경고 (최소 속도 유지 시 v_imp 보장이 깨짐).
+                            #   권장 탐색: 0.867, 1.0, 1.2. bringup 인자 v_imp:= 로 덮어쓴다
+    b1_k: 1.0               # [EXP-TUNE] B1 감속 계수 k (v = v_ref(1 - k rho)). 권장 0.5 / 1.0 / 1.5
+    min_speed_policy: hold  # [EXP-FIXED] hold = v_cap < V_MIN이면 V_MIN 유지 + 플래그.
+                            #   방법마다 다르면 v_cap이 자주 낮은 방법(B2)만 유리/불리해짐.
+                            #   hysteresis는 비교용 (정지 후 v_min+restart_margin에서 재출발)
+    restart_margin: 0.1     # [EXP-FIXED] hysteresis 정책 재출발 여유 [m/s] (hold에서는 안 씀)
+    perception_timeout: 0.3 # [EXP-FIXED] phantom 입력이 이보다 오래되면 0 명령 [s]
+
+    # ---------- 점유격자 (occupancy_grid_node) ----------
+    grid_x_min: -3.0        # [EXP-FIXED] odom 고정 창 [m]. odom 원점 = AUTO 시작 위치 근처
+    grid_x_max: 15.0
+    grid_y_min: -3.0
+    grid_y_max: 3.0
+    grid_resolution: 0.05   # [EXP-FIXED] 칸 크기 [m]. 틈 폭(0.15/0.45 m) 측정 해상도를 정함
+    max_range: 8.0          # [EXP-FIXED] 레이캐스팅 최대 거리 [m]
+    band_z_min: 0.05        # [EXP-FIXED] 높이 대역 하한 (base_link z) [m]. 바닥점 제외
+    band_z_max: 0.30        # [EXP-FIXED] 높이 대역 상한 [m]. 반드시 박스 높이(0.35)보다 낮게.
+                            #   대역 밖 점은 free 처리에 쓰지 않는다 (박스 위를 넘은 빔이 가림을 지우지 않게)
+    n_frames: 3             # [EXP-TUNE] 누적 프레임 수 N. Exp1에서 결정. 권장 1–10
+    known_on: 2             # [EXP-TUNE] 히스테리시스: N 중 이 수 이상 관측되면 known. 권장 1–N
+    known_off: 1            # [EXP-TUNE] 히스테리시스: 관측 수가 이보다 적으면 unknown 복귀. 1 <= off <= on
+    crop_half_x: 8.0        # 발행용 에고 중심 창 [m]
+    crop_half_y: 2.5
+    debug_oob: false        # 대역 밖 점이 free로 만들었을 칸 비율 (/exp/grid_debug). 계산 부담 있음
+
+    # ---------- phantom 배치 (phantom_node) ----------
+    roi_x_max: 6.0          # [EXP-FIXED] phantom 탐색 앞쪽 한계 (base_link x) [m]
+    roi_half_y: 1.5         # [EXP-FIXED] phantom 탐색 좌우 한계 [m]
+    b1_roi_length: 3.0      # [EXP-TUNE] B1 ROI 길이 (앞 끝부터) [m]. 권장 2–4
+    b1_roi_half_width: 1.0  # [EXP-TUNE] B1 ROI 반폭 [m]. 권장 0.6–1.2
+    w_min: 0.35             # [EXP-TUNE] P 최소 틈 폭 [m]. 돌출 차량 폭 0.30 + 여유. 권장 0.25–0.45
+    row_y_min: 0.30         # [EXP-FIXED] P 주차열로 보는 occupied 칸의 |y| 범위 [m]
+    row_y_max: 1.20
+    row_link_dist: 0.10     # [EXP-FIXED] P 같은 열로 묶는 x 간격 [m]
+    row_face_tol: 0.10      # [EXP-FIXED] P 열의 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m]
+    row_end_margin: 0.5     # [EXP-FIXED] ROI 앞 경계 이 거리 안에서 끝나는 열은 끝으로 보지 않음 [m]
+    p_lateral_filter: 0.0   # [EXP-FIXED] P 선택 필터 (|y| 상한, 0 = 끔)
+
+    # ---------- AEB (exp_aeb_node) — 값은 lidar_drive.launch.py(drive 모드)와 같다 ----------
+    aeb_ttc_threshold: 0.55             # [EXP-FIXED] 방법마다 다르면 안전 결과를 비교할 수 없음
+    aeb_path_margin: 0.15               # [EXP-FIXED]
+    aeb_bumper_emergency_distance: 0.25 # [EXP-FIXED]
+    aeb_bumper_overlap_tolerance: 0.10  # [EXP-FIXED]
+    aeb_comfortable_decel: 2.8          # [EXP-FIXED] 제동거리 추정 감속도 (aeb.py 기존값)
+    aeb_stopping_margin: 0.20           # [EXP-FIXED]
+
+    # ---------- 최종 명령 (exp_drive_mux) ----------
+    joy_timeout: 0.5        # [EXP-FIXED] /joy 끊김 감시 [s]. 끊기면 정지 + 회차 폐기
+    require_joy: true       # [EXP-FIXED] 데드맨 사용
+    aeb_latch: true         # [EXP-FIXED] AEB 작동 후 회차 끝까지 정지 유지
+    input_timeout: 0.3      # [EXP-FIXED] 조향/속도 입력 끊김 [s]
+    max_steering: 0.78      # [EXP-FIXED] 조향 제한 [rad] (drive와 같음)
+
+    # ---------- 트리거 (trigger_node) ----------
+    trigger_latency: 0.05   # [EXP0-MEASURE] 트리거 발행 → #2 출발 지연 [s]. Exp0 측정
+    popout_enter_time: 0.2  # [EXP0-MEASURE] #2 출발 → 앞부분이 차선 경계에 닿는 시간 [s]. Exp0 측정
+
+    # ---------- deskew (deskew_node) ----------
+    deskew: false           # [EXP-FIXED] 모든 방법 동일. Exp1에서 on/off 비교 후 결정.
+                            #   bringup 인자 deskew:= 로만 바꾼다 (Exp1 비교용)
+    time_field: timestamp   # [EXP0-MEASURE] 점별 시각 필드 이름 (check_vehicle.sh 로그로 확정)
+    time_scale: 1.0e-9      # [EXP0-MEASURE] 필드 값 → 초
+    time_mode: absolute     # [EXP0-MEASURE] absolute | offset
+
+# exp 조향 노드 전용 (기존 planner 파라미터). 값은 drive 모드 launch와 같고, exp에서 바뀌는 것만 표시.
+exp_steering_node:
+  ros__parameters:
+    start_autonomous: true  # joy_controller가 시작 시 MANUAL을 발행하므로 LB로 AUTO 진입해야 움직인다
+    vehicle_width: 0.30
+    safety_margin: 0.25
+    # [EXP-FIXED] 좌측 벽 목표 거리 = 라이다 프레임에서 본 좌측 벽 |y|.
+    #   target = (좌측 벽 ~ 차선 왼쪽 경계 거리 w_off) + (차선 폭 0.7 / 2) + LIDAR_Y 보정(+0.005)
+    #   좌측 벽 패널이 차선 왼쪽 경계와 붙어 있으면 w_off = 0 → 0.355. 트랙 마킹 후 실측해 교체.
+    target_wall_distance: 0.355
+    lookahead_distance: 2.6
+    lookahead_speed_gain: 0.90
+    max_lookahead_distance: 4.5
+    exp_lookahead_distance: 4.4     # [EXP-FIXED] exp에서 lookahead 고정 (v_ref 2.0 기준 2.6+0.9*2.0)
+    obstacle_avoidance_distance: 1.20
+    blocked_stop_distance: 0.75
+    planner_stop_distance: 0.35
+    planner_stop_time_headway: 0.45
+    planner_stop_margin: 0.20
+    steering_deadband: 0.055        # [EXP-FIXED] 조향 게인류는 방법마다 같아야 궤적이 같다
+    open_space_steering_gain: 0.70
+    obstacle_steering_gain: 1.10
+    path_block_margin: 0.10
+    wall_follow_gain: 0.30          # [EXP-FIXED]
+    wall_error_filter_alpha: 0.25   # [EXP-FIXED]
+    enable_cone_track: false
+    max_steering: 0.78              # [EXP-FIXED]
+
+# AEB와 조향이 쓰는 /scan. 값은 lidar_drive.launch.py와 같다 [EXP-FIXED].
+pointcloud_to_laserscan:
+  ros__parameters:
+    min_height: -0.1
+    max_height: 0.5
+    angle_min: -3.14159
+    angle_max: 3.14159
+    angle_increment: 0.00436
+    scan_time: 0.1
+    range_min: 0.05
+    range_max: 20.0
+    use_inf: true
+    inf_epsilon: 1.0
+    target_frame: livox_frame

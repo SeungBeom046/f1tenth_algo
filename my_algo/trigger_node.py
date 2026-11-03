@@ -14,7 +14,7 @@
     d_e [EXP-VAR] (launch 인자), collision_x (config/scenario_S1.yaml)
     trigger_latency, popout_enter_time [EXP0-MEASURE] (config/common.yaml)
     v_ref [EXP-FIXED] (config/common.yaml)
-    enabled: 돌출 없는 시나리오(S2-S4)에서는 false
+    trigger_enabled: 돌출 없는 시나리오(S2-S4)에서는 false
 """
 
 import json
@@ -35,13 +35,13 @@ def trigger_distance(collision_x, d_e, v_ref, trigger_latency, popout_enter_time
 class TriggerNode(Node):
     def __init__(self):
         super().__init__('trigger_node')
-        defaults = [('odom_topic', '/vesc/odom'), ('enabled', False), ('run_id', ''),
+        defaults = [('odom_topic', '/vesc/odom'), ('trigger_enabled', False), ('run_id', ''),
                     ('d_e', 1.5), ('collision_x', 6.0), ('v_ref', 2.0),
                     ('trigger_latency', 0.05), ('popout_enter_time', 0.2)]
         for k, v in defaults:
             self.declare_parameter(k, v)
         gp = lambda k: self.get_parameter(k).value  # noqa: E731
-        self.enabled = bool(gp('enabled'))
+        self.enabled = bool(gp('trigger_enabled'))
         self.run_id = str(gp('run_id'))
         self.distance = trigger_distance(float(gp('collision_x')), float(gp('d_e')),
                                          float(gp('v_ref')), float(gp('trigger_latency')),

@@ -1,0 +1,6 @@
+# [EXP-VAR] 방법 B2: 모든 가림 경계 칸에 phantom
+# 이 파일에는 method만 둔다. 다른 값은 모두 common.yaml (방법 간 동일).
+# bringup.launch.py method:=B2 으로 고른다. 회차 중 ros2 param set으로 바꾸지 말 것 (노드 재시작).
+/**:
+  ros__parameters:
+    method: B2

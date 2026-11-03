@@ -1,0 +1,15 @@
+# [EXP-VAR] 시나리오 S3: 틈 0.15 m (통과 불가), 돌출 없음 (B2 대비 P의 불필요 감속)
+# 트랙 좌표: AUTO 시작 시 에고 차체 앞 끝 = 0, 진행 방향 +. 아래 거리 값은 트랙 마킹 후 실측해 교체.
+/**:
+  ros__parameters:
+    scenario: S3
+    gap_width: 0.15            # 기록용 (실제 박스 배치)
+    trigger_enabled: false
+    collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]
+    stop_distance: 7.5         # [EXP-FIXED] 소프트웨어 정지선: AUTO 후 주행 거리 > 이 값이면 0 명령 [m]
+                               #   = 트랙 끝 방호벽까지 거리 - 여유. 트랙 마킹 후 교체
+    accel_end_x: 2.5           # [EXP-FIXED] 가속 구간 끝 (v_ref 도달 판정 위치) [m]
+    test_x_start: 2.5          # [EXP-FIXED] 시험 구간 (손실 ΔT 적분 범위) [m]
+    test_x_end: 7.0
+    row_x_start: 4.0           # 주차열(P1 시작 ~ P3 끝) 위치 [m]. 고정 창 손실(주차열 ±1 m) 보조 지표용
+    row_x_end: 6.3
