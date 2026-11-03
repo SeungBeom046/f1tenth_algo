@@ -56,8 +56,10 @@
 `*_old.py`, `*_backup` 같은 중복 백업 파일과 빈 소스 파일은 없다. `resource/my_algo`는 비어 있지만
 ament_index 마커라 **유지**.
 
-## 5. 2단계 진입 전 결정이 필요한 것
+## 5. 결정 (승인됨, 2단계에서 실행)
 
-1. `imu_motion_logger` 묶음 archive 여부
-2. `imu_static_calib.py`의 토픽을 인자로 바꿔도 되는지 (기본값은 그대로 `/livox/imu`)
-3. `.DS_Store` 추적 해제
+1. `imu_motion_logger.py`, `imu_integration.py`, `launch/imu_motion.launch.py`,
+   `test/test_imu_integration.py` → `archive/` 이동 (원래 경로 구조 유지, setup.py 엔트리 제거)
+2. `imu_static_calib.py` 토픽을 인자로 변경. 기본값 `/livox/imu`, 그 밖의 값은 변경 금지
+3. `.DS_Store` 추적 해제 + `.gitignore` 추가, `__pycache__/`와 `my_algo/launch/` 잔여 캐시 삭제
+4. `joy_controller.py` 유지. exp 모드 비상 정지 수단 후보
