@@ -130,6 +130,18 @@ for n in $(timeout 10 ros2 node list 2>/dev/null | grep -Ei 'livox|vesc|odom|ack
   timeout 15 ros2 param dump "$n" 2>&1
 done
 
+section "속도 환산 계수 (명령 ERPM_GAIN vs odom speed_to_erpm_gain)"
+echo "my_algo vehicle_utils.py:"
+python3 -c "from my_algo.vehicle_utils import ERPM_GAIN, MIN_DRIVING_RPM; print(f'  ERPM_GAIN={ERPM_GAIN} MIN_DRIVING_RPM={MIN_DRIVING_RPM} V_MIN={MIN_DRIVING_RPM/ERPM_GAIN:.4f} m/s')" 2>&1
+echo "실행 중 노드 파라미터:"
+for n in $(timeout 10 ros2 node list 2>/dev/null | grep -Ei 'vesc|odom|ackermann'); do
+  for p in speed_to_erpm_gain speed_to_erpm_offset steering_angle_to_servo_gain steering_angle_to_servo_offset wheelbase publish_tf odom_frame base_frame use_servo_cmd_to_calc_angular_velocity; do
+    v=$(timeout 5 ros2 param get "$n" "$p" 2>/dev/null) && echo "  $n $p: $v"
+  done
+done
+echo "설정 파일 위치 (speed_to_erpm_gain 검색):"
+grep -rn --include='*.yaml' --include='*.py' 'speed_to_erpm_gain' ~ /opt/ros 2>/dev/null | grep -v '/build/\|/log/' | head -n 20
+
 section "VESC 상태 토픽 1회 echo (속도, 전압 필드 확인)"
 for t in $VESC_TOPICS; do run ros2 topic echo --once "$t"; done
 
