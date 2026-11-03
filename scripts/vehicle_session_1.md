@@ -1,7 +1,7 @@
 # 차량 세션 1 체크리스트
 
 목적: 토픽 이름 확정, drive 모드 리팩터링 불변 검증(rosbag), 장착값 측정.
-예상 시간 약 60분. 결과물은 모두 `~/session1/`에 모은다. 마지막 표의 파일을 그대로 보내면 된다.
+예상 시간 약 70분. 결과물은 모두 `~/session1/`에 모은다. 마지막 표의 파일을 그대로 보내면 된다.
 
 시작 전에 경로 두 개를 자기 환경에 맞게 정한다:
 
@@ -37,6 +37,32 @@ cd ~/session1 && bash $(ros2 pkg prefix my_algo)/share/my_algo/scripts/check_veh
 
 저장 파일: `~/session1/check_vehicle_<host>_<시각>.log` (자동 생성).
 이 로그로 토픽 이름, IMU 단위, 점군 필드(deskew 가능 여부), TF, `speed_to_erpm_gain`을 확정한다.
+
+## (b2) 두 차 같은 도메인 발행자 확인 (10분, 안전)
+
+#2가 에고 토픽에 섞이지 않는지 본다. 두 Jetson의 `ROS_DOMAIN_ID`를 같게 하고:
+
+- **#2 Jetson**: `ros2 launch my_algo car2.launch.py vesc_config:=<#2 VESC YAML>` 만 띄운다
+  (Livox 드라이버, 정적 TF, joy 등 다른 것은 띄우지 않는다). #2는 바퀴를 띄워 둔다.
+- **에고 Jetson**: (b)와 같이 드라이버를 띄운 상태에서
+
+```bash
+cd ~/session1
+for t in /livox/lidar /livox/imu /commands/motor/speed /commands/servo/position /tf /tf_static \
+         /car2/commands/motor/speed /car2/odom /trigger; do
+  echo "===== $t"; ros2 topic info -v "$t"
+done 2>&1 | tee b2_domain_check.txt
+ros2 node list | tee -a b2_domain_check.txt
+# 조이스틱을 켜고 손대지 않은 상태에서 (데드맨이 쓰는 /joy 재발행 주기)
+timeout -s INT 6 ros2 run joy joy_node --ros-args -p autorepeat_rate:=20.0 &
+sleep 2; timeout -s INT 4 ros2 topic hz /joy 2>&1 | tail -n 3 | tee b2_joy_hz.txt
+```
+
+- 정상: `/livox/*`, `/commands/motor/speed`, `/tf_static`의 Publisher 목록에 `/car2/...` 노드가 **없다**.
+  `/car2/commands/motor/speed`의 Subscriber에 #2 VESC 드라이버만 있다. `/tf`의 Publisher에 #2 노드가 없다.
+- `b2_joy_hz.txt`: 약 20 Hz. 0이거나 안 나오면 데드맨이 AUTO 직후 정지시키므로 보고.
+- 다른 점이 보이면 (d) 이후로 넘어가지 말고 `b2_domain_check.txt`를 보낸다.
+- 확인 후 #2 launch는 끈다 (나머지 단계는 에고만).
 
 ## (c) drive 모드 주행 bag 기록 (10분)
 
@@ -127,6 +153,7 @@ Mid-360 로고(케이블 반대쪽 아님, 상단 로고) 방향: 전방 / 후�
 |---|---|---|
 | a | `a_git.txt` | 커밋 해시, 빌드 성공 |
 | b | `check_vehicle_*.log` | 토픽, IMU 단위, 점군 필드, TF, speed_to_erpm_gain |
+| b2 | `b2_domain_check.txt`, `b2_joy_hz.txt` | #2 격리, 발행자 점검 허용 노드 이름, /joy 주기 |
 | c | `c_bag_info.txt` | 기록 토픽과 메시지 수 (bag 자체는 보내지 않아도 됨) |
 | d | `d_verify.txt` (+ 차이 있으면 `*_launch.log`, `*_params_*.yaml`) | drive 모드 불변 |
 | e | `e_imu_calib_0deg.txt`, `e_imu_calib_180deg.txt` | roll, pitch, 자이로 바이어스, 단위 |

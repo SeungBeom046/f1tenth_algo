@@ -1,19 +1,18 @@
-"""Mid-360 내장 IMU를 /imu (sensor_msgs/Imu, SI 단위)로 정규화해 재발행한다.
+"""Mid-360 내장 IMU 정규화 재발행 노드 (exp·Exp0 공통, 분석 전용).
 
-입력 토픽 (파라미터, 실차 확인 전까지 기본값은 미확정):
-    input_topic          sensor_msgs/Imu, 드라이버 원본 (기본 /livox/imu 추정)
-    recalibrate_topic    std_msgs/Bool, true면 정지 상태 재보정
-
-출력 토픽:
-    output_topic         sensor_msgs/Imu, m/s^2 + rad/s, 자이로 바이어스 차감,
-                         frame_id = imu_frame (livox_imu). 축 회전은 하지 않는다.
-    linear_accel_topic   geometry_msgs/Vector3Stamped, frame_id = base_frame.
-                         정지 비력 g_ref와 자이로 자세 추적으로 중력(roll/pitch 포함)을
-                         뺀 선형 가속도를 base_link 축으로 회전한 값. x가 종방향.
-    status_topic         std_msgs/String JSON (보정 상태, |g_ref|)
-
-용도: 종방향 jerk, Exp0 a_b 측정. 제어 루프에 넣지 않는다.
-base_link <- imu_frame 회전은 TF(/tf_static)에서 읽는다. 노드 안에 장착값을 두지 않는다.
+역할: 가속도 g → m/s², 자이로 바이어스 차감, 중력(roll/pitch 포함)을 뺀 base_link 종방향 가속도 발행.
+    제어 루프에는 쓰지 않는다 (종방향 jerk, Exp0 a_b 측정용).
+파이프라인 위치: [Livox 드라이버 /livox/imu] → (imu_republisher) → [rosbag 기록 → analysis/extract_run.py]
+구독: input_topic (sensor_msgs/Imu, 200 Hz, livox_frame — 토픽 이름 TBD(세션 1)), /imu/recalibrate (Bool)
+      TF base_link <- livox_imu (회전만, tf_static.launch.py)
+발행:
+    /imu                     sensor_msgs/Imu (200 Hz, livox_imu) m/s², rad/s, 바이어스 차감, 축 회전 없음
+    /imu/linear_accel_base   geometry_msgs/Vector3Stamped (200 Hz, base_link) 중력 제거 선형 가속도, x = 종방향
+    /imu/status              std_msgs/String JSON (1 Hz) 수신율, 보정 여부, |g_ref|, TF 확보
+파라미터 (config/imu.yaml): accel_unit (기본 g), gyro_unit, gyro_bias [EXP0-MEASURE], gravity_ref,
+    calibration_samples, track_attitude
+실험 관련: 정지 보정은 회차마다 정지 상태에서 (/imu/recalibrate). 제동 중 pitch 1° = 0.17 m/s² 오차라
+    자이로로 자세 변화를 추적한다 (my_algo/imu_normalize.py).
 """
 
 import json

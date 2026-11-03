@@ -1,0 +1,14 @@
+# Exp0 플랫폼 시험: 빈 트랙(박스·돌출 없음), method:=B0. v_ref까지 가속 후 정지선에서 0 명령(급제동).
+# a_b, t_r, 정지거리 측정용 (analysis/exp0_braking.py). 비교 실험(S1–S4) 회차 순서에는 들어가지 않는다.
+/**:
+  ros__parameters:
+    scenario: E0
+    gap_width: 0.0
+    trigger_enabled: false
+    collision_x: 5.0
+    stop_distance: 4.5         # [EXP0-MEASURE] 제동 시작 위치 = v_ref 도달 후. 트랙 끝까지 정지거리(약 1 m) + 여유 확보
+    accel_end_x: 2.5
+    test_x_start: 2.5
+    test_x_end: 4.5
+    row_x_start: 0.0
+    row_x_end: 0.0

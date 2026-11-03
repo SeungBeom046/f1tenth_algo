@@ -9,7 +9,7 @@ import datetime
 import os
 
 METHODS = ('B0', 'B1', 'B2', 'P')
-SCENARIOS = ('S1', 'S2', 'S3', 'S4')
+SCENARIOS = ('S1', 'S2', 'S3', 'S4', 'E0')  # E0 = Exp0 플랫폼 시험 (급제동)
 
 
 def log_root():
