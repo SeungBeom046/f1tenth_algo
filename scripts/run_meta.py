@@ -140,6 +140,7 @@ def start(mode, method, scenario, d_e, run_id):
         'erpm_gain': ERPM_GAIN, 'min_driving_rpm': MIN_DRIVING_RPM, 'v_min': V_MIN,
         'discard': False, 'discard_reason': None,
         'odom_topic': os.environ.get('ODOM_TOPIC', '/vesc/odom'),
+        'test_v_ref': float(os.environ['TEST_V_REF']) if os.environ.get('TEST_V_REF') else None,
         'cloud_topic': os.environ.get('CLOUD_TOPIC', '/livox/lidar'),
     }
     meta.update(git_info())

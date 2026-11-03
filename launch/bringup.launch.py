@@ -66,6 +66,11 @@ def exp(context):
         value = arg(name)
         if value:
             run_params[name] = cast(value)
+    # Exp0 odom 보정·Exp1 저속 주행 전용. v_ref는 [EXP-FIXED]라 방법 비교(Exp2·Exp3) 회차에는 쓰지 않는다.
+    # params.yaml 덤프에 실제 v_ref가 남고, record_run.sh가 meta.json에 test_v_ref를 기록한다.
+    if arg('test_v_ref'):
+        run_params['v_ref'] = float(arg('test_v_ref'))
+        print(f'[bringup] 경고: test_v_ref={run_params["v_ref"]} — 방법 비교 회차에 쓰지 말 것 (Exp0/Exp1 전용)')
     params = [common, share('config', f'method_{method}.yaml'),
               share('config', f'scenario_{scenario}.yaml'), run_params]
 
@@ -135,6 +140,8 @@ def generate_launch_description():
         DeclareLaunchArgument('cloud_topic', default_value='/livox/lidar', description='실차 확인 필요'),
         DeclareLaunchArgument('odom_topic', default_value='/vesc/odom', description='실차 확인 필요'),
         DeclareLaunchArgument('imu_topic', default_value='/livox/imu', description='실차 확인 필요'),
+        DeclareLaunchArgument('test_v_ref', default_value='',
+                              description='Exp0/Exp1 전용 v_ref 덮어쓰기. 비교 실험 금지'),
     ] + [DeclareLaunchArgument(k, default_value='', description='[EXP-TUNE] 덮어쓰기')
          for k in TUNE_ARGS]
     return LaunchDescription(args + [OpaqueFunction(function=dispatch)])

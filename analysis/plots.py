@@ -45,6 +45,10 @@ def load_runs(dirs):
                 continue
             with open(os.path.join(adir, 'metrics.json'), encoding='utf-8') as f:
                 m = json.load(f)
+            m['run_dir'] = os.path.join(d, name)
+            if m.get('static'):            # Exp1 정지 회차: RQ4 그림에만 쓴다
+                runs.append(m)
+                continue
             if m['discard'] or m.get('aeb_malfunction'):   # 폐기·AEB 오작동 회차는 효율 그림에서 제외
                 continue
             with open(os.path.join(adir, 'speed_vs_s.csv'), encoding='utf-8') as f:
@@ -187,8 +191,9 @@ def main():
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     runs = load_runs(args.session_dirs)
-    fig5(runs, args.out, plt)
-    fig6(runs, args.out, plt)
+    driving = [r for r in runs if not r.get('static')]
+    fig5(driving, args.out, plt)
+    fig6(driving, args.out, plt)
     fig_rq4(runs, args.out, plt)
     print(f'그림 저장: {args.out}')
 

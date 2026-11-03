@@ -34,7 +34,9 @@ def load(dirs):
             p = os.path.join(d, name, 'analysis', 'metrics.json')
             if os.path.exists(p):
                 with open(p, encoding='utf-8') as f:
-                    runs.append(json.load(f))
+                    m = json.load(f)
+                if not m.get('static'):   # Exp1 정지 회차는 RQ4 그림 전용
+                    runs.append(m)
     return runs
 
 

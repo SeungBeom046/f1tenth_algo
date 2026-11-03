@@ -102,7 +102,16 @@ def extract(run_dir):
     autos = [(t, m.data) for t, m in bag.get('/autonomous_mode', [])]
     t_auto = next((t for t, on in autos if on), None)
     if t_auto is None:
-        raise RuntimeError('AUTO 시작 기록 없음')
+        # Exp1 정지 조건처럼 AUTO 없이 기록한 회차: RQ4(경계 흔들림, 깜빡임)만 낸다
+        out = {'run': os.path.basename(run_dir), 'method': meta['method'], 'scenario': meta['scenario'],
+               'd_e': meta['d_e'], 'run_id': meta['run_id'], 'static': True,
+               'discard': True, 'discard_reason': 'static_rq4_only'}
+        out.update(rq4(bag, None))
+        adir = os.path.join(run_dir, 'analysis')
+        os.makedirs(adir, exist_ok=True)
+        with open(os.path.join(adir, 'metrics.json'), 'w', encoding='utf-8') as f:
+            json.dump(out, f, ensure_ascii=False, indent=2)
+        return dict(out, dT_cmd=None, dT_meas=None)
     odom = [(stamp(m), m) for _, m in bag.get(odom_topic, []) if stamp(m) >= t_auto]
     t_o = np.array([t for t, _ in odom])
     x = np.array([m.pose.pose.position.x for _, m in odom])

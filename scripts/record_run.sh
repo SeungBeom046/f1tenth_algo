@@ -26,6 +26,7 @@ if [ "$MODE" = exp ]; then
   python3 "$HERE/check_preflight.py" || exit 1
 fi
 
+export TEST_V_REF="${TEST_V_REF:-}"   # bringup test_v_ref:= 를 썼다면 같은 값을 넣는다 (meta.json 기록)
 RUN_DIR=$(python3 "$HERE/run_meta.py" start "$MODE" "$METHOD" "$SCENARIO" "$DE" "$RUN_ID" | tail -n 1)
 echo "회차 폴더: $RUN_DIR"
 

@@ -34,6 +34,9 @@ def nodes(context):
         raise RuntimeError(f'vesc_config 파일 없음: {vesc_config!r}')
     vesc_config = os.path.expanduser(vesc_config)
     popout = os.path.join(get_package_share_directory('my_algo'), 'config', 'popout.yaml')
+    popout_params = [popout]
+    if arg('v_popout'):   # Exp0 #2 단독 시험 (0.8 / 0.9 m/s). 확정 후에는 popout.yaml 값을 바꾼다
+        popout_params.append({'v_popout': float(arg('v_popout'))})
     return [
         Node(package=arg('vesc_driver_pkg'), executable=arg('vesc_driver_exe'),
              name='vesc_driver_node', namespace=ns, output='screen', parameters=[vesc_config]),
@@ -41,7 +44,7 @@ def nodes(context):
              name='vesc_to_odom_node', namespace=ns, output='screen',
              parameters=[vesc_config, {'publish_tf': False}]),   # /tf는 namespace가 안 붙는다
         Node(package='my_algo', executable='popout_vehicle_node', name='popout_vehicle_node',
-             namespace=ns, output='screen', parameters=[popout]),
+             namespace=ns, output='screen', parameters=popout_params),
     ]
 
 
@@ -53,5 +56,6 @@ def generate_launch_description():
         DeclareLaunchArgument('vesc_driver_exe', default_value='vesc_driver_node'),
         DeclareLaunchArgument('vesc_odom_pkg', default_value='vesc_ackermann'),
         DeclareLaunchArgument('vesc_odom_exe', default_value='vesc_to_odom_node'),
+        DeclareLaunchArgument('v_popout', default_value='', description='Exp0 시험용 속도 덮어쓰기'),
         OpaqueFunction(function=nodes),
     ])
