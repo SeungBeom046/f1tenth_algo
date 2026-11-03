@@ -491,3 +491,78 @@ IMU 가속도 적분은 작은 bias와 자세 오차가 속도·거리 오차로
 LiDAR-inertial odometry 같은 외부 위치 보정이 필요하다. 이 노드는 IMU 단독
 결과를 기존 VESC 기반 로그와 비교하기 위한 용도다. 현재 환경에서는 실차 ROS2
 실행을 검증하지 못했으므로 IMU 토픽·단위·정지 보정 및 실제 거리 비교가 필요하다.
+
+## 관측 공백 실험 브랜치 실행 순서 (exp/occlusion-speed)
+
+기존 주행(`lidar_drive.launch.py`)은 그대로다. 아래는 실험 준비 단계(차량 점검, 라이다 높이,
+IMU)만 다룬다. 자세한 설명과 체크리스트는 [README_experiment.md](README_experiment.md)에 있다.
+아래 명령은 모두 **Jetson에서** 실행한다.
+
+### 1. 빌드
+
+```bash
+cd ~/f1tenth_ws
+git fetch && git checkout exp/occlusion-speed && git pull
+colcon build --packages-select my_algo
+source install/setup.bash
+SCRIPTS=$(ros2 pkg prefix my_algo)/share/my_algo/scripts   # 설치된 스크립트 위치
+```
+
+### 2. 드라이버 실행 (터미널 1)
+
+평소처럼 Livox 드라이버, VESC 드라이버(+vesc_to_odom), 필요하면 카메라 드라이버를 띄운다.
+차는 **바퀴가 땅에 닿은 채 정지** 상태로 둔다. 자율주행 launch는 아직 띄우지 않는다.
+
+### 3. 차량 점검 (터미널 2, 약 2–3분)
+
+```bash
+cd ~ && bash $SCRIPTS/check_vehicle.sh
+```
+
+현재 폴더에 `check_vehicle_<호스트>_<시각>.log`가 생긴다. **이 파일을 통째로 전달**한다.
+읽기 전용이라 차는 움직이지 않는다.
+
+### 4. 라이다 높이 / roll / pitch 측정
+
+평평한 바닥에서 차 주변 0.4–4 m를 비운다. 점군 토픽 이름은 3번 로그에서 확인한다.
+
+```bash
+python3 $SCRIPTS/measure_lidar_height.py --topic /livox/lidar --frames 10
+```
+
+출력의 `height_m`, `roll`, `pitch`를 전달한다. `보정 후 바닥 z 평균`이 `-height_m`과
+비슷하고 std가 0.01 m 이하여야 정상이다.
+
+### 5. IMU 확인
+
+차를 정지시킨 채로 시작한다 (처음 2초 동안 정지 보정).
+
+```bash
+ros2 launch my_algo imu.launch.py input_topic:=/livox/imu accel_unit:=g
+```
+
+다른 터미널에서:
+
+```bash
+ros2 topic echo /imu/status                          # calibrated: true, g_ref_norm ≈ 9.81
+ros2 topic echo /imu --field linear_acceleration     # 정지 시 크기 ≈ 9.8
+ros2 topic hz /imu                                   # ≈ 200 Hz
+```
+
+- `calibrated`가 계속 false면 단위가 틀린 것이다. `accel_unit:=mps2`로 다시 실행해 본다.
+- `tf_ok: false`는 아직 정상이다 (TF 파일 반영 전). 이때 `/imu/linear_accel_base`는 나오지 않는다.
+
+### 6. 전달할 것
+
+1. `check_vehicle_*.log` 파일
+2. `measure_lidar_height.py` 출력
+3. 5번에서 `calibrated`가 true가 된 `accel_unit` 값과 `g_ref_norm`
+
+### 문제 해결
+
+| 증상 | 확인 |
+|---|---|
+| `Package 'my_algo' not found` | `source install/setup.bash`를 했는지 |
+| 높이 측정 `시간 초과` | `--topic` 이름, 드라이버 실행 여부 (`ros2 topic list`) |
+| 높이 측정 inlier 경고 | 주변 물체 치우기, `--range-max 2.5`로 줄이기 |
+| `/imu`가 안 나옴 | `input_topic` 이름 (3번 로그의 IMU 토픽) |

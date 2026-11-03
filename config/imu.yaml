@@ -1,0 +1,29 @@
+# /imu 재발행 노드 파라미터. 제어 루프에는 쓰지 않는다 (분석 전용).
+imu_republisher:
+  ros__parameters:
+    # 토픽 이름: check_vehicle.sh 결과로 확정 전까지 추정값. launch 인자로 덮어쓸 수 있다.
+    input_topic: /livox/imu           # 미확인 (README의 기존 값)
+    output_topic: /imu
+    linear_accel_topic: /imu/linear_accel_base
+    status_topic: /imu/status
+    recalibrate_topic: /imu/recalibrate
+    imu_frame: livox_imu
+    base_frame: base_link
+
+    # 드라이버 원본 단위. livox_ros_driver2는 가속도를 g로 낸다고 알려져 있음 (미확인).
+    # check_vehicle.sh의 /livox/imu echo에서 정지 시 |a|가 ~1.0이면 g, ~9.8이면 mps2.
+    accel_unit: g                     # g | mps2
+    gyro_unit: rad_s                  # rad_s | deg_s (미확인)
+
+    # [EXP0-MEASURE] 자이로 바이어스 [rad/s]. 실험일마다 imu_static_calib.py로 재측정 후 교체.
+    gyro_bias: [0.0, 0.0, 0.0]
+
+    # 정지 비력 벡터 [m/s^2, IMU 프레임]. [0.0]이면 노드 시작 시 정지 샘플로 자동 추정.
+    # 장착 roll/pitch와 바닥 경사가 함께 들어가 중력 제거에 쓰인다.
+    gravity_ref: [0.0]
+    calibration_samples: 400          # 200 Hz 기준 2 s
+    rest_accel_tolerance: 0.5         # |a| - 9.81 허용치, 넘으면 정지 아님(또는 단위 오류)
+    rest_gyro_tolerance: 0.05         # rad/s
+
+    # 제동 중 pitch 변화(1 deg = 0.17 m/s^2 오차)를 자이로 적분으로 추적
+    track_attitude: true

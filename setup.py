@@ -13,6 +13,8 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
+        ('share/' + package_name + '/config', glob('config/*.yaml')),
+        ('share/' + package_name + '/scripts', glob('scripts/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -28,6 +30,7 @@ setup(
             'autonomous_drive = my_algo.autonomous_drive:main',
             'joy_controller = my_algo.joy_controller:main',
             'autonomous_metrics_logger = my_algo.autonomous_metrics_logger:main',
+            'imu_republisher = my_algo.imu_republisher:main',
         ],
     },
 )
