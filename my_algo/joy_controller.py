@@ -1,4 +1,15 @@
-"""실차 F1TENTH 조이스틱 제어 노드."""
+"""실차 F1TENTH 조이스틱 제어 노드 (drive·exp 공통 수동 개입·비상 정지).
+
+역할: LB로 AUTO/MANUAL 전환, B로 긴급 정지, MANUAL에서 스틱으로 직접 주행.
+파이프라인 위치: [joy_node /joy] → (joy_controller) → [autonomous_drive 또는 exp_drive_mux, VESC]
+구독: /joy (sensor_msgs/Joy, joy_node autorepeat 주기)
+발행: /autonomous_mode (std_msgs/Bool, 20 Hz), /joy_active (std_msgs/Bool),
+      MANUAL 중 /commands/motor/speed (Float64 ERPM), /commands/servo/position (Float64)
+파라미터: drive_axis_index, steer_axis_indices, auto_toggle_button_indices, emergency_button_indices,
+    invert_drive_axis, invert_steer_axis (노드 기본값)
+실험 관련: exp 모드 bringup이 띄운다 (drive launch에서는 주석 처리 상태 그대로). 시작은 항상 MANUAL이라
+    회차마다 LB로 AUTO 진입. B 버튼은 exp_drive_mux에서 속도 계층·AEB보다 우선한다.
+"""
 
 import rclpy
 from rclpy.node import Node

@@ -22,7 +22,7 @@
 | [my_algo/speed_layer_node.py:16](../my_algo/speed_layer_node.py#L16) | `method                      [EXP-VAR] config/method_*.yaml` |
 | [my_algo/trigger_node.py:14](../my_algo/trigger_node.py#L14) | `d_e [EXP-VAR] (launch 인자), collision_x (config/scenario_S1.yaml)` |
 
-## [EXP-FIXED] 통제변인 — 방법 간 절대 바꾸지 말 것 (84개)
+## [EXP-FIXED] 통제변인 — 방법 간 절대 바꾸지 말 것 (86개)
 
 | 위치 | 내용 |
 |---|---|
@@ -85,6 +85,8 @@
 | [config/vehicle_geometry.yaml:3](../config/vehicle_geometry.yaml#L3) | `# 모든 방법(B0/B1/B2/P)이 이 파일 하나를 공유한다.  [EXP-FIXED]` |
 | [launch/bringup.launch.py:69](../launch/bringup.launch.py#L69) | `# Exp0 odom 보정·Exp1 저속 주행 전용. v_ref는 [EXP-FIXED]라 방법 비교(Exp2·Exp3) 회차에는 쓰지 않는다.` |
 | [launch/tf_static.launch.py:3](../launch/tf_static.launch.py#L3) | `base_link 원점 = 뒤축 중심, z = 0 바닥.  모든 값 [EXP-FIXED].` |
+| [my_algo/aeb.py:7](../my_algo/aeb.py#L7) | `파라미터: 생성자 인자. drive는 lidar_drive.launch.py, exp는 config/common.yaml [EXP-FIXED] (같은 값).` |
+| [my_algo/autonomous_drive.py:17](../my_algo/autonomous_drive.py#L17) | `AEB 임계값은 config/common.yaml [EXP-FIXED]와 같은 값이어야 한다 (test_config_consistency가 확인).` |
 | [my_algo/deskew_node.py:11](../my_algo/deskew_node.py#L11) | `실험 관련: deskew on/off는 모든 방법 동일 [EXP-FIXED]. 점별 시각 필드가 없으면 노드가 경고 후 원본을 그대로 넘긴다.` |
 | [my_algo/exp_aeb_node.py:15](../my_algo/exp_aeb_node.py#L15) | `[EXP-FIXED] config/common.yaml. 값은 drive 모드 launch(lidar_drive.launch.py)와 같다.` |
 | [my_algo/exp_aeb_node.py:16](../my_algo/exp_aeb_node.py#L16) | `vehicle_geometry_file: lidar_to_front_edge, body_width/2 [EXP-FIXED]` |

@@ -1,4 +1,15 @@
-"""trial 기반 자율주행 성능 측정 및 CSV 로깅 노드."""
+"""trial 기반 자율주행 성능 측정 및 CSV 로깅 노드 (drive 모드).
+
+역할: AUTO 시작~해제를 한 trial로 보고 주행 거리, 평균 속도, 조향 변화, 최근접 거리 등을 CSV로 남긴다.
+파이프라인 위치: [odom, 최종 명령, scan, /autonomous_mode] → (autonomous_metrics_logger) → [logs/*.csv]
+구독: auto_mode_topic(/autonomous_mode), odom_topic(/vesc/odom), steering_topic(/commands/servo/position),
+      motor_speed_topic(/commands/motor/speed), scan_topic(/scan),
+      /metrics/set_trial_result (std_msgs/String), /metrics/finish_session (std_msgs/Bool)
+발행: 없음 (CSV: <logs_dir>/autonomous_trials.csv, autonomous_sessions.csv)
+파라미터: launch/lidar_drive.launch.py dict (lidar_to_bumper_dist), 그 밖은 노드 기본값
+실험 관련: drive 모드 전용. exp 모드 지표는 rosbag + analysis/로 계산한다. replay_drive.sh에서는
+    use_metrics_logger:=false로 끈다.
+"""
 
 import csv
 import math

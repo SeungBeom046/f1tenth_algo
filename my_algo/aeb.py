@@ -1,18 +1,17 @@
-"""긴급 제동 안전 모델.
+"""긴급 제동 안전 모델 (AEBSafetyModel). 노드가 아니라 클래스 모듈.
 
-역할:
-    autonomous_drive.py에서 사용하는 최종 안전 계층이다. 이 모듈은 일반
-    장애물 회피를 수행하지 않는다. 보이는 장애물은 LiDAR reactive drive가 미리
-    회피해야 하며, AEB는 충돌이 임박했거나 planner가 유효한 대응을 못 할 때만
-    정지를 요청한다.
+역할: 전방 진행 띠(|y| <= 반폭 + 여유) 안 최근접 장애물 x(앞범퍼 기준)로 긴급 정지 여부를 판단한다.
+    x <= max(즉시 정지 거리, v^2/(2 a) + margin, v * ttc_threshold) 이면 정지. 장애물 상대속도는 쓰지 않는다.
+파이프라인 위치: [/scan, /vesc/odom 속도] → (AEBSafetyModel) → autonomous_drive(drive) / exp_aeb_node(exp)
+구독·발행: 없음 (호출한 노드가 scan과 속도를 넘긴다)
+파라미터: 생성자 인자. drive는 lidar_drive.launch.py, exp는 config/common.yaml [EXP-FIXED] (같은 값).
+    기준점만 다르다: drive lidar_to_bumper_dist 0.30·반폭 0.15, exp vehicle_geometry.yaml 0.28·0.135.
+실험 관련: 모든 방법이 같은 모델·임계값을 쓴다. 원인 점 기록은 my_algo/aeb_event.py (같은 선택 규칙).
 
 입력 데이터:
     최신 /scan LaserScan
     /vesc/odom에서 얻은 현재 차량 속도
     LiDAR/camera planner가 요청한 reactive drive command
-
-출력:
-    autonomous_drive.py가 사용하는 긴급 정지 여부.
 
 주요 튜닝 값:
     ttc_threshold:

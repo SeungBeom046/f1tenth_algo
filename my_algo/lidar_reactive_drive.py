@@ -1,12 +1,14 @@
-"""실차 F1TENTH용 LiDAR 기반 reactive drive.
+"""실차 F1TENTH용 LiDAR 기반 reactive drive (drive 모드 planner).
 
-입력 토픽:
-    /scan (sensor_msgs/LaserScan)
-    /autonomous_mode (std_msgs/Bool)
-    /joy_active (std_msgs/Bool)
-
-출력 토픽:
-    /reactive/lidar_command (std_msgs/String JSON ReactiveDriveCommand)
+역할: LaserScan → 전방 점 추출 → gap / corridor(벽) / cone / open-space 판단 → 조향·RPM 계획.
+파이프라인 위치: [pointcloud_to_laserscan /scan] → (lidar_reactive_drive) → [autonomous_drive]
+    exp 모드에서는 exp_steering_node가 이 클래스를 상속해 조향만 쓴다.
+구독: /scan (sensor_msgs/LaserScan, 10 Hz, livox_frame), /vesc/odom (nav_msgs/Odometry, 실측 속도),
+      /autonomous_mode (std_msgs/Bool), /joy_active (std_msgs/Bool)
+발행: /reactive/lidar_command (std_msgs/String JSON ReactiveDriveCommand, scan마다)
+파라미터: launch/lidar_drive.launch.py dict + PLANNER_CONSTANTS 기본값 (리팩터링 전 하드코딩 값과 같음)
+실험 관련: 조향은 실측 속도(lookahead 2.6 + 0.9 v 등)에 의존한다. exp 모드는 상속으로 모드·lookahead를 고정한다.
+    최소 RPM(sanitize_rpm)·조향 rate limit은 떨림 방지 튜닝값으로 변경 금지.
 
 흐름:
     LaserScan -> local 장애물/corridor 분석 -> 주행 모드 선택

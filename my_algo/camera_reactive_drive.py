@@ -1,8 +1,13 @@
-"""Intel RealSense D455 카메라 인식/시각화 노드.
+"""Intel RealSense D455 카메라 인식/시각화 노드 (drive 모드, YOLO).
 
-현재 역할:
-    카메라가 RGB/depth 정보를 정상적으로 받아오는지 확인하고, YOLO 객체 인식,
-    객체 거리 추정, 간단한 차선 후보 검출, AEB 경고 표시를 overlay한다.
+역할: RGB/depth 수신, YOLO 객체 인식, bbox depth 거리, 차선 후보, AEB 경고 overlay를 그려 발행한다.
+    차량 제어 명령은 발행하지 않는다.
+파이프라인 위치: [realsense2_camera] → (camera_reactive_drive) → [화면, /camera/perception/*] (제어와 연결 없음)
+구독: color_topic, depth_topic (sensor_msgs/Image, 카메라 주기), /aeb/active (Bool), /aeb/status (String)
+발행: annotated_topic (sensor_msgs/Image), status_topic (std_msgs/String JSON, 5 Hz)
+파라미터: launch/lidar_drive.launch.py dict (color_topic, depth_topic, yolo_model, enable_yolo, show_window ...)
+실험 관련: exp 모드에서는 띄우지 않는다 (YOLO 연산 부하로 t_r이 흔들리는 것 방지). 카메라는 녹화 전용,
+    AEB 표시는 analysis/aeb_overlay.py로 오프라인. 구독 토픽 이름은 TBD(세션 1) 확인 (docs/OPEN_ITEMS.md).
 
 중요:
     이 노드는 현재 차량 제어 명령을 발행하지 않는다. 실차 주행은 LiDAR 기반으로

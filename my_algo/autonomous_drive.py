@@ -1,20 +1,21 @@
-"""실차 F1TENTH용 자율주행 통합 노드.
+"""실차 F1TENTH 자율주행 통합 노드 (drive 모드 최종 명령).
 
-입력 토픽:
-    /autonomous_mode (std_msgs/Bool)
-    /joy_active (std_msgs/Bool)
-    /reactive/lidar_command (std_msgs/String JSON ReactiveDriveCommand)
-    /reactive/camera_command (std_msgs/String JSON ReactiveDriveCommand)
-    /scan (sensor_msgs/LaserScan)
-    /vesc/odom (nav_msgs/Odometry)
-
-출력 토픽:
-    /commands/motor/speed (std_msgs/Float64)
-    /commands/servo/position (std_msgs/Float64)
-
-흐름:
-    LiDAR 또는 camera planner 출력 선택 -> AEB 안전 검사 -> RPM/조향 제한
-    -> 최종 VESC 명령 발행.
+역할: planner 출력 선택 → 내장 AEB 안전 검사 → RPM·조향 제한 → VESC 명령 발행.
+파이프라인 위치: [lidar_reactive_drive] → (autonomous_drive) → [VESC]
+구독:
+    /autonomous_mode (std_msgs/Bool), /joy_active (std_msgs/Bool)
+    /reactive/lidar_command (std_msgs/String JSON ReactiveDriveCommand, scan마다)
+    /reactive/camera_command (std_msgs/String JSON, 발행자 없음 — drive_source=camera용 예약)
+    /scan (sensor_msgs/LaserScan, 10 Hz, livox_frame), /vesc/odom (nav_msgs/Odometry)
+발행:
+    /commands/motor/speed (std_msgs/Float64 ERPM, 50 Hz), /commands/servo/position (std_msgs/Float64, 50 Hz)
+    /autonomous_mode (std_msgs/Bool, 10 Hz heartbeat), /aeb/active (Bool), /aeb/status (String)
+파라미터: launch/lidar_drive.launch.py 안의 dict (drive_source, command_timeout_sec, aeb_ttc_threshold,
+    aeb_vehicle_half_width, aeb_path_margin, aeb_bumper_emergency_distance, aeb_bumper_overlap_tolerance,
+    lidar_to_bumper_dist, max_steering). aeb_comfortable_decel·aeb_stopping_margin은 노드 기본값(2.8, 0.20).
+실험 관련: drive 모드 전용. exp 모드에서는 띄우지 않는다 (exp_drive_mux가 대신).
+    AEB 임계값은 config/common.yaml [EXP-FIXED]와 같은 값이어야 한다 (test_config_consistency가 확인).
+    이 파일의 코드는 리팩터링 기준선(baseline-pre-refactor)과 동작이 같아야 한다.
 
 주요 튜닝 값:
     drive_source:
