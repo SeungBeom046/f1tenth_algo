@@ -2,8 +2,10 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
@@ -14,7 +16,15 @@ def generate_launch_description():
         'rs_launch.py',
     )
 
+    # 아래 세 인자는 rosbag 재생 검증(scripts/replay_drive.sh)용. 기본값은 기존 동작과 같다.
+    use_sim_time = {'use_sim_time': LaunchConfiguration('use_sim_time')}
+    use_camera = IfCondition(LaunchConfiguration('use_camera'))
+
     return LaunchDescription([
+        DeclareLaunchArgument('use_camera', default_value='true',
+                              description='RealSense 드라이버와 camera_reactive_drive 실행'),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
+        DeclareLaunchArgument('use_metrics_logger', default_value='true'),
         Node(
             package='pointcloud_to_laserscan',
             executable='pointcloud_to_laserscan_node',
@@ -31,7 +41,7 @@ def generate_launch_description():
                 'use_inf': True,
                 'inf_epsilon': 1.0,
                 'target_frame': 'livox_frame',
-            }],
+            }, use_sim_time],
             remappings=[
                 ('cloud_in', '/livox/lidar'),
                 ('scan', '/scan'),
@@ -46,12 +56,14 @@ def generate_launch_description():
         # ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(realsense_launch),
+            condition=use_camera,
         ),
         Node(
             package='my_algo',
             executable='camera_reactive_drive',
             name='camera_reactive_drive',
             output='screen',
+            condition=use_camera,
             parameters=[{
                 'color_topic': '/camera/color/image_raw',
                 'depth_topic': '/camera/depth/image_rect_raw',
@@ -63,7 +75,7 @@ def generate_launch_description():
                 'process_every_n_frames': 2,
                 'enable_yolo': True,
                 'enable_lane_detection': True,
-            }],
+            }, use_sim_time],
         ),
         Node(
             package='my_algo',
@@ -91,7 +103,7 @@ def generate_launch_description():
                 'enable_cone_track': False,
                 'max_steering': 0.78,
                 'lidar_to_bumper_dist': 0.30,
-            }],
+            }, use_sim_time],
         ),
         Node(
             package='my_algo',
@@ -108,14 +120,15 @@ def generate_launch_description():
                 'aeb_bumper_overlap_tolerance': 0.10,
                 'lidar_to_bumper_dist': 0.30,
                 'max_steering': 0.78,
-            }],
+            }, use_sim_time],
         ),
         Node(
             package='my_algo',
             executable='autonomous_metrics_logger',
             output='screen',
+            condition=IfCondition(LaunchConfiguration('use_metrics_logger')),
             parameters=[{
                 'lidar_to_bumper_dist': 0.30,
-            }],
+            }, use_sim_time],
         ),
     ])
