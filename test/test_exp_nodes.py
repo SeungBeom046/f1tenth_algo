@@ -13,6 +13,8 @@ if _rosstub.ACTIVE:
     from std_msgs.msg import Bool, Float64, String
 
     import my_algo.exp_drive_mux as mux_mod
+    import my_algo.popout_vehicle_node as popout_mod
+    from std_msgs.msg import Header
     import my_algo.exp_steering_node as steer_mod
     import my_algo.speed_layer_node as speed_mod
     from my_algo.geometry import VehicleGeometry
@@ -210,6 +212,33 @@ class ExpDriveMuxTest(unittest.TestCase):
         advance(0.31)
         self.m.subs['/joy'](Joy())
         self.assertEqual(self.tick(), ([0.0], ['stale_speed']))
+
+
+@unittest.skipUnless(_rosstub.ACTIVE, '실제 ROS 환경: 가짜 rclpy 테스트 건너뜀')
+class PopoutTest(unittest.TestCase):
+    def test_trigger_run_stop_reset(self):
+        import tempfile
+        n = make(popout_mod.PopoutVehicleNode, stop_distance=0.5, log_dir=tempfile.mkdtemp(),
+                 lane_boundary_distance=0.2)
+        n.subs['odom'](odom(0.0, x=0.0))       # 출발 전 정지 위치
+        n.subs['/trigger'](Header())
+        x = 0.0
+        for _ in range(100):
+            advance(0.02)
+            x += 0.8 * 0.02
+            n.subs['odom'](odom(0.8, x=x))
+            rn.BUS.clear()
+            n.tick()
+            if n.state == 'stopped':
+                break
+        self.assertEqual(n.state, 'stopped')
+        self.assertEqual(n.event['stop_reason'], 'distance')
+        self.assertAlmostEqual(n.event['reach_lane_s'], 0.25, delta=0.021)  # odom 한 주기 이내
+        self.assertAlmostEqual(n.event['speed_mean'], 0.8, places=6)
+        n.subs['/trigger'](Header())          # 정지 상태에서는 다시 출발하지 않는다
+        self.assertEqual(n.state, 'stopped')
+        n.subs['/popout/reset'](Bool(True))
+        self.assertEqual(n.state, 'idle')
 
 
 @unittest.skipUnless(_rosstub.ACTIVE, '실제 ROS 환경: 가짜 rclpy 테스트 건너뜀')

@@ -3,7 +3,8 @@
 역할: 트리거 수신 → 속도 v_popout, 조향 0 → 지정 거리 또는 지정 시간 후 정지, 최대 시간 넘으면 무조건 정지.
     트리거 수신 시각과 출발(첫 명령) 시각을 기록한다.
 파이프라인 위치: [에고 trigger_node] → /trigger → (popout_vehicle_node) → [#2 VESC]
-구독: /trigger (std_msgs/Header, 에고와 같은 ROS_DOMAIN_ID), odom_topic (#2 odom, 거리 정지용)
+구독: /trigger (std_msgs/Header, 에고와 같은 ROS_DOMAIN_ID), odom_topic (#2 odom, 거리 정지용),
+      /popout/reset (std_msgs/Bool, true면 정지 상태 → 대기. 회차마다 #2를 출발 위치에 둔 뒤 발행)
 발행 (50 Hz, 동작 중): motor_topic (Float64 ERPM), servo_topic (Float64), /popout/status (String JSON)
 
 주의 (같은 ROS_DOMAIN_ID): 에고와 #2의 VESC 토픽 이름이 같으면 서로의 명령이 섞인다.
@@ -26,7 +27,7 @@ import time
 import rclpy
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from std_msgs.msg import Float64, Header, String
+from std_msgs.msg import Bool, Float64, Header, String
 
 from my_algo.ros_util import publish_float, publish_string
 from my_algo.vehicle_utils import ERPM_GAIN, SERVO_CENTER
@@ -60,6 +61,7 @@ class PopoutVehicleNode(Node):
         self.event = {}
         self.create_subscription(Header, gp('trigger_topic'), self.on_trigger, 10)
         self.create_subscription(Odometry, gp('odom_topic'), self.on_odom, 50)
+        self.create_subscription(Bool, '/popout/reset', self.on_reset, 10)
         self.motor_pub = self.create_publisher(Float64, gp('motor_topic'), 10)
         self.servo_pub = self.create_publisher(Float64, gp('servo_topic'), 10)
         self.status_pub = self.create_publisher(String, '/popout/status', 10)
@@ -81,9 +83,18 @@ class PopoutVehicleNode(Node):
                       'recv_wall_time': time.time(), 'latency_s': recv - sent}
         self.state = 'running'
         self.start = recv
-        self.travel, self.last_xy = 0.0, None
+        # 트리거 전 정지 위치(last_xy)를 출발점으로 둔다. None으로 지우면 첫 odom 구간 이동을 놓친다.
+        self.travel = 0.0
         self.speeds = []
         self.get_logger().info(f'트리거 수신: 지연 {recv - sent:+.4f} s (두 Jetson 시간 동기 전제)')
+
+    def on_reset(self, msg):
+        if msg.data and self.state == 'stopped':
+            self.state = 'idle'
+            self.event = {}
+            self.get_logger().info('#2 대기 상태로 복귀 (출발 위치 확인할 것)')
+        elif msg.data and self.state == 'running':
+            self.get_logger().warn('주행 중에는 reset을 무시한다')
 
     def on_odom(self, msg):
         p = msg.pose.pose.position
