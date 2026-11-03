@@ -15,8 +15,8 @@ set -euo pipefail
 MODE=$1 METHOD=$2 SCENARIO=$3 DE=$4 RUN_ID=$5
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-CLOUD_TOPIC="${CLOUD_TOPIC:-/livox/lidar}"
-ODOM_TOPIC="${ODOM_TOPIC:-/vesc/odom}"
+export CLOUD_TOPIC="${CLOUD_TOPIC:-/livox/lidar}"
+export ODOM_TOPIC="${ODOM_TOPIC:-/vesc/odom}"
 RAW_IMU_TOPIC="${RAW_IMU_TOPIC:-/livox/imu}"
 export VESC_STATE_TOPIC="${VESC_STATE_TOPIC:-/sensors/core}"
 CAMERA_TOPIC="${CAMERA_TOPIC:-/camera/camera/color/image_raw/compressed}"

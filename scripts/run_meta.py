@@ -17,6 +17,7 @@ import datetime
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -108,6 +109,12 @@ def start(mode, method, scenario, d_e, run_id):
     if os.path.exists(os.path.join(rdir, 'bag')):
         sys.exit(f'이미 기록된 회차: {rdir} (run_id를 바꿀 것)')
     os.makedirs(os.path.join(rdir, 'camera'), exist_ok=True)
+    # 기록 시점 설정 사본. 분석은 이 사본을 읽어 나중에 config가 바뀌어도 재현된다.
+    snap = os.path.join(rdir, 'config_snapshot')
+    os.makedirs(snap, exist_ok=True)
+    for name in ('common.yaml', f'method_{method}.yaml', f'scenario_{scenario}.yaml',
+                 'vehicle_geometry.yaml', 'imu.yaml'):
+        shutil.copy2(share_path('config', name), snap)
 
     common = share_path('config', 'common.yaml')
     common_hash = sha256(common)
@@ -131,6 +138,8 @@ def start(mode, method, scenario, d_e, run_id):
         'common_yaml_sha256': common_hash, 'common_yaml_matches_session': matches,
         'erpm_gain': ERPM_GAIN, 'min_driving_rpm': MIN_DRIVING_RPM, 'v_min': V_MIN,
         'discard': False, 'discard_reason': None,
+        'odom_topic': os.environ.get('ODOM_TOPIC', '/vesc/odom'),
+        'cloud_topic': os.environ.get('CLOUD_TOPIC', '/livox/lidar'),
     }
     meta.update(git_info())
     meta.update(read_voltage())
