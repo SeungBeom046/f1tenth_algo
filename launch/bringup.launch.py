@@ -27,8 +27,8 @@ from launch_ros.actions import Node
 from my_algo.run_paths import METHODS, SCENARIOS, run_dir
 
 # 개별 인자로 덮어쓸 수 있는 [EXP-TUNE] 값과 타입. 이 밖의 값은 YAML로만 바꾼다.
-TUNE_ARGS = {'v_imp': float, 'w_min': float, 'n_frames': int, 'known_on': int, 'known_off': int,
-             'b1_k': float, 'b1_roi_length': float, 'b1_roi_half_width': float,
+TUNE_ARGS = {'v_imp': float, 'w_min': float, 'w_max': float, 'n_frames': int, 'known_on': int,
+             'known_off': int, 'b1_k': float, 'b1_roi_length': float, 'b1_roi_half_width': float,
              'row_face_tol': float}
 
 
@@ -68,6 +68,12 @@ def exp(context):
             run_params[name] = cast(value)
     # Exp0 odom 보정·Exp1 저속 주행 전용. v_ref는 [EXP-FIXED]라 방법 비교(Exp2·Exp3) 회차에는 쓰지 않는다.
     # params.yaml 덤프에 실제 v_ref가 남고, record_run.sh가 meta.json에 test_v_ref를 기록한다.
+    # Exp0 i 추종 지연: 주행 거리 test_step_x에서 속도 명령을 test_step_v로 계단처럼 내린다 (방법과 무관, mux에서)
+    if arg('test_step_v'):
+        run_params['test_step_v'] = float(arg('test_step_v'))
+        run_params['test_step_x'] = float(arg('test_step_x') or 2.5)
+        print(f'[bringup] 경고: test_step_v={run_params["test_step_v"]} at {run_params["test_step_x"]} m '
+              '— Exp0 i 전용')
     if arg('test_v_ref'):
         run_params['v_ref'] = float(arg('test_v_ref'))
         print(f'[bringup] 경고: test_v_ref={run_params["v_ref"]} — 방법 비교 회차에 쓰지 말 것 (Exp0/Exp1 전용)')
@@ -142,6 +148,10 @@ def generate_launch_description():
         DeclareLaunchArgument('imu_topic', default_value='/livox/imu', description='실차 확인 필요'),
         DeclareLaunchArgument('test_v_ref', default_value='',
                               description='Exp0/Exp1 전용 v_ref 덮어쓰기. 비교 실험 금지'),
+        DeclareLaunchArgument('test_step_v', default_value='',
+                              description='Exp0 i 전용 속도 계단 목표 [m/s] (예 1.2). 비교 실험 금지'),
+        DeclareLaunchArgument('test_step_x', default_value='',
+                              description='Exp0 i 속도 계단 위치 (AUTO 후 주행 거리) [m], 기본 2.5'),
     ] + [DeclareLaunchArgument(k, default_value='', description='[EXP-TUNE] 덮어쓰기')
          for k in TUNE_ARGS]
     return LaunchDescription(args + [OpaqueFunction(function=dispatch)])

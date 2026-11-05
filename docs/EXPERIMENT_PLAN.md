@@ -23,9 +23,12 @@ H2 성립 조건: 그림 6에서 P가 B2와 같은 높이(무충돌 비율 95% C
 | 코드 | 규칙 | 구현 |
 |---|---|---|
 | B0 | 공백 무시, v_ref 유지. AEB만 | `phantom.B0` |
-| B1 | 전방 ROI(앞 끝부터 3 m, 반폭 0.35 m = 차선 + 갓길, 트랙 구조물까지) 미관측 칸 비율 ρ로 v = v_ref(1 − kρ) | `phantom.B1` + `speed_policy.b1_speed` |
+| B1 | 전방 ROI(앞 끝부터 3 m, 반폭 = 차선 반폭 + v_popout·(t_r + v_ref/a_b), 기본 약 1.0 m) 미관측 칸 비율 ρ로 v = v_ref(1 − kρ) | `phantom.B1` + `speed_policy.b1_speed` |
 | B2 | ROI 안 모든 가림 경계 칸에 phantom, 최근접 d로 v_cap(d) | `phantom.B2` |
-| P | 측면 주차열(차선 쪽 면 0.10 m 띠의 occupied 군집) 사이 틈 폭 ≥ w_min 입구와 열 양 끝에만 phantom | `phantom.P` |
+| P | 측면 주차열(차체 앞 끝보다 앞쪽, 차선 쪽 면 0.10 m 띠의 occupied 군집) 사이 틈 폭 w_min–w_max 입구와 열 양 끝에만 phantom. w_max보다 넓은 빈 공간은 열 끝 | `phantom.P` |
+
+공통 phantom 유지 (B2·P 같은 규칙, `phantom.PhantomHold`): 한 번 생긴 phantom은 odom 좌표에 고정해 차체 앞 끝이 그 x + 0.10 m를
+지날 때까지 유지한다 (`phantom_hold`, `phantom_hold_margin` [EXP-FIXED]). 방법별 차이는 배치 규칙에만 있다.
 
 공통: v_cap(d) = a_b(−t_r + √(t_r² + 2(d − s_m)/a_b + v_imp²/a_b²)), d ≤ s_m이면 v_cap(s_m).
 t_r은 **관측 → 실제 감속 시작까지 전체 지연**(인지 + 통신 + 제어 + 구동, 속도 제어 1차 지연은 등가 지연으로 포함)이다 (Exp0 c·i). 명령 = min(v_ref, v_cap) →
@@ -92,7 +95,7 @@ d_e 정의: #2 앞부분이 차선 경계에 닿는 순간, 에고 차체 앞 �
 | a. 장착값 | 평평한 바닥, 정지 | RUNBOOK 0.4, 부록 C (`imu_static_calib.py` 0°/180°, `measure_lidar_height.py`, 로고 방향, RViz) | 각 2 | ORIGIN_H, LIDAR_ROLL/PITCH/YAW → `tf_static.launch.py`. 자이로 바이어스 → `imu.yaml` |
 | b. odom 스케일 | 빈 트랙 5 m 직선 표시 | `bringup ... method:=B0 scenario:=E0 run_id:=<n> test_v_ref:=0.9` (2.0은 인자 없이). 기록 `TEST_V_REF=0.9 bash $S/record_run.sh exp B0 E0 na <n>`. 정지 후 줄자 | 0.9 m/s × 3, 2.0 m/s × 3 | `analysis/odom_travel.py <runs> --tape ...` → 비율. **ERPM_GAIN 변경은 drive 속도도 바꾼다 (OPEN_ITEMS 2절)** |
 | c. a_b, 정지거리 | 빈 트랙, 정지선 `stop_distance` 4.5 m (E0) | `bringup ... method:=B0 scenario:=E0 run_id:=<n>` + 기록 | 2.0 m/s × 10 | `analysis/exp0_braking.py ~/exp_logs/<날짜>` → a_b(CI 하한) → `common.yaml`. 계단 구동 지연 `t_r_step`·정지거리 등가 지연 `t_r_equiv`는 참고값 (계단 명령은 감속이 a_b로 바로 포화돼 1차 지연이 드러나지 않음) |
-| i. 추종 지연 (t_r) | S2 배치, #2 없음 | `bringup ... method:=B2 scenario:=S2 run_id:=<n>` + 기록 (v_cap 곡선을 따라 명령이 완만히 내려감) | 5 | `analysis/exp0_braking.py ~/exp_logs/<날짜> --tracking <회차 폴더들>` → 추종 지연(순수 + 1차, `braking.tracking_lag`) CI 상한 + 인지 지연(라이다 주기 평균 50 ms + 격자 처리 ms) = **t_r** → `common.yaml`. 비교 실험 회차가 아니다 |
+| i. 추종 지연 (t_r) | 빈 트랙 (E0) | `bringup ... method:=B0 scenario:=E0 run_id:=<n> test_step_v:=1.2 test_step_x:=2.5` + 기록 (`TEST_STEP_V=1.2 bash $S/record_run.sh exp B0 E0 na <n>`). 방법과 무관한 속도 계단 2.0 → 1.2 m/s (mux가 주행 거리 2.5 m에서 명령을 내림) | 5 | `analysis/exp0_braking.py ~/exp_logs/<날짜> --tracking <회차 폴더들>` → 계단 응답을 순수 지연 + 1차 지연 + 감속 한계 a_b 모델로 맞춘 등가 지연(`braking.step_lag`) CI 상한 + 인지 지연(라이다 주기 평균 50 ms + 격자 처리 ms) = **t_r** → `common.yaml`. 비교 실험 회차가 아니다 |
 | d. 트리거 지연 | S1 배치, #2 대기(틈 안), 에고 정지 상태에서 트리거만 | RUNBOOK 0.3 동기 확인 명령을 20회 (`/popout/reset` 사이사이) | 20 | `popout_events.jsonl` latency_s 분포 → `trigger_latency` (중앙값), LED+천장 카메라로 교차 확인 |
 | e. #2 단독 주행 | #2만, 틈 출발 표시 → 차선 경계 | #2: `ros2 launch my_algo car2.launch.py vesc_config:=... v_popout:=0.8`, 에고/노트북: `ros2 topic pub --once /trigger std_msgs/msg/Header "{frame_id: exp0}"` 후 `/popout/reset`. 0.9도 같은 방법 | 0.8 × 5, 0.9 × 5 | `reach_lane_s`(출발 → 차선 경계 도달), `speed_mean`, `speed_std`. 판정 아래 |
 | f. #2 진입 시간 | e와 같음 | e의 `reach_lane_s` 평균 | (e) | `popout_enter_time` |
@@ -170,10 +173,11 @@ python3 analysis/plots.py ~/exp_logs/<날짜1> ...
 |---|---|---|---|---|
 | v_imp | 0.867 (= V_MIN, 하한) | 0.867, 1.0, 1.2 | B2, P · S1(d_e 1.5), S3 | `v_imp:=` |
 | w_min | 0.35 | 0.25, 0.35, 0.45 | P · S1(d_e 1.5), S3 | `w_min:=` |
+| w_max | 0.50 (차 한 대 길이) | 0.40 (2 s_m), 0.50, 1.17 (v_ref 정지거리) | P · S1–S4 | `w_max:=` |
 | N (+ known_on) | Exp1 결과 | 결정값 ± 2 | 전 방법 · S3 | `n_frames:= known_on:=` |
 | row_face_tol | 0.10 | 0.05, 0.10, 0.15 | P · S1(d_e 1.5), S3 | `row_face_tol:=` |
 | k (B1) | 1.0 | 0.5, 1.0, 1.5 | B1 · S2, S4 | `b1_k:=` |
-| B1 ROI | 3.0 × 0.35 | 길이 2–4, 반폭 0.6 / 0.8 / 1.0 | B1 · S2, S4 | `b1_roi_length:= b1_roi_half_width:=` |
+| B1 ROI | 3.0 × 식(약 1.0) | 길이 2–4, 반폭 0.6 / 0.8 / 1.0 | B1 · S2, S4 | `b1_roi_length:= b1_roi_half_width:=` |
 
 w_min을 너무 크게 잡으면 P가 실제 틈을 놓쳐 위험해진다 (원 계획서 리스크). 결과는 한계에 명시한다.
 
@@ -194,7 +198,11 @@ w_min을 너무 크게 잡으면 P가 실제 틈을 놓쳐 위험해진다 (원 
 | exp AEB 기준점 | — | 같은 클래스·임계값, 기준점만 앞 끝(라이다 + 0.28 m)·반폭 0.135 (drive는 0.30·0.15 유지). 회차 끝까지 래치 | 치수 기준 통일. drive 모드 불변 |
 | AEB 오작동 | — | S2–S4에서 **정지선 전** AEB 발동 회차는 효율 통계에서 빼고 방법별로 따로 집계 (2026-11-05: 정지선 전만 세도록 실차·시뮬 통일, `metrics.aeb_malfunction`) | 돌출이 없는데 정지한 회차의 손실은 배치 규칙의 효과가 아니다. 정지선 뒤 방호벽 근접 발동은 시험 구간 밖이다 |
 | 폐기 규칙 (2026-11-05) | — | 가속 구간 끝 실측 < 0.95 v_ref → **가속 구간 끝까지 명령이 v_ref였는데 실측 < 0.95 v_ref일 때만** (`metrics.discard_check`, 모든 방법·실차·시뮬 공통) | 시뮬에서 B1이 스스로 감속해 전 회차 폐기됨 (OPEN_ITEMS 9절). 알고리즘이 낸 감속은 그 방법의 비용이라 지표에 넣어야 한다. "그 시점 명령 = v_ref"만 보면 가속 구간 중 스스로 감속했다가 v_ref로 돌아온 회차가 폐기되므로 가속 구간 전체 명령을 본다 |
-| B1 ROI 반폭 (2026-11-05) | 1 m | 0.35 m = 차선 반폭 0.35 + 갓길 0 (트랙 구조물 차선 쪽 면까지). 0.6 / 0.8 / 1.0은 민감도 | 결과와 무관한 트랙 기준. 구조물 안·뒤 칸은 늘 미관측이라 넣으면 ρ가 가림이 아니라 구조물을 잰다. 갓길은 트랙 마킹 후 실측해 교체 |
+| B1 ROI 반폭 (2026-11-05, 같은 날 재정의) | 1 m | **lane_width/2 + b1_object_speed·(t_r + v_ref/a_b)** = 0.35 + 0.8·(0.15 + 2/3) ≈ 1.003 m (실차 기본값, `phantom.b1_roi_half_width_auto`가 `common.yaml` 값으로 계산, 손 반올림 없음. 시뮬은 t_r 0.25로 ≈ 1.083). 0.6 / 0.8 / 1.0은 민감도 | 에고가 v_ref에서 반응해 멈출 때까지 차선 밖 물체가 차선에 도달할 수 있는 범위. 처음 정한 0.35(차선 + 갓길)는 B1이 구조물 뒤 미관측 칸(물체가 숨을 수 있는 곳)을 세지 못하게 만들어 기준 자체가 잘못됐다 |
+| phantom 유지 (2026-11-05) | 프레임마다 새로 배치 | 생긴 phantom을 odom에 고정해 앞 끝이 x + 0.10 m를 지날 때까지 유지 (B2·P 공통, `phantom_hold`·`phantom_hold_margin` [EXP-FIXED]) | 시뮬에서 #2가 틈에서 나오는 순간 P가 #2를 열로 묶어 틈 phantom이 사라지고 v_cap이 풀려 v_imp 초과 충돌 (OPEN_ITEMS 10절). 가장 위험한 순간에 phantom이 사라지면 안 된다. 방법 차이는 배치 규칙에만 둔다. 테스트 `test_hold_keeps_phantom_when_car_fills_gap` |
+| P 주차열 범위 (2026-11-05) | 모든 occupied 칸 | 차체 앞 끝보다 앞쪽 칸만. 첫 칸이 앞 끝 바로 앞(row_link_dist 안)이면 열이 차 옆으로 이어지는 것으로 보고 시작 끝 phantom을 두지 않는다 | 출발점 뒤 벽이 열로 잡혀 뒤 벽 ~ P1 사이를 틈으로 보고 가속 구간에 phantom을 뒀다 (OPEN_ITEMS 10절). 시작 끝 예외는 예전에 앞 끝보다 뒤에 있어 d에서 빠지던 경우와 같은 결과를 내기 위함 |
+| P w_max (2026-11-05) | 없음 | 0.50 m. 넘는 빈 공간은 틈이 아니라 열 끝(앞 열 끝·뒤 열 시작 phantom) | 차 한 대 길이 이상 빈 공간은 주차 칸이 비어 열이 끊긴 것. 결과 보기 전 근거로 정함 (승인). 민감도 0.40 / 0.50 / 1.17 |
+| Exp0 i 추종 지연 측정 (2026-11-05, 같은 날 변경) | B2 주행 | 방법과 무관한 속도 계단 2.0 → 1.2 m/s (`test_step_v`), 응답을 순수 + 1차 지연 + a_b 포화 모델로 맞춤 | 측정이 비교 대상 방법(B2)에 의존하지 않게 |
 | t_r 정의 (2026-11-05) | 반응시간 | 관측 → 실제 감속 시작 전체 지연 (인지 + 통신 + 제어 + 구동, 1차 지연은 등가 지연). Exp0 i 추종 지연 시험 추가, c의 계단 구동 지연은 참고값 | v_cap 식은 '순수 지연 t_r 뒤 a_b 감속'을 가정한다. 1차 지연 τ인 속도 제어는 v_cap처럼 완만히 내려가는 명령을 τ 늦게 따라가므로 τ가 t_r에 들어가야 v_imp 보장이 맞는다 (시뮬에서 틈 입구 속도 1.24 > v_imp 0.867, OPEN_ITEMS 9절). 계단 급제동은 감속이 바로 포화돼 τ가 거의 안 보인다 |
 | 충돌 속도 보고 (2026-11-05) | 충돌 여부 | 충돌 회차의 충돌 속도 최대·평균, v_imp 이하 / 초과 충돌 수 | v_imp 이하 충돌은 설계가 허용한 결과라 초과 충돌과 구분해야 한다 |
 | **P 주차열 군집** | occupied 군집 사이 틈 | **차선 쪽 면에서 row_face_tol(0.10 m) 띠 안의 칸만 열로 묶는다** ([EXP-TUNE] 0.05/0.10/0.15) | 틈 안에 숨은 #2의 앞부분이 occupied로 잡히면 두 박스가 한 열로 이어져 P가 바로 그 틈을 놓친다. 테스트: `test_occupancy_phantom.test_p_hidden_car_does_not_bridge_gap` (면에서 0.15 m 들어간 숨은 차가 있어도 틈 입구 phantom 유지). 가정: 숨은 물체는 면보다 0.10 m 이상 안쪽 |

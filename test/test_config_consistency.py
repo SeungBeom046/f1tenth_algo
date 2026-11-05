@@ -99,6 +99,11 @@ class ConfigConsistencyTest(unittest.TestCase):
             keys = keys or set(p)
             self.assertEqual(set(p), keys)
 
+    def test_b1_object_speed_equals_popout(self):
+        # B1 ROI 반폭 계산의 물체 속도는 #2 속도(popout.yaml)의 사본이다
+        popout = load_params(os.path.join(self.cfg, 'popout.yaml'))['/**']
+        self.assertEqual(self.c['b1_object_speed'], popout['v_popout'])
+
     def test_physical_constraints(self):
         self.assertGreaterEqual(self.c['v_imp'], V_MIN)
         self.assertLess(self.c['band_z_max'], BOX_HEIGHT)

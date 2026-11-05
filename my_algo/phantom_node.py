@@ -27,7 +27,9 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 from my_algo.geometry import load_geometry
 from my_algo.perception import decode_grid
-from my_algo.phantom import METHODS, PhantomParams, make_strategy, to_odom
+from my_algo.phantom import (
+    METHODS, PhantomHold, PhantomParams, b1_roi_half_width_auto, make_strategy, nearest_d, to_odom,
+)
 from my_algo.ros_util import default_geometry_path, lookup_pose2d, publish_float, publish_string
 
 
@@ -37,10 +39,11 @@ class PhantomNode(Node):
         defaults = [('method', 'B0'), ('vehicle_geometry_file', ''),
                     ('odom_frame', 'odom'), ('base_frame', 'base_link'),
                     ('roi_x_max', 6.0), ('roi_half_y', 1.5),
-                    ('b1_roi_length', 3.0), ('b1_roi_half_width', 0.35),
-                    ('w_min', 0.35), ('row_y_min', 0.30), ('row_y_max', 1.20),
+                    ('b1_roi_length', 3.0), ('b1_roi_half_width', -1.0),
+                    ('lane_width', 0.7), ('b1_object_speed', 0.8), ('t_r', 0.15), ('v_ref', 2.0), ('a_b', 3.0),
+                    ('w_min', 0.35), ('w_max', 0.50), ('row_y_min', 0.30), ('row_y_max', 1.20),
                     ('row_link_dist', 0.10), ('row_face_tol', 0.10), ('row_end_margin', 0.5),
-                    ('p_lateral_filter', 0.0)]
+                    ('p_lateral_filter', 0.0), ('phantom_hold', True), ('phantom_hold_margin', 0.10)]
         for k, v in defaults:
             self.declare_parameter(k, v)
         gp = lambda k: self.get_parameter(k).value  # noqa: E731
@@ -48,12 +51,19 @@ class PhantomNode(Node):
         if method not in METHODS:
             raise ValueError(f'method must be one of {METHODS}')
         geom = load_geometry(gp('vehicle_geometry_file') or default_geometry_path())
+        b1_half = float(gp('b1_roi_half_width'))
+        if b1_half <= 0.0:      # 자동: 차선 반폭 + 물체 속도 (t_r + v_ref / a_b) (config/common.yaml 근거)
+            b1_half = b1_roi_half_width_auto(gp('lane_width'), gp('b1_object_speed'), gp('t_r'), gp('v_ref'),
+                                             gp('a_b'))
         self.params = PhantomParams(
-            front=geom.rear_axle_to_front,
+            front=geom.rear_axle_to_front, b1_roi_half_width=b1_half,
             **{k: float(gp(k)) for k in ('roi_x_max', 'roi_half_y', 'b1_roi_length',
-                                         'b1_roi_half_width', 'w_min', 'row_y_min', 'row_y_max',
+                                         'w_min', 'w_max', 'row_y_min', 'row_y_max',
                                          'row_link_dist', 'row_face_tol', 'row_end_margin',
                                          'p_lateral_filter')})
+        self.hold_enabled = bool(gp('phantom_hold'))
+        self.hold_margin = float(gp('phantom_hold_margin'))
+        self.hold = None        # 첫 격자에서 칸 크기로 만든다
         self.strategy = make_strategy(method, self.params)
         self.odom_frame, self.base_frame = gp('odom_frame'), gp('base_frame')
         self.buffer = Buffer()
@@ -63,7 +73,9 @@ class PhantomNode(Node):
         self.marker_pub = self.create_publisher(MarkerArray, '/exp/phantoms', 5)
         self.debug_pub = self.create_publisher(String, '/exp/phantom_debug', 5)
         self.create_subscription(OccupancyGrid, '/exp/grid', self.callback, 5)
-        self.get_logger().info(f'phantom 전략 {method}, 앞 끝 {geom.rear_axle_to_front} m')
+        self.get_logger().info(f'phantom 전략 {method}, 앞 끝 {geom.rear_axle_to_front} m, '
+                               f'B1 ROI 반폭 {b1_half:.4f} m, w {self.params.w_min}–{self.params.w_max} m, '
+                               f'유지 {self.hold_enabled} (여유 {self.hold_margin} m)')
 
     def callback(self, msg):
         pose = lookup_pose2d(self.buffer, self.odom_frame, self.base_frame,
@@ -75,6 +87,11 @@ class PhantomNode(Node):
         grid, spec = decode_grid(msg.data, info.width, info.height, info.origin.position.x,
                                  info.origin.position.y, info.resolution)
         res = self.strategy.compute(grid, spec, pose)
+        if self.hold_enabled:
+            if self.hold is None:
+                self.hold = PhantomHold(self.params.front, self.hold_margin, spec.resolution)
+            res.phantoms_base = self.hold.update(res.phantoms_base, pose)
+            res.d = nearest_d(res.phantoms_base, self.params.front)
         publish_float(self.d_pub, res.d)
         publish_float(self.rho_pub, res.rho)
         self.publish_markers(msg.header.stamp, to_odom(res.phantoms_base, pose)

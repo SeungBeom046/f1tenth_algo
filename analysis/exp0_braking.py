@@ -2,14 +2,15 @@
 """Exp0 지연·제동 → a_b, t_r(전체 지연), 정지거리 (평균 ± 95% CI)와 common.yaml 권장값.
 
     python3 analysis/exp0_braking.py ~/exp_logs/20261110                                  # c. 급제동 (E0_*)
-    python3 analysis/exp0_braking.py ~/exp_logs/20261110 --tracking S2_B2_dena_run01 ...   # + i. 추종 지연
+    python3 analysis/exp0_braking.py ~/exp_logs/20261110 --tracking E0_B0_dena_run31 ...   # + i. 추종 지연
 
 t_r 정의 (common.yaml): 관측 → 실제 감속 시작 전체 지연 = 인지 + 통신 + 제어 + 구동 (1차 지연은 등가 지연으로 포함).
     c. 급제동 (E0): a_b, 정지거리, 계단 구동 지연(t_r_step, 참고), 정지거리 등가 지연(t_r_equiv, 참고).
        0 명령 시각 = /exp/stop_reason이 처음 'stop_line'이 된 시각. 계단 명령은 감속이 a_b로 바로 포화돼
        속도 제어의 1차 지연이 거의 드러나지 않으므로 t_r에는 쓰지 않는다.
-    i. 추종 지연 (B2, S2 배치): 명령(/exp/final_cmd)이 v_cap 곡선을 따라 완만히 내려가는 구간에서
-       odom 속도의 등가 지연 = 순수 지연 + 1차 지연 (my_algo.braking.tracking_lag). 통신 + 제어 + 구동.
+    i. 추종 지연 (E0, 방법과 무관한 속도 계단 2.0 → 1.2 m/s, bringup test_step_v:=1.2): 명령(/exp/final_cmd) 계단에
+       대한 odom 속도 응답을 '순수 지연 + 1차 지연 + 감속 한계 a_b' 모델로 맞춘 등가 지연 = 순수 지연 + 1차 지연
+       (my_algo.braking.step_lag). 통신 + 제어 + 구동.
     인지 지연 = 라이다 주기 평균(0.5 / 10 Hz = 50 ms) + 격자 처리 시간(/exp/grid_debug ms 중앙값, 추종 회차에서).
 권장값 (보수적): a_b = 급제동 95% CI 하한, t_r = 인지 지연 + 추종 지연 95% CI 상한.
 """
@@ -23,7 +24,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bag_io import read_bag, stamp  # noqa: E402
 
-from my_algo.braking import braking_metrics, tracking_lag  # noqa: E402
+from my_algo.braking import braking_metrics, step_lag  # noqa: E402
 from my_algo.metrics import mean_ci95, travel_distance  # noqa: E402
 
 LIDAR_HZ = 10.0     # Mid-360 점군 주기 (common.yaml 격자 누적과 같은 가정)
@@ -69,8 +70,8 @@ def one_tracking(run_dir, a_b):
     cmd = [(t, m.data) for t, m in bag.get('/exp/final_cmd', []) if t >= t_auto]
     if len(odom) < 5 or len(cmd) < 5:
         return None
-    r = tracking_lag(np.array([t for t, _ in cmd]), np.array([c for _, c in cmd]),
-                     np.array([t for t, _ in odom]), np.array([m.twist.twist.linear.x for _, m in odom]), a_b)
+    r = step_lag(np.array([t for t, _ in cmd]), np.array([c for _, c in cmd]),
+                 np.array([stamp(m) for _, m in odom]), np.array([m.twist.twist.linear.x for _, m in odom]), a_b)
     if r is None:
         return None
     ms = [json.loads(m.data).get('ms') for _, m in bag.get('/exp/grid_debug', [])]
@@ -85,7 +86,10 @@ def main():
     ap.add_argument('--tracking', nargs='*', default=[], help='i. 추종 지연 회차 폴더 (session_dir 기준 또는 경로)')
     args = ap.parse_args()
     root = args.session_dir
-    runs = [os.path.join(root, d) for d in sorted(os.listdir(root)) if d.startswith('E0_')]
+    # c: E0 회차 중 속도 계단(i, meta test_step_v)이 아닌 것만
+    runs = [os.path.join(root, d) for d in sorted(os.listdir(root))
+            if d.startswith('E0_') and os.path.exists(os.path.join(root, d, 'meta.json'))
+            and not _meta(os.path.join(root, d)).get('test_step_v')]
     results = [r for r in (one(d) for d in runs) if r]
     for r in results:
         print(f'{r["run"]}: v0={r["v0"]:.2f} a_b={r["a_b"]} t_r_step={r["t_r_step"]} '
@@ -104,8 +108,8 @@ def main():
         r = one_tracking(path, a_b)
         if r:
             tracking.append(r)
-            print(f'{r["run"]}: 추종 지연 {r["lag"]:.3f} s (순수 {r["dead"]:.3f} + 1차 {r["tau"]:.3f}, '
-                  f'표본 {r["n"]}, rmse {r["rmse"]:.3f}) 격자 {r["grid_ms_median"]} ms')
+            print(f'{r["run"]}: 계단 {r["v_from"]:.2f}→{r["v_to"]:.2f} 지연 {r["lag"]:.3f} s '
+                  f'(순수 {r["dead"]:.3f} + 1차 {r["tau"]:.3f}, rmse {r["rmse"]:.3f}) 격자 {r["grid_ms_median"]} ms')
     mean, half, n = mean_ci95([r['lag'] for r in tracking])
     summary['tracking_lag'] = {'mean': mean, 'ci95': half, 'n': n}
     ms = [r['grid_ms_median'] for r in tracking if r['grid_ms_median'] is not None]

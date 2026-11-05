@@ -197,8 +197,10 @@ def run_grid(module, frames, overrides):
 def run_phantom(module, grids, method):
     rosstub.set_time(rn, 0.0)
     rn.BUS.clear()
-    # B1 ROI 반폭 기본값은 이후 의도적으로 바꿨다 (1.0 → 0.35). 기준 커밋과 같은 값을 명시해 리팩터만 비교한다
-    node = rosstub.make_node(rn, module.PhantomNode, {'method': method, 'b1_roi_half_width': 1.0})
+    # 이후 의도적으로 바꾼 동작(2026-11-05 결정)은 기준 커밋과 같게 맞춰 리팩터만 비교한다:
+    # B1 ROI 반폭 1.0 고정, phantom 유지 끔. P의 '앞 끝보다 앞쪽 열만'·w_max는 끌 수 없어 P는 비교하지 않는다
+    node = rosstub.make_node(rn, module.PhantomNode, {'method': method, 'b1_roi_half_width': 1.0,
+                                                      'phantom_hold': False})
     out = []
     for msg, T_ob in grids:
         pose = (T_ob[0, 3], T_ob[1, 3], math.atan2(T_ob[1, 0], T_ob[0, 0]))
@@ -246,7 +248,7 @@ def main():
             (a, ga), (b, gb) = run_grid(old_grid, frames, ov), run_grid(new_grid, frames, ov)
             ok &= compare(f'occupancy seed{seed} {ov or "기본"}', a, b)
             total += len(a)
-            for method in ('B0', 'B1', 'B2', 'P'):
+            for method in ('B0', 'B1', 'B2'):     # P는 의도적 동작 변경 (위 주석). 37b8a1f 시점 P 포함 일치 기록
                 pa, pb = run_phantom(old_ph, gb, method), run_phantom(new_ph, gb, method)
                 ok &= compare(f'  phantom {method} seed{seed}', pa, pb)
                 total += len(pa)

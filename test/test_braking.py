@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from my_algo.braking import braking_metrics, equivalent_delay, tracking_lag
+from my_algo.braking import braking_metrics, equivalent_delay, step_lag, tracking_lag
 
 
 class BrakingTest(unittest.TestCase):
@@ -53,6 +53,15 @@ class BrakingTest(unittest.TestCase):
         k0 = int(1.0 / 0.001)
         stop = s[np.flatnonzero((t > 1.0) & (v < 0.01))[0]] - s[k0]
         self.assertLess(equivalent_delay(2.0, stop, 3.0), 0.19)
+
+    def test_step_lag_recovers_dead_time_plus_tau(self):
+        # Exp0 i: 2.0 → 1.2 m/s 계단 (감속 초반은 a_b로 포화). 등가 지연 = t_d + tau
+        step = lambda t: np.where(t < 1.0, 2.0, 1.2)  # noqa: E731
+        for t_d, tau in ((0.15, 0.10), (0.05, 0.05), (0.10, 0.20)):
+            t, u, v = self.lagged(t_d, tau, 3.0, step)
+            r = step_lag(t, u, t[::10], v[::10], 3.0)
+            self.assertAlmostEqual(r['lag'], t_d + tau, delta=0.01, msg=(t_d, tau, r))
+            self.assertAlmostEqual(r['t_step'], 1.0, delta=0.002)
 
 
 if __name__ == '__main__':

@@ -9,7 +9,8 @@ from my_algo.occupancy import (
     FREE, OCCUPIED, UNKNOWN, GridSpec, OccupancyAccumulator, height_band_mask,
     occlusion_boundary, out_of_band_free_ratio, raycast, single_frame_grid,
 )
-from my_algo.phantom import PhantomParams, make_strategy
+from my_algo.phantom import PhantomHold, PhantomParams, b1_roi_half_width_auto, make_strategy, nearest_d
+from my_algo.speed_policy import v_cap
 
 SPEC = GridSpec.from_bounds(-2.0, 10.0, -2.0, 2.0, 0.05)
 LIDAR = (0.13, 0.0)          # base_link 원점 = 뒤축, 에고 시작 위치
@@ -139,6 +140,70 @@ class PhantomTest(unittest.TestCase):
         for m in ('B0', 'B1', 'B2', 'P'):
             make_strategy(m, self.params()).compute(grid, SPEC, POSE)
         self.assertTrue(np.array_equal(grid, before))  # 전략은 격자를 바꾸지 않는다
+
+
+class PhantomRuleTest(unittest.TestCase):
+    """phantom 유지(공통), P 앞쪽 열만, P w_max, B1 ROI 반폭 식."""
+
+    def params(self, **kw):
+        return PhantomParams(front=FRONT, **kw)
+
+    def frame(self, method, segs, ego_x):
+        grid = build_grid(segs, origin=(LIDAR[0] + ego_x, LIDAR[1]))
+        pose = (ego_x, 0.0, 0.0)
+        return make_strategy(method, self.params()).compute(grid, SPEC, pose), pose
+
+    def test_hold_keeps_phantom_when_car_fills_gap(self):
+        cap = dict(t_r=0.25, a_b=3.0, s_m=0.2, v_imp=0.867)
+        for method in ('P', 'B2'):
+            hold = PhantomHold(FRONT, 0.10, SPEC.resolution)
+            # 1) #2가 틈 안 깊이(면에서 0.30 m) 숨어 있음: 틈 입구 phantom이 있다
+            r1, pose1 = self.frame(method, _track.segments(gap=0.45, hidden_car=0.30), 0.0)
+            held1 = hold.update(r1.phantoms_base, pose1)
+            d1 = nearest_d(held1, FRONT)
+            # 2) 에고가 0.2 m 나아가고 #2 앞 끝이 박스 면까지 나와 틈을 채움
+            r2, pose2 = self.frame(method, _track.segments(gap=0.45, hidden_car=0.0), 0.2)
+            gap_x = 3.0 + 0.55 + 0.225 - 0.2          # P1–P2 틈 입구 (base_link, 에고 0.2 m 전진 후)
+            if method == 'P':
+                # 유지 규칙이 없으면 틈이 메워져 입구 phantom이 사라진다 (지키려는 경우가 실제로 생김)
+                self.assertFalse(any(abs(x - gap_x) < 0.06 for x in r2.phantoms_base[:, 0]))
+                self.assertTrue(any(abs(x - (gap_x + 0.2)) < 0.06 for x in r1.phantoms_base[:, 0]))
+            held2 = hold.update(r2.phantoms_base, pose2)
+            self.assertTrue(any(abs(x - gap_x) < 0.06 for x in held2[:, 0]), method)
+            d2 = nearest_d(held2, FRONT)
+            self.assertLessEqual(d2, d1 - 0.2 + 1e-6, method)                  # odom 고정: 전진한 만큼 줄어든다
+            self.assertLessEqual(v_cap(d2, **cap), v_cap(d1, **cap) + 1e-9, method)   # v_cap이 풀리지 않음
+
+    def test_hold_drops_after_front_passes_margin(self):
+        hold = PhantomHold(FRONT, 0.10, SPEC.resolution)
+        hold.update(np.array([[2.0, -0.4]]), (0.0, 0.0, 0.0))                 # odom x = 2.0
+        self.assertEqual(len(hold.update(np.empty((0, 2)), (2.0 - FRONT + 0.05, 0.0, 0.0))), 1)  # 앞 끝 2.05
+        self.assertEqual(len(hold.update(np.empty((0, 2)), (2.0 - FRONT + 0.11, 0.0, 0.0))), 0)  # 앞 끝 2.11
+
+    def test_p_ignores_structures_behind_front(self):
+        # 출발점 뒤 오른쪽에 박스(뒤 벽 같은 구조물). 예전에는 그 박스 ~ P1 사이를 틈으로 보고 중간에 phantom을 뒀다
+        segs = _track.segments(gap=0.45)
+        y0, y1 = _track.BOX_INNER_Y, _track.BOX_INNER_Y - _track.BOX_DEPTH
+        segs += [(-1.0, y0, -0.4, y0), (-1.0, y1, -0.4, y1), (-0.4, y0, -0.4, y1)]
+        r, _ = self.frame('P', segs, 0.0)
+        right = r.phantoms_base[r.phantoms_base[:, 1] < 0]
+        self.assertFalse(any(0.5 < x < 2.9 for x in right[:, 0]))
+        self.assertAlmostEqual(r.d, 3.0 - FRONT, delta=0.06)           # 가장 가까운 것은 P1 시작 끝
+
+    def test_p_wide_space_is_row_end_not_gap(self):
+        r, _ = self.frame('P', _track.segments(gap=1.2, n_boxes=2), 0.0)
+        xs = r.phantoms_base[r.phantoms_base[:, 1] < 0][:, 0]
+        a1, b0 = 3.0 + 0.55, 3.0 + 0.55 + 1.2
+        self.assertFalse(any(abs(x - 0.5 * (a1 + b0)) < 0.1 for x in xs))     # 중간(틈) phantom 없음
+        self.assertTrue(any(abs(x - a1) < 0.06 for x in xs))                  # 앞 열 끝
+        self.assertTrue(any(abs(x - b0) < 0.08 for x in xs))                  # 뒤 열 시작
+        # 0.45 틈은 그대로 틈 (w_max 0.50 이하)
+        r, _ = self.frame('P', _track.segments(gap=0.45), 0.0)
+        self.assertTrue(any(abs(x - 3.775) < 0.06 for x in r.phantoms_base[:, 0]))
+
+    def test_b1_roi_half_width_formula(self):
+        self.assertAlmostEqual(b1_roi_half_width_auto(0.7, 0.8, 0.15, 2.0, 3.0), 0.35 + 0.8 * (0.15 + 2.0 / 3.0))
+        self.assertAlmostEqual(b1_roi_half_width_auto(0.7, 0.8, 0.25, 2.0, 3.0), 0.35 + 0.8 * (0.25 + 2.0 / 3.0))
 
 
 class GeometryTest(unittest.TestCase):

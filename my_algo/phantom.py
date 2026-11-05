@@ -11,7 +11,10 @@ d 정의: 차체 앞 끝에서 phantom의 에고 경로상 진입 지점까지�
     B0  공백 무시. phantom 없음.
     B1  전방 ROI 미관측 칸 비율 rho만 계산 (속도는 speed_policy.b1_speed).
     B2  ROI 안 모든 가림 경계 칸에 phantom.
-    P   측면 주차열(occupied 군집) 사이 틈 폭 >= w_min인 곳의 입구와 주차열 양 끝에만 phantom.
+    P   측면 주차열(앞 끝보다 앞쪽 occupied 군집) 사이 틈 폭 w_min–w_max인 곳의 입구와 주차열 양 끝에만 phantom.
+        w_max보다 넓은 빈 공간은 열 끝으로 본다.
+
+공통 유지 규칙 (PhantomHold, B2·P 같음): 한 번 생긴 phantom은 odom에 고정해 앞 끝이 x + 여유를 지날 때까지 유지.
 """
 
 import math
@@ -24,6 +27,15 @@ from my_algo.occupancy import OCCUPIED, UNKNOWN, occlusion_boundary
 METHODS = ('B0', 'B1', 'B2', 'P')
 
 
+def b1_roi_half_width_auto(lane_width, object_speed, t_r, v_ref, a_b):
+    """B1 ROI 반폭 = 차선 반폭 + 물체 속도 · (t_r + v_ref / a_b).
+
+    에고가 v_ref에서 반응(t_r)해 멈출 때까지(v_ref / a_b) 걸리는 시간 동안 차선 밖 물체가 옆으로 올 수 있는 거리를
+    차선 반폭에 더한다 = 에고가 정지하기 전에 물체가 차선에 도달할 수 있는 범위. 값은 config/common.yaml.
+    """
+    return 0.5 * float(lane_width) + float(object_speed) * (float(t_r) + float(v_ref) / float(a_b))
+
+
 @dataclass
 class PhantomParams:
     """모든 방법이 같은 값을 쓰는 ROI와 방법별 파라미터. 값은 config/common.yaml."""
@@ -31,8 +43,9 @@ class PhantomParams:
     roi_x_max: float = 6.0       # phantom 탐색 앞쪽 한계, base_link x [m] [EXP-FIXED]
     roi_half_y: float = 1.5      # phantom 탐색 좌우 한계 |y| [m] [EXP-FIXED]
     b1_roi_length: float = 3.0   # B1 ROI: 앞 끝부터 길이 [m] [EXP-TUNE]
-    b1_roi_half_width: float = 0.35  # B1 ROI 반폭 [m] [EXP-TUNE] (근거: config/common.yaml)
+    b1_roi_half_width: float = b1_roi_half_width_auto(0.7, 0.8, 0.15, 2.0, 3.0)  # [EXP-TUNE] 근거: common.yaml
     w_min: float = 0.35          # P 최소 틈 폭 [m] [EXP-TUNE]
+    w_max: float = 0.50          # P 최대 틈 폭 [m] [EXP-TUNE]. 넘으면 열 끝
     row_y_min: float = 0.30      # P 주차열로 볼 occupied 칸의 |y| 하한 (차선 안 물체 제외) [m]
     row_y_max: float = 1.20      # P 주차열 |y| 상한 [m]
     row_link_dist: float = 0.10  # P 같은 군집으로 묶는 x 간격 상한 [m]
@@ -141,7 +154,8 @@ class P(Strategy):
     def place(self, res, grid, spec, pose):
         prm = self.params
         occ = cells_base(grid == OCCUPIED, spec, pose)
-        occ = occ[in_roi(occ, prm)]
+        # 주차열은 차체 앞 끝보다 앞쪽 칸으로만 만든다 (출발점 뒤 벽 등 뒤쪽 구조물을 열로 잡지 않게)
+        occ = occ[in_roi(occ, prm) & (occ[:, 0] > prm.front)]
         phantoms = []
         half_cell = 0.5 * spec.resolution
         for side, sign in (('left', 1.0), ('right', -1.0)):
@@ -158,12 +172,17 @@ class P(Strategy):
             for (a0, a1, ay), (b0, b1, by) in zip(clusters, clusters[1:]):
                 width = (b0 - half_cell) - (a1 + half_cell)
                 res.gaps.append((side, 0.5 * (a1 + b0), width))
-                if width >= prm.w_min:
+                if width > prm.w_max:
+                    # 틈이 아니라 열이 끊긴 것: 앞 열 끝과 뒤 열 시작에 phantom (열 끝 규칙과 같음)
+                    phantoms.append((a1 + half_cell, ay))
+                    phantoms.append((b0 - half_cell, by))
+                elif width >= prm.w_min:
                     phantoms.append((0.5 * (a1 + b0), 0.5 * (ay + by)))
             # 주차열 양 끝. ROI 경계에 닿은 끝은 열이 시야 밖으로 이어지는 것이라 끝으로 보지 않는다.
-            # 시작 끝은 항상 넣는다 (앞 끝보다 뒤면 d 계산에서 빠진다).
+            # 시작 끝도 같다: 첫 칸이 앞 끝(열을 자른 곳) 바로 앞이면 열이 차 옆으로 이어지는 것이라 끝으로 보지 않는다.
             first, last = clusters[0], clusters[-1]
-            phantoms.append((first[0] - half_cell, first[2]))
+            if first[0] - half_cell > prm.front + prm.row_link_dist:
+                phantoms.append((first[0] - half_cell, first[2]))
             if last[1] < prm.roi_x_max - prm.row_end_margin:
                 phantoms.append((last[1] + half_cell, last[2]))
         xy = np.array(phantoms, dtype=float).reshape(-1, 2)
@@ -185,6 +204,32 @@ class P(Strategy):
 
 
 STRATEGIES = {'B0': B0, 'B1': B1, 'B2': B2, 'P': P}
+
+
+class PhantomHold:
+    """phantom 유지 (모든 방법 공통 규칙, config/common.yaml phantom_hold·phantom_hold_margin).
+
+    매 프레임 새 phantom을 odom 좌표로 바꿔 기억에 더하고(격자 칸 단위로 중복 제거), 차체 앞 끝이
+    phantom x + margin을 지난 것(base_link x < front - margin)만 지운다. 반환은 기억 전체의 base_link 좌표.
+    """
+
+    def __init__(self, front, margin, cell):
+        self.front, self.margin, self.cell = float(front), float(margin), float(cell)
+        self.mem = {}
+
+    def update(self, phantoms_base, pose):
+        if len(phantoms_base):
+            for x, y in to_odom(np.asarray(phantoms_base, float), pose):
+                self.mem[(int(round(x / self.cell)), int(round(y / self.cell)))] = (float(x), float(y))
+        if not self.mem:
+            return np.empty((0, 2))
+        keys = list(self.mem)
+        base = to_base(np.array([self.mem[k] for k in keys]), pose)
+        keep = base[:, 0] >= self.front - self.margin
+        for k, ok in zip(keys, keep):
+            if not ok:
+                del self.mem[k]
+        return base[keep]
 
 
 def make_strategy(method, params):

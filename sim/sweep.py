@@ -20,7 +20,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-TUNE = ('v_imp', 'w_min', 'n_frames', 'known_on', 'known_off', 'b1_k', 'b1_roi_length', 'b1_roi_half_width',
+TUNE = ('v_imp', 'w_min', 'w_max', 'n_frames', 'known_on', 'known_off', 'b1_k', 'b1_roi_length', 'b1_roi_half_width',
         'row_face_tol')
 
 

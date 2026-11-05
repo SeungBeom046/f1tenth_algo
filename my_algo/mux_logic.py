@@ -20,6 +20,8 @@ class MuxConfig:
     input_timeout: float = 0.3
     stop_distance: float = 7.5
     require_preflight: bool = True
+    step_x: float = 0.0        # Exp0 i 속도 계단: AUTO 후 주행 거리 >= step_x이면 속도를 step_v 이하로 (0 = 끔)
+    step_v: float = 0.0
 
 
 @dataclass
@@ -96,6 +98,9 @@ def tick(cfg, st, inp):
         return MuxOutput(True, 0.0, 0.0, 'stale_steering', aborts)
     # 6. 정상
     st.has_driven = True
+    if cfg.step_v > 0.0 and inp.travel >= cfg.step_x:
+        # Exp0 i: 방법과 무관한 속도 계단 (bringup test_step_v:=, 비교 실험에서는 끔)
+        return MuxOutput(True, min(inp.v_cmd, cfg.step_v), inp.steer, 'speed_step', aborts)
     return MuxOutput(True, inp.v_cmd, inp.steer, '', aborts)
 
 

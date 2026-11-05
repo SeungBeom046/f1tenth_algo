@@ -371,13 +371,14 @@ python3 analysis/odom_travel.py ~/exp_logs/<날짜>/E0_B0_dena_run0{1,2,3} --tap
 ros2 launch my_algo bringup.launch.py mode:=exp method:=B0 scenario:=E0 run_id:=<n>    # c: n = 21..30
 bash $S/record_run.sh exp B0 E0 na <n>
 ```
-i (S2 배치로 박스를 놓고, #2 없음): 명령이 v_cap 곡선을 따라 완만히 내려가는 동안 실측 속도가 얼마나 늦게 따라오는지 잰다.
+i (같은 빈 트랙): 방법과 무관한 속도 계단. mux가 주행 거리 2.5 m에서 명령을 2.0 → 1.2 m/s로 내리고, 실측 속도가 얼마나 늦게 따라오는지 잰다.
 ```bash
-ros2 launch my_algo bringup.launch.py mode:=exp method:=B2 scenario:=S2 run_id:=<n>    # i: n = 31..35
-bash $S/record_run.sh exp B2 S2 na <n>
+ros2 launch my_algo bringup.launch.py mode:=exp method:=B0 scenario:=E0 run_id:=<n> test_step_v:=1.2 test_step_x:=2.5   # i: n = 31..35
+TEST_STEP_V=1.2 bash $S/record_run.sh exp B0 E0 na <n>
 ```
-노트북: `python3 analysis/exp0_braking.py ~/exp_logs/<날짜> --tracking S2_B2_dena_run31 S2_B2_dena_run32 ...`
-→ `exp0_braking.json` 권장값 (a_b = 급제동 CI 하한, **t_r = 인지 지연 + 추종 지연 CI 상한**). i 회차는 비교 실험에 넣지 않는다.
+노트북: `python3 analysis/exp0_braking.py ~/exp_logs/<날짜> --tracking E0_B0_dena_run31 E0_B0_dena_run32 ...`
+→ `exp0_braking.json` 권장값 (a_b = 급제동 CI 하한, **t_r = 인지 지연 + 추종 지연 CI 상한**). i 회차는 meta.json `test_step_v`로
+구분되어 c의 급제동 분석에서 빠진다 (기록할 때 `TEST_STEP_V=1.2`를 꼭 붙일 것). 비교 실험에는 넣지 않는다.
 
 ### 2-6. AEB 단독 정지 (g) — 15분 ⚠ 정지 박스
 빈 트랙, 차선 중앙 x ≈ 5 m에 박스 하나(폼). S2 정지선(7.5 m)보다 앞.

@@ -13,7 +13,7 @@ import yaml
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 CONFIG = os.path.join(ROOT, 'config')
-TUNE_KEYS = ('v_imp', 'w_min', 'n_frames', 'known_on', 'known_off', 'b1_k', 'b1_roi_length',
+TUNE_KEYS = ('v_imp', 'w_min', 'w_max', 'n_frames', 'known_on', 'known_off', 'b1_k', 'b1_roi_length',
              'b1_roi_half_width', 'row_face_tol')
 
 
@@ -65,6 +65,7 @@ class RunConfig:
         self.geometry_path = os.path.join(CONFIG, 'vehicle_geometry.yaml')
         self.sim = load_sim(sim_path)
         self.mount = mount()
+        self.run_extra = {}    # bringup 회차 인자와 같은 것 (Exp0 i test_step_v·test_step_x)
         self.timing = {}       # Sim이 채운다: popout_enter_time, trigger_latency (sim/popout_timing.py)
         if scenario == 'S1' and d_e is None:
             raise ValueError('S1은 d_e가 필요하다')
@@ -81,11 +82,12 @@ class RunConfig:
         p.update({'run_id': str(self.run_id), 'run_dir': '', 'vehicle_geometry_file': self.geometry_path})
         if self.d_e is not None:
             p['d_e'] = float(self.d_e)
+        p.update(self.run_extra)
         p.update(self.tune)
         if node_name == 'exp_drive_mux':
             p.update(self.sim['mux_overrides'])
         to = self.sim.get('timing_overrides', {})
-        if node_name == 'speed_layer_node' and to.get('t_r_eff'):
+        if node_name in ('speed_layer_node', 'phantom_node') and to.get('t_r_eff'):   # phantom_node: B1 ROI 반폭 식
             p['t_r'] = self.t_r_eff()
         if node_name == 'trigger_node' and to.get('popout_from_model') and self.timing:
             p['popout_enter_time'] = float(self.timing['popout_enter_time'])
@@ -106,7 +108,7 @@ class RunConfig:
         return {'method': self.method, 'scenario': self.scenario, 'd_e': self.d_e, 'run_id': self.run_id,
                 'tune': self.tune, 'common': self.common, 'method_params': self.method_p,
                 'scenario_params': self.scenario_p, 'popout': self.popout, 'sim': self.sim,
-                'mount': self.mount, 'timing': self.timing,
+                'mount': self.mount, 'timing': self.timing, 'run_extra': self.run_extra,
                 't_r_eff': self.t_r_eff() if self.sim.get('timing_overrides', {}).get('t_r_eff') else None,
                 'steering_section': self.section('exp_steering_node'),
                 'pointcloud_to_laserscan': self.pointcloud_to_laserscan()}

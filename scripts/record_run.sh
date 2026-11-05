@@ -27,6 +27,7 @@ if [ "$MODE" = exp ]; then
 fi
 
 export TEST_V_REF="${TEST_V_REF:-}"   # bringup test_v_ref:= 를 썼다면 같은 값을 넣는다 (meta.json 기록)
+export TEST_STEP_V="${TEST_STEP_V:-}" # bringup test_step_v:= 를 썼다면 같은 값 (Exp0 i, meta.json 기록)
 RUN_DIR=$(python3 "$HERE/run_meta.py" start "$MODE" "$METHOD" "$SCENARIO" "$DE" "$RUN_ID" | tail -n 1)
 echo "회차 폴더: $RUN_DIR"
 

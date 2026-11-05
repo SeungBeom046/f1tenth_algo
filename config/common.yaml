@@ -12,9 +12,7 @@
   ros__parameters:
     # ---------- 속도 계층 (speed_layer_node, trigger_node) ----------
     v_ref: 2.0              # [EXP-FIXED] 목표 속도. 방법마다 다르면 손실 ΔT의 기준이 달라져 비교 불가
-    t_r: 0.15               # [EXP-FIXED][EXP0-MEASURE] 전체 지연 [s] = 관측 → 실제 감속 시작 (인지 + 통신 + 제어 + 구동,
-                            #   속도 제어 1차 지연은 등가 지연으로 포함). v_cap 식 공통 (B2·P 같은 값).
-                            #   Exp0 c(급제동)·i(추종 지연)로 측정 → analysis/exp0_braking.py (EXPERIMENT_PLAN Exp0)
+    t_r: 0.15               # [EXP-FIXED][EXP0-MEASURE] 관측→실제 감속 시작까지 전체 지연 [s]. 측정 방법은 EXPERIMENT_PLAN Exp0 참고
     a_b: 3.0                # [EXP-FIXED][EXP0-MEASURE] 최대 감속 [m/s^2]. v_cap 식 공통. Exp0에서 /imu로 측정
     s_m: 0.2                # [EXP-FIXED] 정지 여유 [m]. v_cap 식 공통
     v_imp: 0.867            # [EXP-TUNE] 허용 충돌속도 [m/s]. 하한 = V_MIN(=4000/4614=0.867, 플랫폼 최소 안정 속도).
@@ -48,13 +46,19 @@
     roi_x_max: 6.0          # [EXP-FIXED] phantom 탐색 앞쪽 한계 (base_link x) [m]
     roi_half_y: 1.5         # [EXP-FIXED] phantom 탐색 좌우 한계 [m]
     b1_roi_length: 3.0      # [EXP-TUNE] B1 ROI 길이 (앞 끝부터) [m]. 권장 2–4
-    b1_roi_half_width: 0.35 # [EXP-TUNE] B1 ROI 반폭 [m]. 기본값은 결과와 무관한 트랙 기준으로 정한다:
-                            #   반폭 = 차선 중앙 ~ 트랙 구조물(좌측 벽 패널, 주차 박스) 차선 쪽 면 거리
-                            #        = 차선 폭 0.7 / 2 + 갓길(차선 경계 ~ 구조물 면, 계획서상 붙어 있음 = 0) = 0.35
-                            #   구조물 안·뒤 칸은 차가 들어갈 수 없고 늘 미관측이라 rho가 가림이 아니라 구조물을 재게 된다.
-                            #   좌우 갓길이 다르면 작은 쪽. 트랙 마킹 후 갓길 실측해 교체 (target_wall_distance의 w_off와 같은 값).
-                            #   민감도 0.6 / 0.8 / 1.0 (EXPERIMENT_PLAN 7절, sim/sweep.py --b1-roi-half-width)
+    b1_roi_half_width: -1.0 # [EXP-TUNE] B1 ROI 반폭 [m]. -1 = 자동: phantom.b1_roi_half_width_auto로 아래 값에서 계산
+                            #   반폭 = lane_width / 2 + b1_object_speed · (t_r + v_ref / a_b)
+                            #   = "에고가 정지하기 전에 차선 밖 물체가 차선에 도달할 수 있는 범위" (t_r + v_ref/a_b = v_ref에서
+                            #   반응해 멈출 때까지 시간, 그동안 물체가 옆으로 오는 거리). 기본값 계산: 0.35 + 0.8·(0.15 + 2.0/3.0)
+                            #   양수를 주면 그 값을 쓴다 (민감도 0.6 / 0.8 / 1.0, EXPERIMENT_PLAN 7절)
+    lane_width: 0.7         # [EXP-FIXED][EXP0-MEASURE] 차선 폭 [m] (계획서). B1 ROI 반폭 계산 입력. 트랙 마킹 후 실측
+    b1_object_speed: 0.8    # [EXP-FIXED] B1 ROI 계산의 돌출 물체 속도 [m/s] = config/popout.yaml v_popout 사본
+                            #   (test_config_consistency가 일치 확인. v_popout을 바꾸면 같이 바꾼다)
     w_min: 0.35             # [EXP-TUNE] P 최소 틈 폭 [m]. 돌출 차량 폭 0.30 + 여유. 권장 0.25–0.45
+    w_max: 0.50             # [EXP-TUNE] P 최대 틈 폭 [m]. 이보다 넓은 빈 공간은 틈이 아니라 열 끝으로 본다
+                            #   (앞 열 끝·뒤 열 시작에 phantom). 근거: 주차열의 틈은 차 한 대가 들어갈 수 없는 폭이고,
+                            #   차 한 대 길이(#2 0.50, 실측 대상) 이상 빈 공간은 주차 칸이 비어 열이 끊긴 것.
+                            #   틈 폭을 넓게 잘못 재면 열 끝(더 보수적) 쪽으로 틀린다. 민감도 0.40 (2 s_m) / 0.50 / 1.17 (v_ref 정지거리)
     row_y_min: 0.30         # [EXP-FIXED] P 주차열로 보는 occupied 칸의 |y| 범위 [m]
     row_y_max: 1.20
     row_link_dist: 0.10     # [EXP-FIXED] P 같은 열로 묶는 x 간격 [m]
@@ -63,6 +67,13 @@
                             #   작으면 면 노이즈로 열이 끊겨 가짜 틈, 크면 숨은 물체가 틈을 메움. 권장 0.05 / 0.10 / 0.15
     row_end_margin: 0.5     # [EXP-FIXED] ROI 앞 경계 이 거리 안에서 끝나는 열은 끝으로 보지 않음 [m]
     p_lateral_filter: 0.0   # [EXP-FIXED] P 선택 필터 (|y| 상한, 0 = 끔)
+    phantom_hold: true      # [EXP-FIXED] phantom 유지 (B2·P 공통 규칙): 한 번 생긴 phantom은 odom 좌표에 고정해
+                            #   에고 앞 끝이 그 x + phantom_hold_margin을 지날 때까지 유지한다. 근거: 틈에 숨은 물체가 나오기
+                            #   시작하면 그 물체가 틈을 메워(P) 또는 경계를 바꿔(B2) phantom이 사라지는데, 바로 그때가 가장 위험하다.
+                            #   방법별 차이는 배치 규칙에만 두고 유지 규칙은 같게 한다
+    phantom_hold_margin: 0.10 # [EXP-FIXED] 유지 여유 [m] = 격자 2칸. phantom 위치는 격자 칸(0.05)으로 양자화되고 프레임마다
+                            #   한 칸쯤 흔들리므로, 앞 끝이 막 지난 phantom을 지웠다가 같은 자리에 다시 만들지 않게 2칸 더 둔다.
+                            #   앞 끝보다 뒤의 phantom은 d 계산에서 빠지므로 이 값은 v_cap에 영향이 없다
 
     # ---------- AEB (exp_aeb_node) — 값은 lidar_drive.launch.py(drive 모드)와 같다 ----------
     aeb_ttc_threshold: 0.55             # [EXP-FIXED] 방법마다 다르면 안전 결과를 비교할 수 없음

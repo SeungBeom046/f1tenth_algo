@@ -117,3 +117,56 @@ def tracking_lag(t_cmd, v_cmd, t_v, v, a_b, max_dead=0.4, max_tau=0.4, dt=0.01, 
                 best = (e, t_d, tau, n)
     e, t_d, tau, n = best
     return {'lag': float(t_d + tau), 'dead': float(t_d), 'tau': float(tau), 'n': n, 'rmse': math.sqrt(e)}
+
+
+def step_lag(t_cmd, v_cmd, t_v, v, a_b, a_max=None, window=1.5, dt=0.005, min_drop=0.2):
+    """속도 계단 명령(예: 2.0 → 1.2 m/s, Exp0 i)에 대한 등가 지연 [s] = 순수 지연 t_d + 1차 지연 τ.
+
+    명령이 처음 min_drop 넘게 떨어진 시각부터 window 동안, 실측 속도를
+    'v' = clip((u(t - t_d) - v) / τ, -a_b, a_max)' (u = 영차 유지 명령, 시작값 = 그 시각 실측 속도)로 맞추는
+    (t_d, τ)를 격자로 찾는다 (0.01 → 0.002 s). 감속 한계 a_b(Exp0 c 값)로 포화되는 구간도 모델에 들어 있어
+    계단이 커도 τ를 분리할 수 있다. v_cap 식의 등가 지연은 t_d + τ (tracking_lag와 같은 계).
+    반환 {'lag', 'dead', 'tau', 'rmse', 't_step', 'v_from', 'v_to'} 또는 None.
+    """
+    t_cmd, v_cmd, t_v, v = (np.asarray(x, float) for x in (t_cmd, v_cmd, t_v, v))
+    drop = np.flatnonzero(np.diff(v_cmd) < -min_drop)
+    if len(drop) == 0 or len(t_v) < 5:
+        return None
+    k = drop[0] + 1
+    t_step = float(t_cmd[k])
+    tg = np.arange(t_step, min(t_step + window, t_v[-1], t_cmd[-1]), dt)
+    if len(tg) < 20:
+        return None
+    vg = np.interp(tg, t_v, v)
+    a_up = math.inf if a_max is None else float(a_max)
+
+    def u_at(times):
+        i = np.searchsorted(t_cmd, times, side='right') - 1
+        return v_cmd[np.clip(i, 0, len(v_cmd) - 1)]
+
+    def err(t_d, tau):
+        u = u_at(tg - t_d)
+        y = np.empty_like(tg)
+        y[0] = vg[0]
+        lo, hi = -a_b * dt, a_up * dt
+        alpha = 1.0 if tau <= 0 else 1.0 - math.exp(-dt / tau)
+        for i in range(1, len(tg)):
+            dv = (u[i - 1] - y[i - 1]) * alpha
+            y[i] = y[i - 1] + min(hi, max(lo, dv))
+        return float(np.mean((y - vg) ** 2))
+
+    best = (math.inf, 0.0, 0.0)
+    for t_d in np.arange(0.0, 0.401, 0.01):
+        for tau in np.arange(0.0, 0.401, 0.01):
+            e = err(t_d, tau)
+            if e < best[0]:
+                best = (e, t_d, tau)
+    _, d0, tau0 = best
+    for t_d in np.arange(max(0.0, d0 - 0.01), d0 + 0.0101, 0.002):
+        for tau in np.arange(max(0.0, tau0 - 0.01), tau0 + 0.0101, 0.002):
+            e = err(t_d, tau)
+            if e < best[0]:
+                best = (e, t_d, tau)
+    e, t_d, tau = best
+    return {'lag': float(t_d + tau), 'dead': float(t_d), 'tau': float(tau), 'rmse': math.sqrt(e),
+            't_step': t_step, 'v_from': float(v_cmd[k - 1]), 'v_to': float(v_cmd[k])}

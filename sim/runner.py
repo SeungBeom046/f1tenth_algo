@@ -82,6 +82,8 @@ class Sim:
         self.args = args
         tune = {k: getattr(args, k) for k in simconfig.TUNE_KEYS}
         self.cfg = cfg = simconfig.RunConfig(args.method, args.scenario, args.d_e, args.seed, tune)
+        if getattr(args, 'test_step_v', None):        # Exp0 i 속도 계단 (bringup test_step_v:= 와 같음)
+            cfg.run_extra.update(test_step_v=float(args.test_step_v), test_step_x=float(args.test_step_x))
         for w in check_layout(cfg.scenario_p):
             print(f'경고: 트랙 배치 불일치 (계산값 사용): {w}', file=sys.stderr)
         self.geom = load_geometry(cfg.geometry_path)
@@ -431,6 +433,9 @@ def parse(argv=None):
     ap.add_argument('--out-dir', default=None, help='회차 폴더를 직접 지정')
     ap.add_argument('--tag', default='')
     ap.add_argument('--viewer', action='store_true', help='대화형 뷰어 (macOS: mjpython으로 실행)')
+    ap.add_argument('--test-step-v', type=float, default=None,
+                    help='Exp0 i 전용: 주행 거리 --test-step-x에서 속도 명령을 이 값으로 계단처럼 내림 (보통 E0, B0)')
+    ap.add_argument('--test-step-x', type=float, default=2.5)
     ap.add_argument('--viewer-max-points', type=int, default=4000,
                     help='뷰어에 그릴 라이다 점 수 상한 (표시용 솎아내기, 알고리즘 입력은 그대로)')
     ap.add_argument('--video', action='store_true', help='위에서 본 영상 mp4 저장')

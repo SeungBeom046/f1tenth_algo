@@ -52,7 +52,7 @@ class ExpDriveMux(Node):
                     ('rate_hz', 50.0), ('joy_timeout', 0.5), ('require_joy', True),
                     ('aeb_latch', True), ('input_timeout', 0.3), ('max_steering', 0.78),
                     ('stop_distance', 7.5), ('start_autonomous', False), ('run_dir', ''),
-                    ('require_preflight', True)]
+                    ('require_preflight', True), ('test_step_x', 0.0), ('test_step_v', 0.0)]
         for k, v in defaults:
             self.declare_parameter(k, v)
         gp = lambda k: self.get_parameter(k).value  # noqa: E731
@@ -67,7 +67,8 @@ class ExpDriveMux(Node):
         self.preflight_ok = False
         # 판단은 my_algo/mux_logic.py (시뮬과 같은 함수)
         self.cfg = MuxConfig(self.joy_timeout, self.require_joy, self.aeb_latch, self.input_timeout,
-                             self.stop_distance, self.require_preflight)
+                             self.stop_distance, self.require_preflight,
+                             float(gp('test_step_x')), float(gp('test_step_v')))   # Exp0 i 전용 (기본 끔)
         self.state = MuxState()
 
         self.auto_mode = bool(gp('start_autonomous'))

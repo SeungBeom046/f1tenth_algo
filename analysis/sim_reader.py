@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
 from my_algo import metrics as M  # noqa: E402
-from my_algo.braking import tracking_lag  # noqa: E402
+from my_algo.braking import step_lag, tracking_lag  # noqa: E402
 from my_algo.track_layout import from_params as layout_from_params  # noqa: E402
 
 
@@ -82,6 +82,10 @@ def compute(run_dir):
         r = tracking_lag(t, z['final_cmd'][auto], t, v, float(cfg['common']['a_b']))
         if r and r['n'] >= 20:
             out['tracking_lag'], out['tracking_lag_dead'], out['tracking_lag_tau'] = r['lag'], r['dead'], r['tau']
+    if (cfg.get('run_extra') or {}).get('test_step_v'):
+        # Exp0 i 시뮬판: 실차 exp0_braking.py와 같은 함수 (계단 응답 → 순수 + 1차 지연)
+        r = step_lag(t, z['final_cmd'][auto], t, v, float(cfg['common']['a_b']))
+        out['step_lag'] = r
     out['t_r_eff'] = cfg.get('t_r_eff')
     out['sim_popout_enter_time'] = (cfg.get('timing') or {}).get('popout_enter_time')
     out['v_imp'] = float(meta['config']['tune'].get('v_imp', cfg['common']['v_imp']))

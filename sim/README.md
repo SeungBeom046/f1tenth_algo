@@ -88,9 +88,16 @@ python sim/video.py sim_logs/20261105/S1_P_de1.0_seed00                 # 이미
 python sim/runner.py --method P --scenario S3 --w-min 0.30
 python sim/sweep.py --scenarios S1 S3 --methods P --w-min 0.25 0.35 0.45 --d-e 1.5 --name wmin      # 값마다 별도 회차
 python sim/sweep.py --methods B1 --b1-roi-half-width 0.6 0.8 1.0 --seeds 0 1 2 --name b1roi
+python sim/sweep.py --methods P --w-max 0.40 0.50 1.17 --seeds 0 1 2 --name wmax
 ```
 
-덮어쓸 수 있는 것: `--v-imp --w-min --n-frames --known-on --known-off --b1-k --b1-roi-length --b1-roi-half-width --row-face-tol`.
+Exp0 i(추종 지연)의 시뮬판: 방법과 무관한 속도 계단. `analysis/metrics.json`의 `step_lag`에 실차 `exp0_braking.py`와 같은 함수 결과가 남는다.
+
+```bash
+python sim/runner.py --method B0 --scenario E0 --test-step-v 1.2 --test-step-x 2.5
+```
+
+덮어쓸 수 있는 것: `--v-imp --w-min --w-max --n-frames --known-on --known-off --b1-k --b1-roi-length --b1-roi-half-width --row-face-tol`.
 
 ## 3. 대화형 뷰어
 
@@ -202,6 +209,7 @@ sim_logs/                                  (git 제외)
 | 최대 가속 a_max | 2.5 m/s² | 가정 | `sim.yaml` `vehicle.a_max` (E0 가속 구간 odom) |
 | 조향 변화율 | 6 rad/s | 가정 | `sim.yaml` `vehicle.steer_rate` |
 | 순수 구동 지연, 최대 감속 | t_r 0.15 s, a_b 3.0 | `common.yaml` [EXP0-MEASURE] | Exp0 c·i → `common.yaml` (실차와 공유) |
+| B1 ROI 반폭 | 식 = 0.35 + 0.8·(t_r_eff + 2/3) ≈ 1.083 m | common.yaml `b1_roi_half_width: -1` (자동) | `lane_width`, `b1_object_speed`, t_r, a_b (실차와 공유) |
 | v_cap에 넣는 t_r | t_r + τ = 0.25 s | 1차 지연의 등가 지연 ([SIMULATION.md](../docs/SIMULATION.md)) | `sim.yaml` `timing_overrides.t_r_eff` |
 | #2 진입 시간, 트리거 지연 | 0.556 s(#2 모델에서 계산), 0 | 시뮬 #2 모델 | 자동 (`timing_overrides.popout_from_model`) |
 | 라이다 | 20000 광선/프레임, 10 Hz, 수직 −7°–52°, 비반복(시드), 거리 노이즈 0 | Mid-360 근사 | `sim.yaml` `lidar` |

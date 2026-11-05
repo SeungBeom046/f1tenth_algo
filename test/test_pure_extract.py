@@ -31,6 +31,17 @@ class MuxLogicTest(unittest.TestCase):
         self.assertEqual((out.send, out.speed, out.steering, out.reason), (True, 1.5, 0.1, ''))
         self.assertTrue(st.has_driven)
 
+    def test_speed_step_for_exp0_i(self):
+        cfg = MuxConfig(step_x=2.5, step_v=1.2)
+        before = tick(cfg, MuxState(), inputs(v_cmd=2.0, travel=2.4))
+        after = tick(cfg, MuxState(), inputs(v_cmd=2.0, travel=2.6))
+        self.assertEqual((before.speed, before.reason), (2.0, ''))
+        self.assertEqual((after.speed, after.reason), (1.2, 'speed_step'))
+        # 기본(끔)은 영향 없음, 정지선이 계단보다 우선
+        self.assertEqual(tick(MuxConfig(), MuxState(), inputs(v_cmd=2.0, travel=2.6)).speed, 2.0)
+        self.assertEqual(tick(MuxConfig(stop_distance=2.0, step_x=1.0, step_v=1.2), MuxState(),
+                              inputs(v_cmd=2.0, travel=2.6)).reason, 'stop_line')
+
     def test_manual_sends_once_then_silent(self):
         st = MuxState()
         tick(MuxConfig(), st, inputs())
