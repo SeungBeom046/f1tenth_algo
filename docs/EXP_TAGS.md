@@ -127,7 +127,7 @@
 | [my_algo/speed_policy.py:56](../my_algo/speed_policy.py#L56) | `"""목표 속도를 플랫폼이 낼 수 있는 속도로 바꾼다. 모든 방법에 같은 정책을 쓴다. [EXP-FIXED]` |
 | [my_algo/trigger_node.py:18](../my_algo/trigger_node.py#L18) | `v_ref [EXP-FIXED] (config/common.yaml)` |
 
-## [EXP-TUNE] 민감도 분석 대상 — bringup 인자로 덮어쓰기 허용 (32개)
+## [EXP-TUNE] 민감도 분석 대상 — bringup 인자로 덮어쓰기 허용 (30개)
 
 | 위치 | 내용 |
 |---|---|
@@ -156,15 +156,13 @@
 | [my_algo/phantom.py:53](../my_algo/phantom.py#L53) | `row_face_tol: float = 0.10   # [EXP-TUNE] P 주차열 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m].` |
 | [my_algo/speed_layer_node.py:13](../my_algo/speed_layer_node.py#L13) | `v_imp, b1_k                 [EXP-TUNE] (v_imp 하한 = V_MIN)` |
 | [my_algo/speed_policy.py:10](../my_algo/speed_policy.py#L10) | `[EXP-TUNE]    v_imp (하한 = v_min), k` |
-| [sim/README.md:85](../sim/README.md#L85) | `[EXP-TUNE] 값만 덮어쓸 수 있다 (실차 bringup 인자와 같은 이름). 다른 값을 바꾸려 하면 오류가 난다.` |
-| [sim/README.md:192](../sim/README.md#L192) | `- sweep의 [EXP-TUNE] 값이 여러 개면 표는 값을 합쳐서 낸다. 값별 비교는 회차 폴더 이름 꼬리표로 나눠 본다.` |
-| [sim/README.md:269](../sim/README.md#L269) | `\| `[EXP-TUNE]가 아닌 값은 바꿀 수 없다` \| 덮어쓸 수 있는 값은 2절 목록뿐. 다른 값은 config 파일 (실차와 공유)이나 `sim.yaml` \|` |
+| [sim/README.md:66](../sim/README.md#L66) | `python sim/sweep.py --methods P --w-min 0.25 0.35 0.45 --name wmin     # [EXP-TUNE] 덮어쓰기 (값마다 별도 회차)` |
 | [sim/runner.py:6](../sim/runner.py#L6) | `sim/.venv/bin/python sim/runner.py --method P --scenario S3 --w-min 0.30 --video         # [EXP-TUNE] + 위에서 본 영상` |
 | [sim/runner.py:445](../sim/runner.py#L445) | `ap.add_argument('--' + k.replace('_', '-'), dest=k, type=typ, default=None, help='[EXP-TUNE]')` |
 | [sim/simconfig.py:4](../sim/simconfig.py#L4) | `< 회차 값(d_e, run_id) < [EXP-TUNE] 인자 < 시뮬 전용(sim.yaml mux_overrides·timing_overrides, 지오메트리 파일 경로).` |
 | [sim/simconfig.py:59](../sim/simconfig.py#L59) | `raise ValueError(f'[EXP-TUNE]가 아닌 값은 바꿀 수 없다: {sorted(bad)}')` |
 
-## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (40개)
+## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (39개)
 
 | 위치 | 내용 |
 |---|---|
@@ -206,5 +204,4 @@
 | [my_algo/speed_policy.py:11](../my_algo/speed_policy.py#L11) | `[EXP0-MEASURE] t_r, a_b` |
 | [my_algo/trigger_node.py:17](../my_algo/trigger_node.py#L17) | `trigger_latency, popout_enter_time [EXP0-MEASURE] (config/common.yaml)` |
 | [scripts/measure_lidar_height.py:2](../scripts/measure_lidar_height.py#L2) | `"""평평한 바닥에서 라이다 원점 높이와 장착 roll/pitch를 측정한다. [EXP0-MEASURE]` |
-| [sim/README.md:211](../sim/README.md#L211) | `\| 순수 구동 지연, 최대 감속 \| t_r 0.15 s, a_b 3.0 \| `common.yaml` [EXP0-MEASURE] \| Exp0 c·i → `common.yaml` (실차와 공유) \|` |
 | [sim/config/sim.yaml:54](../sim/config/sim.yaml#L54) | `#   trigger_latency = 0 (시뮬 /trigger 전달 지연 없음). 실차 값은 Exp0까지 [EXP0-MEASURE] 유지` |
