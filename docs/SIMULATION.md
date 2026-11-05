@@ -1,35 +1,13 @@
-# MuJoCo 시뮬레이션 (Mac, ROS 없음)
+# MuJoCo 시뮬레이션 — 구조, 설계 근거, 검증
 
-실차 전에 파이프라인 버그를 잡고, 민감도(w_min, v_imp, N)를 미리 훑고, RQ4 기준선(노이즈 없는 가림)을 얻는 용도다.
+실차 전에 파이프라인 버그를 잡고, 민감도(w_min, v_imp, N, B1 ROI)를 미리 훑고, RQ4 기준선(노이즈 없는 가림)을 얻는 용도다.
 브랜치 `sim/mujoco`. 실차 exp 노드 클래스를 가짜 rclpy(`sim/rosstub.py`) 위에서 **그대로** 실행하므로
 시뮬 결과는 실차 코드의 결과다 (알고리즘 재구현 없음).
 
-## 1. 설치
+**설치·실행·뷰어 키·출력 파일·파라미터 표·알 수 있는 것/없는 것·시뮬 전용 차이·문제 해결은 [sim/README.md](../sim/README.md)** 에 있다.
+이 문서는 내부 구조와 시뮬 전용 값의 근거, 검증만 다룬다. 시뮬에서 드러난 설계 문제는 [OPEN_ITEMS 9–10절](OPEN_ITEMS.md).
 
-```bash
-cd <my_algo 레포>
-bash sim/setup_env.sh        # sim/.venv 생성(Homebrew python3.12, arm64) + 고정 버전 설치 + 점검. 다시 실행해도 안전
-```
-- 고정 버전 (`sim/requirements.txt`): mujoco 3.12.0, numpy 2.5.4, PyYAML 6.0.3, matplotlib 3.11.2, imageio 2.38.1 (+ffmpeg 0.8.1).
-- 시스템 Python·Homebrew·conda는 건드리지 않는다. conda Python이 PATH 앞에 있어도 항상 `sim/.venv/bin/python`, `sim/.venv/bin/mjpython`을 경로로 부른다.
-- 점검만: `sim/.venv/bin/python sim/check_env.py` (mujoco 버전, mjpython, 순수 모듈 import, 오프스크린 렌더).
-
-## 2. 실행
-
-| 터미널 | 명령 | 결과 |
-|---|---|---|
-| 배치 1회 | `sim/.venv/bin/python sim/runner.py --method P --scenario S1 --d-e 1.5 --seed 0` | 실시간보다 빠름 (시뮬 5 s ≈ 벽시계 4 s) |
-| 대화형 뷰어 | `sim/.venv/bin/mjpython sim/runner.py --method P --scenario S3 --viewer` | **macOS는 반드시 mjpython**. 실시간 속도 |
-| 위에서 본 영상 | `... runner.py ... --video` 또는 `sim/.venv/bin/python sim/video.py <run_dir>` | `<run_dir>/topdown.mp4` (격자·경계·phantom·차량·v_cap) |
-| 민감도 1회 | `... runner.py --method P --scenario S3 --w-min 0.30` | [EXP-TUNE] 값만 바꿀 수 있다 (`--v-imp --n-frames --known-on --known-off --b1-k --b1-roi-length --b1-roi-half-width --row-face-tol`) |
-| 일괄 | `sim/.venv/bin/python sim/sweep.py --seeds 0 1 2` | S1(1.0/1.5/2.0) + S2–S4 × 4방법 × 시드, 병렬. 요약 표·그림 5·6 |
-| 민감도 일괄 | `sim/.venv/bin/python sim/sweep.py --scenarios S1 S3 --methods P --w-min 0.25 0.35 0.45 --d-e 1.5 --name wmin` | 값마다 별도 회차 |
-| 조향 비교 | `... --steering simple` | 시뮬 전용 단순 조향 (기본은 실차 exp_steering_node) |
-| 시뮬 테스트 | `sim/.venv/bin/python -m unittest discover -s sim/tests` | 라이다 해석해, scan 규칙, 박스 위 빔, 정지거리, 최소 ERPM |
-
-노드 상태 출력은 기본으로 숨긴다 (`--verbose`로 보기).
-
-## 3. 구조
+## 1. 구조
 
 ```
 라이다(mj_multiRay, 10 Hz) ─/livox/lidar─> occupancy_grid_node ─/exp/grid─> phantom_node ─/exp/phantom_d,/exp/rho─> speed_layer_node ─/exp/v_cmd─┐
@@ -48,83 +26,33 @@ bash sim/setup_env.sh        # sim/.venv 생성(Homebrew python3.12, arm64) + �
 | `sim/vehicle.py` | 뒤축 기준 운동학 자전거 모델. 명령은 `mux_logic.to_vesc`(최소 4000 ERPM) → ERPM·서보 → m/s·조향각. t_r 지연 + 1차 지연 τ + 가속 a_max·감속 a_b 제한 |
 | `sim/lidar.py` | Mid-360 근사, 2D scan 생성 |
 | `sim/runner.py` | 노드 생성, 토픽 라우팅, 고정 스텝 루프, 저장 |
+| `sim/popout_timing.py` | 시뮬 #2 모델의 진입 시간 (Exp0 f와 같은 측정) → 시뮬 trigger_node 값 |
+| `sim/viewer_ui.py` | 대화형 뷰어 오버레이·재생 제어. 스텝 뒤 상태를 읽기만 한다 |
 | `sim/sweep.py`, `sim/video.py` | 일괄 실행·그림, 영상 |
 | `analysis/sim_reader.py` | 시뮬 로그 → `my_algo.metrics`로 실차와 같은 키의 `metrics.json`·`speed_vs_s.csv` (`summarize.py`·`plots.py`가 그대로 읽음) |
 
-한 스텝(기본 dt 0.01 s): 차량 갱신 → /vesc/odom → (0.1 s마다) 라이다 점군·scan → 노드 타이머(50 Hz 등) → mux 명령 → 차량.
+한 스텝(기본 dt 0.01 s): 차량 갱신 → /vesc/odom → (0.1 s마다) 라이다 점군·scan → 노드 타이머(50 Hz 등) → mux 명령 → 차량
+→ 기록 → (뷰어면) 그리기·대기. 뷰어는 마지막 단계에서 상태를 읽기만 하므로 배치와 결과가 같다 ([sim/README.md 3절](../sim/README.md#3-대화형-뷰어)).
 
-## 4. 로그
-
-```
-sim_logs/YYYYMMDD/<scenario>_<method>_de<d_e>_seed<NN>[_<tag>]/          (sweep은 sim_logs/YYYYMMDD/sweep_<name>/ 아래)
-  log.npz        스텝별: t, x, y, yaw, v(실제), steer, s(AUTO 후 주행 거리), final_cmd(보낸 속도), v_cmd(정책 후),
-                 v_raw(min(v_ref, v_cap), 명령 기준 손실용), v_cap, d, rho, aeb, stop_reason, flag(최소 속도 정책),
-                 car2_x/y/v, dist_car2(footprint 다각형 거리), dist_static
-                 프레임별: frame_t, phantoms_xy/phantoms_frame, boundary_xy/boundary_frame (RQ4 기준선)
-  grids.npz      프레임별 발행 격자 (g0000...) + origin
-  meta.json      설정 전체(common/method/scenario/popout/sim.yaml/장착값), git hash·dirty, mujoco 버전, 시드,
-                 이벤트(/trigger, /exp/aeb_event, /exp/abort, /popout/status), 월드 박스, 시뮬 전용 차이 목록
-  analysis/metrics.json, speed_vs_s.csv   실차와 같은 지표 키 (+ d_e_actual, car2_enter_after_trigger_s, static_contact)
-  topdown.mp4    (--video)
-```
-`sim_logs/`와 `sim/.venv/`는 git에 넣지 않는다.
-
-## 5. 시뮬 파라미터 (`sim/config/sim.yaml`)
-
-| 키 | 기본 | 의미 |
-|---|---|---|
-| sim.dt / max_time / auto_start_time | 0.01 / 15 / 0.3 s | 고정 스텝, 회차 최대 시간, AUTO 진입 시각 |
-| track.start_x / end_x | −0.6 / 9.0 m | 뒤 벽, 방호벽 (가정) |
-| track.lane_width, left_wall_offset | 0.7, 0.0 | 차선, 좌측 벽 위치 (common.yaml target_wall_distance 0.355와 같은 가정) |
-| track.box_depth / box_height / box_offset_from_lane | 0.30 / 0.35 / 0.0 | 박스 치수 (길이는 scenario yaml `box_len`) |
-| track.left_wall_height, right_wall_height, track_width | 0.5, 0.35, 2.5 | 가정 |
-| car2.length / width / rear_overhang / height | 0.50 / 0.30 / 0.09 / 0.25 | #2 치수 (길이·높이 가정) |
-| vehicle.tau / a_max / steer_rate | 0.10 s / 2.5 / 6 rad/s | 종방향 1차 지연, 최대 가속, 조향 변화율 (가정). t_r·a_b는 common.yaml |
-| lidar.rays_per_frame / pattern / range_noise_std | 20000 / nonrepetitive / 0.0 | 광선 수, 패턴(시드 고정 무작위 / 격자), 거리 노이즈(0 = RQ4 기준선) |
-| timing_overrides.t_r_eff | true | speed_layer_node t_r = common t_r 0.15 + τ 0.10 = **0.25** (1차 지연의 등가 지연, 아래) |
-| timing_overrides.popout_from_model | true | trigger_node popout_enter_time = 시뮬 #2 모델 값(**0.556 s**, `sim/popout_timing.py`), trigger_latency = 0 |
-| mux_overrides | require_joy false, require_preflight false | 시뮬에서만 끔 |
-
-실차 값(v_ref, t_r, a_b, s_m, v_imp, AEB 임계값, 격자, 조향 게인 ...)은 `config/*.yaml`을 그대로 쓴다. 시뮬이 바꾸는 것은 위 표뿐이다.
+## 2. 시뮬 전용 시간 값의 근거 (`sim.yaml` `timing_overrides`)
 
 **t_r_eff = t_r + τ의 근거.** t_r은 '관측 → 실제 감속 시작 전체 지연'이다 (EXPERIMENT_PLAN 2절). 시뮬 차량은 명령을 순수 지연
 t_r(0.15 s) 뒤에 받아 1차 지연 τ(0.10 s)로 따라간다. 1차 지연 계는 기울기 a로 내려가는 명령에 대해 정상 상태에서 v(t) = u(t − τ)이므로
 (오차 a·τ = 시간 지연 τ), v_cap처럼 완만히 내려가는 상한을 따라갈 때 순수 지연 τ와 같다. 그래서 v_cap 식에는 t_r + τ를 넣는다.
 확인: 시뮬 S2 회차에 실차 Exp0 i와 같은 함수(`braking.tracking_lag`)를 쓰면 0.268 s (순수 0.146 + 1차 0.122)가 나온다
 (`metrics.json` `tracking_lag`). 계단 급제동은 감속이 a_b로 바로 포화돼 τ가 거의 안 보인다 (`test_braking.test_step_braking_hides_tau`).
-시뮬의 인지 지연(라이다 10 Hz 주기)은 t_r_eff에 넣지 않았다 (지시대로 t_r + τ만).
+시뮬의 인지 지연(라이다 10 Hz 주기, 평균 0.05 s)은 t_r_eff에 넣지 않았다 (결정: t_r + τ). 시뮬의 실제 총 지연은 그만큼 t_r_eff보다 길다.
 
 **popout_enter_time.** 실차 Exp0 f와 같은 방법(실차 popout_vehicle_node의 `reach_lane_s`)을 시뮬 #2 모델(같은 Kinematic, sim.yaml car2·vehicle)로
 재서 쓴다. 트리거 시각과 노드 타이머(50 Hz) 위상 5개 평균 0.556 s (0.55–0.56). 시뮬 /trigger 전달 지연은 0이라 trigger_latency = 0.
 실차 `common.yaml` 값(0.05, 0.2)은 Exp0까지 [EXP0-MEASURE]로 둔다.
 
-## 6. 시뮬로 알 수 있는 것 / 없는 것
+## 3. 검증
 
-**알 수 있는 것**
-- 파이프라인 연결 버그 (노드 간 토픽, 파라미터 우선순위, 노드 내부 시간 로직, mux 우선순위, 트리거 계산)
-- 같은 관측 조건에서 방법별 phantom 배치·v_cap·명령 속도의 상대 차이 (그림 5·6 시뮬판)
-- 민감도의 방향 (w_min, v_imp, N, row_face_tol, k)
-- RQ4 기준선: 노이즈 0, 차량 정지 시 경계의 흔들림 = 스캔 패턴만의 효과
-- 설계 가정 사이의 불일치 (아래 OPEN_ITEMS 9절처럼)
-
-**알 수 없는 것 (실차 필요)**
-- Mid-360 비반복 스캔의 실제 패턴과 거리 노이즈, 반사율, 다중 반사
-- 실제 a_b·t_r·바닥 슬립, VESC 속도 제어 응답
-- 최소 속도(4000 ERPM) 근처의 떨림·출발 토크 문제
-- DDS 지연, 메시지 유실, CPU 부하에 따른 주기 흔들림, 시간 동기
-- odom 오차 (시뮬 odom은 참값), IMU (시뮬에 없음)
-- 실제 #2 진입 거동 (출발 가속, 직진성)
-
-## 7. 시뮬 전용 차이
-
-| 항목 | 실차 | 시뮬 |
+| 무엇 | 어떻게 | 결과 (2026-11-05) |
 |---|---|---|
-| 조향 | exp_steering_node | 같음 (기본). `--steering simple`은 시뮬 전용 좌측 벽 P 제어 — 방법 간 동일 |
-| 조이스틱 데드맨·발행자 점검 | 켬 | 끔 (sim.yaml `mux_overrides`). 나머지 mux 우선순위·래치는 같음 |
-| AUTO 진입 | 조이스틱 LB | `auto_start_time`에 `/autonomous_mode=true` |
-| odom | VESC 휠 odom | 참값 |
-| 2D scan | pointcloud_to_laserscan 노드 | 같은 규칙을 numpy로 (`lidar.cloud_to_scan`, 테스트로 확인) |
-| 차량 | 실제 | 운동학 모델. t_r을 구동 지연으로 넣어 인지 지연(라이다 주기)과 일부 겹칠 수 있다 (보수적) |
-| 충돌 | 천장 카메라·scan | footprint 다각형 참값 (`geometry.polygon_distance`, 천장 카메라 분석과 같은 함수) |
-| v_cap의 t_r | Exp0 측정값 | t_r + τ (timing_overrides) |
-| #2 진입 시간·트리거 지연 | Exp0 측정값 | 시뮬 #2 모델 값, 0 (timing_overrides) |
+| 라이다 거리, scan 규칙, 박스 위 빔, 정지거리, 최소 ERPM | `sim/tests/test_sim.py` | 통과 |
+| 뷰어·배치 같은 결과 | `sim/tests/test_viewer_determinism.py`: 같은 시드, 뷰어 경로(그리기·0.25배속·일시정지·프레임 진행·토글) 대 배치. 로그 전 항목·프레임별 점군 지문·격자·이벤트 비트 단위 비교 | 통과. 변이(그리기 중 라이다 난수 1개 소비, 차량 속도 1e-12 변경) 둘 다 검출 |
+| exp 노드 순수 모듈 분리 전후 | `scripts/verify_exp_refactor.py --baseline 2187633` (B1 ROI 반폭은 기준 커밋 값 1.0으로 고정해 비교) | 101,075개 메시지 일치 |
+| 추종 지연 = t_r + τ | 시뮬 S2·S3 B2·P에 `braking.tracking_lag` | 0.252–0.268 s (모델 0.25) |
+| #2 진입 시간 | `sim/popout_timing.py` | 0.556 s, 재실행 시 실제 d_e가 명목과 맞음 (B0 1.00/1.48/2.00) |

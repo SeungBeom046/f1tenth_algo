@@ -53,6 +53,7 @@ class ViewerUI:
         self.anchor = None            # (벽시계, 시뮬 시각): 배속 기준점
         self.drawn_points = 0         # 마지막으로 그린 라이다 점 수 (테스트·화면 표시용)
         self.dropped = False          # user_scn 한도로 일부를 못 그렸는지
+        self.ended = False
 
     # ------------------------------------------------------------ 연결
     def attach(self, handle):
@@ -116,6 +117,16 @@ class ViewerUI:
         elif now - target > 0.5:               # 계산이 느려 밀리면 기준점을 다시 잡는다 (따라잡기 폭주 방지)
             self.anchor = (now, sim.t)
         return True
+
+    def hold_until_closed(self):
+        """회차가 끝난 뒤 창을 닫을 때까지 마지막 장면을 둔다 (시뮬은 이미 끝남, 토글만 동작)."""
+        self.ended = True
+        h = self.handle
+        while h.is_running():
+            self._apply_keys()
+            self.draw()
+            h.sync()
+            self.sleep(0.05)
 
     # ------------------------------------------------------------ 그리기
     def _geom(self, scn, gtype, size, pos, rgba):
@@ -181,6 +192,8 @@ class ViewerUI:
             v = float(v)
             return 'inf' if not np.isfinite(v) else f'{v:.2f}{unit}'
         state = 'PAUSED' if self.paused and self.step_until is None else ('STEP' if self.step_until else 'RUN')
+        if self.ended:
+            state = 'ENDED (close window to save)'
         de = '' if sim.args.d_e is None else f' d_e={sim.args.d_e:.1f}'
         method = sim.args.method
         rows = [('method / scenario', f'{method} / {sim.args.scenario}{de} seed={sim.args.seed}'),

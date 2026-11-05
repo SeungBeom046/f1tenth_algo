@@ -5,6 +5,8 @@
     sim/.venv/bin/python sim/sweep.py --scenarios S3 --methods P --w-min 0.25 0.35 0.45 --seeds 0 1 --name wmin
     sim/.venv/bin/python sim/sweep.py --scenarios S2 S3 --methods B2 P --v-imp 0.867 1.0 1.2 --name vimp
 
+    sim/.venv/bin/python sim/sweep.py --analyze sim_logs/20261105/sweep_main                # 다시 돌리지 않고 표·그림만
+
 결과: sim_logs/<날짜>/sweep_<name>/<회차>/ 와 sweep_<name>/analysis/ (summary.md/csv, fig5, fig6).
 표·그림은 analysis/summarize.py, analysis/plots.py를 그대로 쓴다 (실차와 같은 코드).
 민감도 인자(--w-min 등)에 값을 여러 개 주면 각 값이 별도 회차가 된다 (회차 이름 꼬리표에 값).
@@ -43,9 +45,14 @@ def main():
     ap.add_argument('--name', default='main')
     ap.add_argument('--workers', type=int, default=max(1, (os.cpu_count() or 2) - 2))
     ap.add_argument('--log-root', default=os.path.join(ROOT, 'sim_logs'))
+    ap.add_argument('--analyze', metavar='SWEEP_DIR', default=None,
+                    help='실행 없이 이 sweep 폴더의 요약 표·그림 5·6만 다시 만든다')
     for k in TUNE:
         ap.add_argument('--' + k.replace('_', '-'), dest=k, nargs='+', default=None)
     args = ap.parse_args()
+    if args.analyze:
+        print(f'요약·그림: {report(os.path.abspath(args.analyze))}')
+        return
     root = os.path.join(args.log_root, datetime.date.today().strftime('%Y%m%d'), f'sweep_{args.name}')
     tune_axes = [(k, v) for k in TUNE if getattr(args, k) for v in getattr(args, k)]
     tune_sets = [()] if not tune_axes else [((k, v),) for k, v in tune_axes]
@@ -71,6 +78,14 @@ def main():
             print(f'[{i}/{len(jobs)}] {os.path.basename(out_dir)} {status}')
             if err:
                 failed.append((out_dir, err))
+    out = report(root)
+    print(f'요약·그림: {out}' + (f'  (실패 {len(failed)}회)' if failed else ''))
+    for d, e in failed:
+        print(f'  실패 {d}: {e}')
+
+
+def report(root):
+    """sweep 폴더 → analysis/summary.md·csv, fig5, fig6 (실차와 같은 summarize·plots 코드)."""
     sys.path.insert(0, os.path.join(ROOT, 'analysis'))
     sys.path.insert(0, ROOT)
     import plots
@@ -88,9 +103,7 @@ def main():
     runs = [r for r in plots.load_runs([root]) if not r.get('static')]
     plots.fig5(runs, out, plt)
     plots.fig6(runs, out, plt)
-    print(f'요약·그림: {out}' + (f'  (실패 {len(failed)}회)' if failed else ''))
-    for d, e in failed:
-        print(f'  실패 {d}: {e}')
+    return out
 
 
 if __name__ == '__main__':

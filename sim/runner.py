@@ -458,6 +458,7 @@ def main(argv=None):
             with mujoco.viewer.launch_passive(sim.m, sim.d, key_callback=ui.on_key) as v:
                 ui.attach(v)
                 log, frames = sim.run(hook=ui)
+                ui.hold_until_closed()      # 회차가 끝나도 창을 닫을 때까지 마지막 장면 유지
         else:
             log, frames = sim.run()
     meta = save(sim, log, frames, args.out_dir, time.time() - wall0)

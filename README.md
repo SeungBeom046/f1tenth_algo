@@ -8,7 +8,8 @@ F1TENTH 실차(Livox Mid-360, VESC, **ROS2 Foxy**) 주행 스택과, 관측 공�
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 파이프라인, 노드 표, TF 트리, drive·exp 모드 차이 |
 | [docs/SESSIONS.md](docs/SESSIONS.md) | **세션별로 차 앞에서 순서대로 칠 명령** (세션 1 정비 검증 ~ 세션 5 Exp3) |
-| [docs/SIMULATION.md](docs/SIMULATION.md) | Mac MuJoCo 시뮬 (ROS 없음, 실차 exp 노드 그대로): 설치·실행·로그·한계 |
+| [sim/README.md](sim/README.md) | Mac MuJoCo 시뮬 실행 안내 (ROS 없음, 실차 exp 노드 그대로): 설치·실행·뷰어 키·출력·가정값·문제 해결 |
+| [docs/SIMULATION.md](docs/SIMULATION.md) | 시뮬 구조, 시뮬 전용 값의 근거, 검증 |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | 터미널별 실행 절차, 회차 체크리스트, 비상 정지, 문제 해결 |
 | [docs/EXPERIMENT_PLAN.md](docs/EXPERIMENT_PLAN.md) | RQ·가설, Exp0–Exp3 명령과 회차, 지표, 계획서 이후 변경 사항 |
 | [docs/LOGGING.md](docs/LOGGING.md) | 로그 경로·meta.json·기록 토픽·용량 |
