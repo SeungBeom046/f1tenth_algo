@@ -213,6 +213,14 @@ sim_logs/                                  (git 제외)
 기준값과 근거는 `sim/config/report_criteria.yaml` 한 곳(결과 보기 전 고정). v_ref 비율·폐기·AEB 오작동은 `my_algo/metrics.py` 그대로.
 같은 상위 폴더에 같은 scenario·d_e·seed·[EXP-TUNE]·조향의 다른 방법 회차가 있으면 그 v_raw를 속도 그래프에 점선으로 겹치고 ΔT·충돌 비교 표를 넣는다.
 
+## 7-2. 로그 정리 (`sim/clean_logs.py`)
+
+- 고르는 단위는 회차 폴더(meta.json 있는 곳). sweep 안 회차가 모두 골라지면 sweep 폴더 전체(analysis, index.html 포함).
+- `--incomplete`: 최대 시간(15 s)에 닿지 않았고 정지해서 끝나지도 않은 회차 (창을 중간에 닫음, 진행 중 재시작). 기존 로그에서 판정.
+- `--tag`: 회차 이름 `<S>_<M>_de.._seedNN_<tag>[_rN]`의 tag (sweep [EXP-TUNE] 꼬리표 예: `w_min0.25`). `--keep-latest N`은 KEEP 보호를
+  뺀 후보 중 최근 N개(meta.json 수정 시각)를 남긴다. 휴지통 이름은 `sim_logs_<상위 폴더>_<이름>`.
+- 조건이 하나도 없으면 아무것도 하지 않는다.
+
 ## 8. 시뮬 파라미터와 가정값 — 실측 후 바꿀 곳
 
 실차 값(v_ref, t_r, a_b, s_m, v_imp, AEB 임계값, 격자, 조향 게인, 트랙 좌표)은 `config/*.yaml`을 그대로 읽는다.

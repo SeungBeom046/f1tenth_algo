@@ -73,6 +73,20 @@ python sim/sweep.py --methods P --w-min 0.25 0.35 0.45 --name wmin     # [EXP-TU
 회차마다 **`report.html`** (브라우저로 열기: 속도·d·ρ·이벤트·궤적 그래프 + 판정 체크리스트 통과/주의/실패 + 같은 조건 다른 방법 비교),
 sweep 폴더에는 회차 목록과 판정 요약 **`index.html`**. 기존 회차는 `python sim/report.py <회차>` / `--index <sweep 폴더>`.
 
+## 로그 정리
+
+`sim_logs/`는 git에 올라가지 않으므로 지워도 코드에 영향이 없다. 기본은 **미리보기**, `--yes`일 때만 휴지통으로 옮긴다 (`--permanent`면 영구 삭제).
+폴더에 `KEEP` 파일이 있으면 절대 지우지 않는다.
+
+```bash
+python sim/clean_logs.py --du                                   # 전체·폴더별 용량
+python sim/clean_logs.py --restarts --incomplete --yes          # 뷰어 재시작 중 끊긴 회차를 휴지통으로
+python sim/clean_logs.py --before 20261101 --keep-latest 5      # 미리보기: 11/1 전 회차 중 최근 5개 빼고
+python sim/clean_logs.py --keep sim_logs/20261105/sweep_main_v3 # 보호 표시
+```
+
+조건(`--before --tag --restarts --incomplete --keep-latest --videos-only`)은 함께 쓰면 모두 만족하는 회차만 고른다.
+
 ## 자주 나는 문제
 
 - `can't open file ... sim/runner.py: No such file` → 레포 루트(my_algo)에서 실행
