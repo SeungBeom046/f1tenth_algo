@@ -36,10 +36,9 @@ from rclpy.qos import DurabilityPolicy, QoSProfile
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Float64, String
 
+from my_algo.mux_logic import MuxConfig, MuxInputs, MuxState, tick, to_vesc
 from my_algo.ros_util import publish_float, publish_string
-from my_algo.vehicle_utils import (
-    command_from_json, sanitize_rpm, speed_to_erpm, steering_to_servo,
-)
+from my_algo.vehicle_utils import command_from_json
 
 
 DISCARD_REASONS = ('joy_timeout', 'foreign_publisher')
@@ -66,7 +65,10 @@ class ExpDriveMux(Node):
         self.run_dir = gp('run_dir')
         self.require_preflight = bool(gp('require_preflight'))
         self.preflight_ok = False
-        self.has_driven = False
+        # 판단은 my_algo/mux_logic.py (시뮬과 같은 함수)
+        self.cfg = MuxConfig(self.joy_timeout, self.require_joy, self.aeb_latch, self.input_timeout,
+                             self.stop_distance, self.require_preflight)
+        self.state = MuxState()
 
         self.auto_mode = bool(gp('start_autonomous'))
         self.joy_active = False
@@ -75,8 +77,6 @@ class ExpDriveMux(Node):
         self.v_cmd, self.v_time = 0.0, None
         self.steer, self.steer_time = 0.0, None
         self.odom_xy, self.travel = None, 0.0
-        self.latched = ''     # 회차 끝까지 유지되는 정지 사유
-        self.was_running = False
 
         self.create_subscription(Float64, '/exp/v_cmd', self.on_v, 10)
         self.create_subscription(String, '/exp/steering_command', self.on_steer, 10)
@@ -134,11 +134,12 @@ class ExpDriveMux(Node):
             self.travel += math.hypot(p.x - self.odom_xy[0], p.y - self.odom_xy[1])
         self.odom_xy = (p.x, p.y)
 
+    @property
+    def latched(self):
+        return self.state.latched
+
     def abort(self, reason):
-        """회차 폐기 사유 기록. 같은 사유는 한 번만 쓴다."""
-        if self.latched == reason:
-            return
-        self.latched = reason
+        """새로 래치된 정지 사유 기록 (래치 판단은 mux_logic.tick이 한다)."""
         record = {'reason': reason, 'ros_time': self.now_s(), 'wall_time': time.time(),
                   'travel_m': round(self.travel, 3)}
         publish_string(self.abort_pub, json.dumps(record))
@@ -157,53 +158,21 @@ class ExpDriveMux(Node):
             self.get_logger().error(f'이벤트 기록 실패: {exc}')
 
     def tick(self):
-        now = self.now_s()
-        # 1. 비상 정지: 사람이 잡고 있으면 아무것도 보내지 않는다 (joy_controller가 0을 보냄)
-        if self.joy_active or not self.auto_mode:
-            if self.was_running:
-                self.send(0.0, 0.0, 'manual_or_auto_off')
-                self.was_running = False
-            return
-        self.was_running = True
-        # 1-1. 발행자 점검
-        if self.require_preflight and not self.preflight_ok:
-            if self.has_driven:
-                self.abort('foreign_publisher')
-            elif not self.latched:
-                self.send(0.0, 0.0, 'preflight_failed')
-                return
-        # 2. 데드맨
-        if self.require_joy and (self.last_joy is None or now - self.last_joy > self.joy_timeout):
-            self.abort('joy_timeout')
-        # 3. 정지선
-        if self.travel > self.stop_distance and not self.latched:
-            self.abort('stop_line')
-        # 4. AEB
-        if self.aeb and self.aeb_latch and not self.latched:
-            self.abort('aeb')
-        if self.latched:
-            self.send(0.0, self.steer, self.latched)
-            return
-        if self.aeb:
-            self.send(0.0, self.steer, 'aeb')
-            return
-        # 5. 입력 끊김
-        if self.v_time is None or now - self.v_time > self.input_timeout:
-            self.send(0.0, self.steer, 'stale_speed')
-            return
-        if self.steer_time is None or now - self.steer_time > self.input_timeout:
-            self.send(0.0, 0.0, 'stale_steering')
-            return
-        # 6. 정상
-        self.has_driven = True
-        self.send(self.v_cmd, self.steer, '')
+        out = tick(self.cfg, self.state, MuxInputs(
+            now=self.now_s(), auto_mode=self.auto_mode, joy_active=self.joy_active,
+            preflight_ok=self.preflight_ok, last_joy=self.last_joy, aeb=self.aeb,
+            v_cmd=self.v_cmd, v_time=self.v_time, steer=self.steer, steer_time=self.steer_time,
+            travel=self.travel))
+        for reason in out.aborts:
+            self.abort(reason)
+        if out.send:
+            self.send(out.speed, out.steering, out.reason)
 
     def send(self, speed, steering, reason):
-        steering = max(-self.max_steering, min(self.max_steering, steering))
-        rpm = sanitize_rpm(speed_to_erpm(max(0.0, speed)))
+        rpm, servo, final = to_vesc(speed, steering, self.max_steering)
         publish_float(self.motor_pub, rpm)
-        publish_float(self.servo_pub, steering_to_servo(steering))
-        publish_float(self.final_pub, rpm / speed_to_erpm(1.0))
+        publish_float(self.servo_pub, servo)
+        publish_float(self.final_pub, final)
         publish_string(self.reason_pub, reason)
 
 

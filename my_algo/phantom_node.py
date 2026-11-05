@@ -26,7 +26,7 @@ from tf2_ros import Buffer, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
 
 from my_algo.geometry import load_geometry
-from my_algo.occupancy import GridSpec
+from my_algo.perception import decode_grid
 from my_algo.phantom import METHODS, PhantomParams, make_strategy, to_odom
 from my_algo.ros_util import default_geometry_path, lookup_pose2d, publish_float, publish_string
 
@@ -72,9 +72,8 @@ class PhantomNode(Node):
             self.get_logger().warn('TF odom<-base_link 없음', throttle_duration_sec=2.0)
             return
         info = msg.info
-        spec = GridSpec(info.origin.position.x, info.origin.position.y, info.resolution,
-                        info.width, info.height)
-        grid = np.asarray(msg.data, dtype=np.int8).reshape(info.height, info.width)
+        grid, spec = decode_grid(msg.data, info.width, info.height, info.origin.position.x,
+                                 info.origin.position.y, info.resolution)
         res = self.strategy.compute(grid, spec, pose)
         publish_float(self.d_pub, res.d)
         publish_float(self.rho_pub, res.rho)

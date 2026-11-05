@@ -26,10 +26,7 @@ from rclpy.node import Node
 from std_msgs.msg import Bool, Header, String
 
 from my_algo.ros_util import publish_string
-
-
-def trigger_distance(collision_x, d_e, v_ref, trigger_latency, popout_enter_time):
-    return collision_x - d_e - v_ref * (trigger_latency + popout_enter_time)
+from my_algo.trigger_math import trigger_distance  # noqa: F401 (순수 함수, 시뮬과 공유)
 
 
 class TriggerNode(Node):

@@ -32,11 +32,9 @@ from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 
-from my_algo.occupancy import (
-    GridSpec, OccupancyAccumulator, crop, height_band_mask, occlusion_boundary,
-    out_of_band_free_ratio, raycast, single_frame_grid,
-)
+from my_algo.occupancy import GridSpec, OccupancyAccumulator
 from my_algo.pc2 import read_xyz
+from my_algo.perception import cropped, process_frame
 from my_algo.ros_util import lookup_matrix, publish_string
 
 
@@ -87,23 +85,11 @@ class OccupancyGridNode(Node):
         xyz = read_xyz(msg)
         if len(xyz) == 0:
             return
-        hom = np.column_stack([xyz, np.ones(len(xyz))])
-        z_base = hom @ to_base[2, :]
-        xy_odom = (hom @ to_odom[:2, :].T)
-        origin = to_odom[:2, 3]
-        in_band = height_band_mask(z_base, *self.band)
-
-        free, occ = raycast(self.spec, origin, xy_odom[in_band], self.max_range)
-        self.acc.add_frame(free, occ)
-        grid = self.acc.grid()
-        boundary = occlusion_boundary(grid)
-        frame_boundary = occlusion_boundary(single_frame_grid(self.spec, free, occ))
-
-        debug = {'points': int(len(xyz)), 'in_band': int(in_band.sum()),
-                 'free_cells': int(len(free)), 'occ_cells': int(len(occ))}
-        if self.debug_oob:
-            ratio, n = out_of_band_free_ratio(self.spec, origin, free, grid, xy_odom[~in_band])
-            debug.update(oob_would_free_ratio=round(ratio, 4), oob_would_free_cells=n)
+        # 프레임 처리는 my_algo/perception.py (시뮬과 같은 함수)
+        res = process_frame(self.acc, self.spec, xyz, to_odom, to_base, self.band, self.max_range,
+                            self.debug_oob)
+        grid, boundary, frame_boundary, origin, debug = (
+            res.grid, res.boundary, res.frame_boundary, res.origin, res.debug)
 
         base_in_odom = lookup_matrix(self.buffer, self.odom_frame, self.base_frame, stamp)
         center = base_in_odom[:2, 3] if base_in_odom is not None else origin
@@ -114,15 +100,15 @@ class OccupancyGridNode(Node):
         publish_string(self.debug_pub, json.dumps(debug))
 
     def publish_grid(self, stamp, grid, center):
-        sub, (ox, oy) = crop(grid, self.spec, center, *self.crop_half)
+        sub, sub_spec = cropped(grid, self.spec, center, *self.crop_half)
         msg = OccupancyGrid()
         msg.header.stamp = stamp
         msg.header.frame_id = self.odom_frame
         msg.info.resolution = self.spec.resolution
         msg.info.width = sub.shape[1]
         msg.info.height = sub.shape[0]
-        msg.info.origin.position.x = float(ox)
-        msg.info.origin.position.y = float(oy)
+        msg.info.origin.position.x = float(sub_spec.origin_x)
+        msg.info.origin.position.y = float(sub_spec.origin_y)
         msg.info.origin.orientation.w = 1.0
         msg.data = sub.reshape(-1).astype(np.int8).tolist()
         self.grid_pub.publish(msg)
