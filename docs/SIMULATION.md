@@ -81,9 +81,22 @@ sim_logs/YYYYMMDD/<scenario>_<method>_de<d_e>_seed<NN>[_<tag>]/          (sweep�
 | car2.length / width / rear_overhang / height | 0.50 / 0.30 / 0.09 / 0.25 | #2 치수 (길이·높이 가정) |
 | vehicle.tau / a_max / steer_rate | 0.10 s / 2.5 / 6 rad/s | 종방향 1차 지연, 최대 가속, 조향 변화율 (가정). t_r·a_b는 common.yaml |
 | lidar.rays_per_frame / pattern / range_noise_std | 20000 / nonrepetitive / 0.0 | 광선 수, 패턴(시드 고정 무작위 / 격자), 거리 노이즈(0 = RQ4 기준선) |
+| timing_overrides.t_r_eff | true | speed_layer_node t_r = common t_r 0.15 + τ 0.10 = **0.25** (1차 지연의 등가 지연, 아래) |
+| timing_overrides.popout_from_model | true | trigger_node popout_enter_time = 시뮬 #2 모델 값(**0.556 s**, `sim/popout_timing.py`), trigger_latency = 0 |
 | mux_overrides | require_joy false, require_preflight false | 시뮬에서만 끔 |
 
 실차 값(v_ref, t_r, a_b, s_m, v_imp, AEB 임계값, 격자, 조향 게인 ...)은 `config/*.yaml`을 그대로 쓴다. 시뮬이 바꾸는 것은 위 표뿐이다.
+
+**t_r_eff = t_r + τ의 근거.** t_r은 '관측 → 실제 감속 시작 전체 지연'이다 (EXPERIMENT_PLAN 2절). 시뮬 차량은 명령을 순수 지연
+t_r(0.15 s) 뒤에 받아 1차 지연 τ(0.10 s)로 따라간다. 1차 지연 계는 기울기 a로 내려가는 명령에 대해 정상 상태에서 v(t) = u(t − τ)이므로
+(오차 a·τ = 시간 지연 τ), v_cap처럼 완만히 내려가는 상한을 따라갈 때 순수 지연 τ와 같다. 그래서 v_cap 식에는 t_r + τ를 넣는다.
+확인: 시뮬 S2 회차에 실차 Exp0 i와 같은 함수(`braking.tracking_lag`)를 쓰면 0.268 s (순수 0.146 + 1차 0.122)가 나온다
+(`metrics.json` `tracking_lag`). 계단 급제동은 감속이 a_b로 바로 포화돼 τ가 거의 안 보인다 (`test_braking.test_step_braking_hides_tau`).
+시뮬의 인지 지연(라이다 10 Hz 주기)은 t_r_eff에 넣지 않았다 (지시대로 t_r + τ만).
+
+**popout_enter_time.** 실차 Exp0 f와 같은 방법(실차 popout_vehicle_node의 `reach_lane_s`)을 시뮬 #2 모델(같은 Kinematic, sim.yaml car2·vehicle)로
+재서 쓴다. 트리거 시각과 노드 타이머(50 Hz) 위상 5개 평균 0.556 s (0.55–0.56). 시뮬 /trigger 전달 지연은 0이라 trigger_latency = 0.
+실차 `common.yaml` 값(0.05, 0.2)은 Exp0까지 [EXP0-MEASURE]로 둔다.
 
 ## 6. 시뮬로 알 수 있는 것 / 없는 것
 
@@ -113,4 +126,5 @@ sim_logs/YYYYMMDD/<scenario>_<method>_de<d_e>_seed<NN>[_<tag>]/          (sweep�
 | 2D scan | pointcloud_to_laserscan 노드 | 같은 규칙을 numpy로 (`lidar.cloud_to_scan`, 테스트로 확인) |
 | 차량 | 실제 | 운동학 모델. t_r을 구동 지연으로 넣어 인지 지연(라이다 주기)과 일부 겹칠 수 있다 (보수적) |
 | 충돌 | 천장 카메라·scan | footprint 다각형 참값 (`geometry.polygon_distance`, 천장 카메라 분석과 같은 함수) |
-| AEB 오작동 판정 | S2–S4에서 발동 | 정지선(stop_distance) 전에 발동한 경우만 (정지선 뒤 방호벽 근접 제외). OPEN_ITEMS 9절 |
+| v_cap의 t_r | Exp0 측정값 | t_r + τ (timing_overrides) |
+| #2 진입 시간·트리거 지연 | Exp0 측정값 | 시뮬 #2 모델 값, 0 (timing_overrides) |

@@ -31,7 +31,7 @@ class PhantomParams:
     roi_x_max: float = 6.0       # phantom 탐색 앞쪽 한계, base_link x [m] [EXP-FIXED]
     roi_half_y: float = 1.5      # phantom 탐색 좌우 한계 |y| [m] [EXP-FIXED]
     b1_roi_length: float = 3.0   # B1 ROI: 앞 끝부터 길이 [m] [EXP-TUNE]
-    b1_roi_half_width: float = 1.0  # B1 ROI 반폭 [m] [EXP-TUNE]
+    b1_roi_half_width: float = 0.35  # B1 ROI 반폭 [m] [EXP-TUNE] (근거: config/common.yaml)
     w_min: float = 0.35          # P 최소 틈 폭 [m] [EXP-TUNE]
     row_y_min: float = 0.30      # P 주차열로 볼 occupied 칸의 |y| 하한 (차선 안 물체 제외) [m]
     row_y_max: float = 1.20      # P 주차열 |y| 상한 [m]

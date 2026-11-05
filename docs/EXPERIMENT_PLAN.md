@@ -23,11 +23,12 @@ H2 성립 조건: 그림 6에서 P가 B2와 같은 높이(무충돌 비율 95% C
 | 코드 | 규칙 | 구현 |
 |---|---|---|
 | B0 | 공백 무시, v_ref 유지. AEB만 | `phantom.B0` |
-| B1 | 전방 ROI(앞 끝부터 3 m, 반폭 1 m) 미관측 칸 비율 ρ로 v = v_ref(1 − kρ) | `phantom.B1` + `speed_policy.b1_speed` |
+| B1 | 전방 ROI(앞 끝부터 3 m, 반폭 0.35 m = 차선 + 갓길, 트랙 구조물까지) 미관측 칸 비율 ρ로 v = v_ref(1 − kρ) | `phantom.B1` + `speed_policy.b1_speed` |
 | B2 | ROI 안 모든 가림 경계 칸에 phantom, 최근접 d로 v_cap(d) | `phantom.B2` |
 | P | 측면 주차열(차선 쪽 면 0.10 m 띠의 occupied 군집) 사이 틈 폭 ≥ w_min 입구와 열 양 끝에만 phantom | `phantom.P` |
 
-공통: v_cap(d) = a_b(−t_r + √(t_r² + 2(d − s_m)/a_b + v_imp²/a_b²)), d ≤ s_m이면 v_cap(s_m). 명령 = min(v_ref, v_cap) →
+공통: v_cap(d) = a_b(−t_r + √(t_r² + 2(d − s_m)/a_b + v_imp²/a_b²)), d ≤ s_m이면 v_cap(s_m).
+t_r은 **관측 → 실제 감속 시작까지 전체 지연**(인지 + 통신 + 제어 + 구동, 속도 제어 1차 지연은 등가 지연으로 포함)이다 (Exp0 c·i). 명령 = min(v_ref, v_cap) →
 최소 속도 정책(hold) → AEB override → VESC. d는 **차체 앞 끝**에서 phantom의 경로상 진입 지점(phantom의 base_link x)까지
 종방향 거리이고, 앞 끝보다 뒤의 phantom은 무시한다.
 
@@ -65,11 +66,17 @@ d_e 정의: #2 앞부분이 차선 경계에 닿는 순간, 에고 차체 앞 �
 - 그림 6 x축 = S3 + S4 명령 기준 ΔT (불필요 감속). S2는 옆 패널에 따로.
 - 감속 구간 길이 = v < 0.95 v_ref인 구간 총 길이. 최저 속도 = 시험 구간 min v.
 - jerk RMS = `/imu/linear_accel_base` x → **2차 Butterworth 5 Hz 저역통과(앞뒤 두 번, 위상 지연 없음)** → 미분 → RMS. 방법 간 상대 비교 전용.
+- 충돌 속도: 충돌 회차의 실측 속도. 요약 표에 최대·평균과 **v_imp 이하 충돌 / 초과 충돌** 수를 따로 낸다 (`metrics.impact_class`).
+  v_imp 이하 충돌은 설계가 허용한 결과, 초과 충돌은 v_cap 보장이 깨진 결과다.
 - 최소 거리·충돌 = 차체 footprint 다각형 기준. 1순위 천장 카메라(두 차 ArUco, 바닥 호모그래피), 보조 `/scan` 차선 안 점.
 - 최소 TTC = 거리 / 접근 속도(상대). 에고 속도 기준 TTC(AEB와 같은 정의)도 함께 낸다.
 - 통과시각 = 천장 카메라 1순위. 2.0 m/s·60 fps면 프레임당 약 3.3 cm라 선 전후 두 프레임 선형 보간으로 서브프레임 시각을 낸다.
-- **폐기**: 가속 구간 끝(`accel_end_x`)에서 실측 속도 < 0.95 v_ref, 조이스틱 끊김, 예상 외 발행자, 수동 사유. 폐기 수와 사유를 표에 함께 낸다.
-- **AEB 오작동**: S2–S4에서 AEB가 발동한 회차. 효율 통계에서 빼고, 뺀 수를 표에 내고, 방법별 오작동 수를 따로 집계한다.
+- **폐기** (`metrics.discard_check`, 실차·시뮬 같은 함수, 모든 방법 공통): 가속 구간 끝(`accel_end_x`)까지 보낸 명령
+  (`/exp/final_cmd`)이 계속 v_ref였는데 그 지점 실측 속도 < 0.95 v_ref (플랫폼 문제). 가속 구간 안에서 명령이 v_ref 아래로
+  내려간 회차(알고리즘이 스스로 감속, 최소 속도 정책, AEB)는 폐기하지 않고 지표에 그대로 넣는다. 그 밖에 조이스틱 끊김,
+  예상 외 발행자, 수동 사유. 폐기 수와 사유를 표에 함께 낸다.
+- **AEB 오작동** (`metrics.aeb_malfunction`, 실차·시뮬 같은 함수): S2–S4에서 **정지선(`stop_distance`) 전에** AEB가 처음 발동한 회차.
+  정지선 뒤 감속 중 방호벽에 가까워져 걸린 경우는 세지 않는다. 효율 통계에서 빼고, 뺀 수를 표에 내고, 방법별 오작동 수를 따로 집계한다.
 - 통계: 조건별 평균과 95% CI (t 분포).
 
 ## 5. 실험 단계
@@ -84,7 +91,8 @@ d_e 정의: #2 앞부분이 차선 경계에 닿는 순간, 에고 차체 앞 �
 |---|---|---|---|---|
 | a. 장착값 | 평평한 바닥, 정지 | RUNBOOK 0.4, 부록 C (`imu_static_calib.py` 0°/180°, `measure_lidar_height.py`, 로고 방향, RViz) | 각 2 | ORIGIN_H, LIDAR_ROLL/PITCH/YAW → `tf_static.launch.py`. 자이로 바이어스 → `imu.yaml` |
 | b. odom 스케일 | 빈 트랙 5 m 직선 표시 | `bringup ... method:=B0 scenario:=E0 run_id:=<n> test_v_ref:=0.9` (2.0은 인자 없이). 기록 `TEST_V_REF=0.9 bash $S/record_run.sh exp B0 E0 na <n>`. 정지 후 줄자 | 0.9 m/s × 3, 2.0 m/s × 3 | `analysis/odom_travel.py <runs> --tape ...` → 비율. **ERPM_GAIN 변경은 drive 속도도 바꾼다 (OPEN_ITEMS 2절)** |
-| c. a_b, t_r, 정지거리 | 빈 트랙, 정지선 `stop_distance` 4.5 m (E0) | `bringup ... method:=B0 scenario:=E0 run_id:=<n>` + 기록 | 2.0 m/s × 10 | `analysis/exp0_braking.py ~/exp_logs/<날짜>` → a_b(CI 하한), t_r(구동, CI 상한) + 인지 지연(50 ms + 격자 처리 ms) → `common.yaml` |
+| c. a_b, 정지거리 | 빈 트랙, 정지선 `stop_distance` 4.5 m (E0) | `bringup ... method:=B0 scenario:=E0 run_id:=<n>` + 기록 | 2.0 m/s × 10 | `analysis/exp0_braking.py ~/exp_logs/<날짜>` → a_b(CI 하한) → `common.yaml`. 계단 구동 지연 `t_r_step`·정지거리 등가 지연 `t_r_equiv`는 참고값 (계단 명령은 감속이 a_b로 바로 포화돼 1차 지연이 드러나지 않음) |
+| i. 추종 지연 (t_r) | S2 배치, #2 없음 | `bringup ... method:=B2 scenario:=S2 run_id:=<n>` + 기록 (v_cap 곡선을 따라 명령이 완만히 내려감) | 5 | `analysis/exp0_braking.py ~/exp_logs/<날짜> --tracking <회차 폴더들>` → 추종 지연(순수 + 1차, `braking.tracking_lag`) CI 상한 + 인지 지연(라이다 주기 평균 50 ms + 격자 처리 ms) = **t_r** → `common.yaml`. 비교 실험 회차가 아니다 |
 | d. 트리거 지연 | S1 배치, #2 대기(틈 안), 에고 정지 상태에서 트리거만 | RUNBOOK 0.3 동기 확인 명령을 20회 (`/popout/reset` 사이사이) | 20 | `popout_events.jsonl` latency_s 분포 → `trigger_latency` (중앙값), LED+천장 카메라로 교차 확인 |
 | e. #2 단독 주행 | #2만, 틈 출발 표시 → 차선 경계 | #2: `ros2 launch my_algo car2.launch.py vesc_config:=... v_popout:=0.8`, 에고/노트북: `ros2 topic pub --once /trigger std_msgs/msg/Header "{frame_id: exp0}"` 후 `/popout/reset`. 0.9도 같은 방법 | 0.8 × 5, 0.9 × 5 | `reach_lane_s`(출발 → 차선 경계 도달), `speed_mean`, `speed_std`. 판정 아래 |
 | f. #2 진입 시간 | e와 같음 | e의 `reach_lane_s` 평균 | (e) | `popout_enter_time` |
@@ -165,7 +173,7 @@ python3 analysis/plots.py ~/exp_logs/<날짜1> ...
 | N (+ known_on) | Exp1 결과 | 결정값 ± 2 | 전 방법 · S3 | `n_frames:= known_on:=` |
 | row_face_tol | 0.10 | 0.05, 0.10, 0.15 | P · S1(d_e 1.5), S3 | `row_face_tol:=` |
 | k (B1) | 1.0 | 0.5, 1.0, 1.5 | B1 · S2, S4 | `b1_k:=` |
-| B1 ROI | 3.0 × 1.0 | 길이 2–4, 반폭 0.6–1.2 | B1 · S4 | `b1_roi_length:= b1_roi_half_width:=` |
+| B1 ROI | 3.0 × 0.35 | 길이 2–4, 반폭 0.6 / 0.8 / 1.0 | B1 · S2, S4 | `b1_roi_length:= b1_roi_half_width:=` |
 
 w_min을 너무 크게 잡으면 P가 실제 틈을 놓쳐 위험해진다 (원 계획서 리스크). 결과는 한계에 명시한다.
 
@@ -184,13 +192,17 @@ w_min을 너무 크게 잡으면 P가 실제 틈을 놓쳐 위험해진다 (원 
 | Exp1 속도 조건 | 정지, 0.5 m/s | 정지, 0.9 m/s, 2.0 m/s | 0.5 m/s는 V_MIN(0.867) 아래라 낼 수 없다 |
 | exp 조향 | 기존 조향 공유 | 기존 planner 상속, 좌측 벽 WALL_FOLLOW 고정, 회피 모드 끔, lookahead 4.4 m 고정, 정지 시 조향 유지 | 돌출 차량을 조향으로 피하면 안전 결과를 속도 계획 효과로 해석할 수 없다. 실측 속도에 따라 lookahead가 바뀌면 방법별로 조향이 달라진다 |
 | exp AEB 기준점 | — | 같은 클래스·임계값, 기준점만 앞 끝(라이다 + 0.28 m)·반폭 0.135 (drive는 0.30·0.15 유지). 회차 끝까지 래치 | 치수 기준 통일. drive 모드 불변 |
-| AEB 오작동 | — | S2–S4에서 AEB 발동 회차는 효율 통계에서 빼고 방법별로 따로 집계 | 돌출이 없는데 정지한 회차의 손실은 배치 규칙의 효과가 아니다 |
+| AEB 오작동 | — | S2–S4에서 **정지선 전** AEB 발동 회차는 효율 통계에서 빼고 방법별로 따로 집계 (2026-11-05: 정지선 전만 세도록 실차·시뮬 통일, `metrics.aeb_malfunction`) | 돌출이 없는데 정지한 회차의 손실은 배치 규칙의 효과가 아니다. 정지선 뒤 방호벽 근접 발동은 시험 구간 밖이다 |
+| 폐기 규칙 (2026-11-05) | — | 가속 구간 끝 실측 < 0.95 v_ref → **가속 구간 끝까지 명령이 v_ref였는데 실측 < 0.95 v_ref일 때만** (`metrics.discard_check`, 모든 방법·실차·시뮬 공통) | 시뮬에서 B1이 스스로 감속해 전 회차 폐기됨 (OPEN_ITEMS 9절). 알고리즘이 낸 감속은 그 방법의 비용이라 지표에 넣어야 한다. "그 시점 명령 = v_ref"만 보면 가속 구간 중 스스로 감속했다가 v_ref로 돌아온 회차가 폐기되므로 가속 구간 전체 명령을 본다 |
+| B1 ROI 반폭 (2026-11-05) | 1 m | 0.35 m = 차선 반폭 0.35 + 갓길 0 (트랙 구조물 차선 쪽 면까지). 0.6 / 0.8 / 1.0은 민감도 | 결과와 무관한 트랙 기준. 구조물 안·뒤 칸은 늘 미관측이라 넣으면 ρ가 가림이 아니라 구조물을 잰다. 갓길은 트랙 마킹 후 실측해 교체 |
+| t_r 정의 (2026-11-05) | 반응시간 | 관측 → 실제 감속 시작 전체 지연 (인지 + 통신 + 제어 + 구동, 1차 지연은 등가 지연). Exp0 i 추종 지연 시험 추가, c의 계단 구동 지연은 참고값 | v_cap 식은 '순수 지연 t_r 뒤 a_b 감속'을 가정한다. 1차 지연 τ인 속도 제어는 v_cap처럼 완만히 내려가는 명령을 τ 늦게 따라가므로 τ가 t_r에 들어가야 v_imp 보장이 맞는다 (시뮬에서 틈 입구 속도 1.24 > v_imp 0.867, OPEN_ITEMS 9절). 계단 급제동은 감속이 바로 포화돼 τ가 거의 안 보인다 |
+| 충돌 속도 보고 (2026-11-05) | 충돌 여부 | 충돌 회차의 충돌 속도 최대·평균, v_imp 이하 / 초과 충돌 수 | v_imp 이하 충돌은 설계가 허용한 결과라 초과 충돌과 구분해야 한다 |
 | **P 주차열 군집** | occupied 군집 사이 틈 | **차선 쪽 면에서 row_face_tol(0.10 m) 띠 안의 칸만 열로 묶는다** ([EXP-TUNE] 0.05/0.10/0.15) | 틈 안에 숨은 #2의 앞부분이 occupied로 잡히면 두 박스가 한 열로 이어져 P가 바로 그 틈을 놓친다. 테스트: `test_occupancy_phantom.test_p_hidden_car_does_not_bridge_gap` (면에서 0.15 m 들어간 숨은 차가 있어도 틈 입구 phantom 유지). 가정: 숨은 물체는 면보다 0.10 m 이상 안쪽 |
 | #2 격리 | 언급 없음 | #2는 `/car2` 네임스페이스로 VESC 드라이버(publish_tf false)와 #2 노드만 (`car2.launch.py`). 에고는 발행자 점검(`publisher_guard_node`) 통과 전 출발·기록 거부 | 같은 ROS_DOMAIN_ID에서 토픽 이름이 겹치면 #2 명령이 에고 VESC로 들어갈 수 있다 |
 | #2 속도 | 0.8 m/s | 0.8 m/s, Exp0 e에서 불안정하면 0.9 m/s (결과 여기에 기록: TBD) | 0.8 m/s(3691 ERPM)는 에고 최소 RPM(4000)보다 낮아 안정성 확인 필요 |
 | YOLO, 카메라 | 카메라 인지 | YOLO 끔(exp), 전방 카메라 녹화 전용(압축, depth 끔), AEB 표시는 오프라인 오버레이 | 연산 부하로 t_r이 흔들리는 것 방지, 디스크 I/O로 LiDAR 누락 방지 |
 | 실험 전환 | — | 설정 파일(common/method/scenario)과 bringup 인자로만. 회차마다 노드 재시작 | 주석 처리 전환 금지, 상태 이월 방지 |
-| 효율 지표 | 손실 % | 절대 손실 ΔT 주 지표, 명령·실측 분리, 시나리오 분리, v_ref 미도달 폐기 수 보고 | % 손실은 구간 길이에 희석. S2와 S3·S4는 성격이 다름. 주장 근거는 명령 기준 |
+| 효율 지표 | 손실 % | 절대 손실 ΔT 주 지표, 명령·실측 분리, 시나리오 분리, 폐기 수·사유 보고 | % 손실은 구간 길이에 희석. S2와 S3·S4는 성격이 다름. 주장 근거는 명령 기준 |
 | 안전 장치 | 폼 범퍼 | + 조이스틱 B 최우선, 조이스틱 끊김 0.5 s 정지(폐기), 소프트웨어 정지선 | 실차 회차 수가 많아 사람 반응만으로는 부족 |
 
 ## 9. 한계 (원고에 명시)

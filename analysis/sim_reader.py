@@ -20,6 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
 from my_algo import metrics as M  # noqa: E402
+from my_algo.braking import tracking_lag  # noqa: E402
 from my_algo.track_layout import from_params as layout_from_params  # noqa: E402
 
 
@@ -60,8 +61,11 @@ def compute(run_dir):
         out[f'min_speed_{tag}'] = M.min_speed(ss, vs, x0, x1)
         out[f'decel_length_{tag}'] = M.decel_length(ss, vs, v_ref, x0, x1)
     out['vref_reached'] = M.vref_reached(*grids['meas'], float(scen['accel_end_x']), v_ref)
-    if not out['vref_reached']:
-        out['discard'], out['discard_reason'] = True, 'vref_not_reached'
+    # 폐기: 실차와 같은 함수 (가속 구간 끝 명령 = v_ref인데 실측 미달일 때만)
+    bad, why, info = M.discard_check(*grids['final'], *grids['meas'], float(scen['accel_end_x']), v_ref)
+    out.update(info)
+    if bad:
+        out['discard'], out['discard_reason'] = True, why
     in_test = (s >= x0) & (s <= x1)
     a = np.gradient(v, t) if len(t) > 2 else np.zeros_like(v)
     out['jerk_rms'] = M.jerk_rms(t, a, float(t[in_test][0]), float(t[in_test][-1])) if in_test.any() else None
@@ -72,6 +76,16 @@ def compute(run_dir):
     else:
         out.update({'min_distance': None, 'collision': False, 'impact_speed': None, 'min_ttc': None,
                     'min_ego_ttc': None})
+    # 추종 지연 (Exp0 i와 같은 함수): 명령이 v_cap을 따라 내려가는 구간의 등가 지연. 시뮬 t_r_eff 가정 확인용
+    out['tracking_lag'] = None
+    if meta['method'] in ('B2', 'P'):
+        r = tracking_lag(t, z['final_cmd'][auto], t, v, float(cfg['common']['a_b']))
+        if r and r['n'] >= 20:
+            out['tracking_lag'], out['tracking_lag_dead'], out['tracking_lag_tau'] = r['lag'], r['dead'], r['tau']
+    out['t_r_eff'] = cfg.get('t_r_eff')
+    out['sim_popout_enter_time'] = (cfg.get('timing') or {}).get('popout_enter_time')
+    out['v_imp'] = float(meta['config']['tune'].get('v_imp', cfg['common']['v_imp']))
+    out['impact_class'] = M.impact_class(out.get('impact_speed'), out['v_imp'])
     out['static_contact'] = bool((z['dist_static'][auto] <= 0.0).any())
     # 실제 d_e (2.10절 정의): #2 앞 끝이 차선 경계에 닿는 순간 에고 앞 끝과 충돌 지점 사이 거리
     out['d_e_actual'] = None
@@ -89,9 +103,8 @@ def compute(run_dir):
     out['aeb_triggered'] = bool(aeb.any())
     first = int(np.argmax(aeb)) if aeb.any() else None
     out['aeb_first_s'] = float(s[first]) if first is not None else None
-    # 돌출 없는 시나리오에서 정지선 전에 AEB가 걸리면 오작동 (정지선 뒤 방호벽 근접은 제외)
-    out['aeb_malfunction'] = bool(meta['scenario'] not in ('S1',) and first is not None
-                                  and s[first] <= float(scen['stop_distance']))
+    # 돌출 없는 시나리오에서 정지선 전에 AEB가 걸리면 오작동 (실차 extract_run과 같은 함수)
+    out['aeb_malfunction'] = M.aeb_malfunction(meta['scenario'], out['aeb_first_s'], scen['stop_distance'])
     flags = list(z['flag'][auto])
     out['clamped_to_vmin_ratio'] = flags.count('clamped_to_vmin') / len(flags) if flags else None
     frames = [z['boundary_xy'][z['boundary_frame'] == i] for i in range(len(z['frame_t']))]

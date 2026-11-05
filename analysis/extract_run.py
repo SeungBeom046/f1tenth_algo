@@ -37,6 +37,23 @@ def snapshot(run_dir, name):
         return yaml.safe_load(f)
 
 
+def run_v_imp(run_dir, common):
+    """회차의 v_imp: params.yaml(record_run.sh의 param dump)의 speed_layer_node 값, 없으면 common.yaml."""
+    path = os.path.join(run_dir, 'params.yaml')
+    if os.path.exists(path):
+        node = None
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                if line.startswith('# ---- '):
+                    node = line[7:].strip()
+                elif node and node.endswith('speed_layer_node') and line.strip().startswith('v_imp:'):
+                    try:
+                        return float(line.split(':', 1)[1])
+                    except ValueError:
+                        break
+    return float(common['v_imp'])
+
+
 def series(msgs, fn):
     if not msgs:
         return np.empty(0), np.empty(0)
@@ -137,8 +154,11 @@ def extract(run_dir):
         out[f'min_speed_{tag}'] = M.min_speed(ss, vv, x0, x1)
         out[f'decel_length_{tag}'] = M.decel_length(ss, vv, v_ref, x0, x1)
     out['vref_reached'] = M.vref_reached(s_meas, vm_s, float(scen['accel_end_x']), v_ref)
-    if not out['vref_reached'] and not out['discard']:
-        out['discard'], out['discard_reason'] = True, 'vref_not_reached'
+    # 폐기: 가속 구간 끝 명령이 v_ref인데 실측이 미달일 때만 (알고리즘이 스스로 감속한 회차는 그대로 지표에 포함)
+    bad, why, info = M.discard_check(s_fin, vf_s, s_meas, vm_s, float(scen['accel_end_x']), v_ref)
+    out.update(info)
+    if bad and not out['discard']:
+        out['discard'], out['discard_reason'] = True, why
 
     # jerk: 시험 구간에 있는 시간 동안
     t_in = t_o[(s >= x0) & (s <= x1)]
@@ -150,10 +170,13 @@ def extract(run_dir):
     t_d, dist = scan_distances(bag.get('/scan', []), lidar_offset(bag), geom.footprint)
     v_at = np.interp(t_d, t_o, v_meas) if len(t_d) else np.empty(0)
     out.update(M.safety_metrics(t_d, dist, v_at) if len(t_d) else {})
-    out['aeb_triggered'] = any(m.data for _, m in bag.get('/aeb/active', []) if _ >= t_auto)
-    # S2–S4(돌출 없음)에서 AEB 발동 = 오작동. 효율 통계에서 빼고 방법별로 따로 센다 (summarize.py)
-    out['aeb_malfunction'] = bool(out['aeb_triggered'] or meta.get('aeb_malfunction')) \
-        and meta['scenario'] != 'S1'
+    out['v_imp'] = run_v_imp(run_dir, common)
+    out['impact_class'] = M.impact_class(out.get('impact_speed'), out['v_imp'])
+    t_aeb = [t for t, m in bag.get('/aeb/active', []) if t >= t_auto and m.data]
+    out['aeb_triggered'] = bool(t_aeb)
+    out['aeb_first_s'] = float(np.interp(t_aeb[0], t_o, s)) if t_aeb and len(t_o) else None
+    # S2–S4(돌출 없음)에서 정지선 전에 AEB가 걸리면 오작동 (시뮬과 같은 함수). 효율 통계에서 빼고 따로 센다
+    out['aeb_malfunction'] = M.aeb_malfunction(meta['scenario'], out['aeb_first_s'], scen['stop_distance'])
     out['aeb_first_cause_point'] = (meta.get('aeb') or {}).get('first_cause_point')
     flags = [m.data for _, m in bag.get('/exp/min_speed_flag', [])]
     out['clamped_to_vmin_ratio'] = (flags.count('clamped_to_vmin') / len(flags)) if flags else None

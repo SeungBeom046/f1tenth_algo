@@ -13,11 +13,12 @@
 | IMU 가속도 단위 | g | `check_vehicle.sh` IMU 정지 통계 | `config/imu.yaml` `accel_unit` |
 | 바퀴 지름 | 미측정 | 자 또는 5바퀴 굴림 (세션 1 g) | `config/vehicle_geometry.yaml` `wheel_diameter` |
 | a_b | 3.0 m/s² | Exp0: 2.0 m/s 급제동 10회, `/imu/linear_accel_base` x | `config/common.yaml` `a_b` |
-| t_r | 0.15 s | Exp0: 명령 0 발행 시각 → 감속 시작(IMU) 지연 | `config/common.yaml` `t_r` |
+| t_r (전체 지연) | 0.15 s | Exp0 i: 추종 지연(B2·S2, `braking.tracking_lag`) CI 상한 + 인지 지연(50 ms + 격자 ms). c의 계단 지연은 참고 | `config/common.yaml` `t_r` |
 | 트리거 지연 | 0.05 s | Exp0: `/trigger` stamp vs #2 `latency_s`, LED+카메라 | `config/common.yaml` `trigger_latency` |
-| #2 진입 시간 | 0.2 s | Exp0: #2 출발 → 앞 끝 차선 경계 (천장 카메라) | `config/common.yaml` `popout_enter_time` |
+| #2 진입 시간 | 0.2 s (시뮬 #2 모델은 0.556 s — 실측 전 참고) | Exp0 f: #2 출발 → 앞 끝 차선 경계 (`reach_lane_s`, 천장 카메라) | `config/common.yaml` `popout_enter_time` |
 | #2 ERPM 계수, 직진 서보 | 4614, 0.5 | #2에서 odom 스케일 보정과 같은 방법 | `config/popout.yaml` `erpm_gain`, `servo_center` |
 | 트랙 좌표 | row_x_start 4.0 (유일 출처), stop_distance 7.5, accel_end_x 2.5, test_x 2.5–7.0. row_x_end·collision_x는 `track_layout` 계산값 사본 | 트랙 마킹 후 줄자 (row_x_start, box_len, gap_width) | `config/scenario_S*.yaml` (8절) |
+| B1 ROI 반폭 (갓길) | 0.35 (갓길 0) | 차선 경계 ~ 좌측 벽·주차 박스 차선 쪽 면 거리 실측, 좌우 중 작은 쪽 + 0.35 | `config/common.yaml` `b1_roi_half_width` |
 | 좌측 벽 목표 거리 | 0.355 | 좌측 벽 ~ 차선 왼쪽 경계 거리 실측 → 식은 `common.yaml` 주석 | `config/common.yaml` `target_wall_distance` |
 | 점별 시각 필드 (deskew) | `timestamp`, 1e-9, absolute | `check_vehicle.sh` 점군 필드 목록 | `config/common.yaml` `time_field`, `time_scale`, `time_mode` |
 

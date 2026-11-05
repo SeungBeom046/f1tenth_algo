@@ -47,6 +47,12 @@ lidar:                     # Livox Mid-360 근사
   range_noise_std: 0.0     # 거리 노이즈 [m]. 0 = RQ4 기준선 (완벽한 가림)
   grid_azimuth: 720        # pattern=grid일 때 방위 개수 (rays_per_frame = 방위 × 고도)
 
+timing_overrides:          # 시뮬 모델에서 정해 시뮬에만 넣는 값 (실차 common.yaml은 그대로). docs/SIMULATION.md 5절
+  t_r_eff: true            # speed_layer_node t_r = common.yaml t_r(0.15, 차량 모델의 순수 구동 지연) + vehicle.tau.
+                           #   1차 지연 τ는 기울기 일정한 명령을 정확히 τ 늦게 따라가므로 등가 지연 τ로 더한다. B2·P 같은 값
+  popout_from_model: true  # trigger_node popout_enter_time = 시뮬 #2 모델 진입 시간(sim/popout_timing.py, Exp0 f와 같은 측정),
+                           #   trigger_latency = 0 (시뮬 /trigger 전달 지연 없음). 실차 값은 Exp0까지 [EXP0-MEASURE] 유지
+
 mux_overrides:             # 시뮬에서 끄는 exp_drive_mux 항목 (실차 common.yaml은 그대로)
   require_joy: false       # 조이스틱 데드맨 없음
   require_preflight: false # 발행자 점검 없음

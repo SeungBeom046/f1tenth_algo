@@ -6,9 +6,9 @@
 규칙 (2.11절):
     - 시나리오별로 분리해 보고한다. S2/S3/S4 평균은 내지 않는다 (S2는 정당한 감속, S3·S4는 과잉 보수성).
     - 명령 기준(dT_cmd)과 실측 기준(dT_meas)을 따로 낸다. 논문 주장의 핵심 근거는 명령 기준.
-    - 폐기 회차(v_ref 미도달, 조이스틱 끊김, 수동 폐기)는 통계에서 빼고 폐기 수와 사유를 함께 낸다.
-    - S1은 d_e별로 나눈다. 안전 지표: 무충돌 비율, 최소 TTC, 최소 거리.
-    - S2–S4에서 AEB가 발동한 회차는 'AEB 오작동'으로 방법별로 따로 세고, 효율 통계에서 빼며 뺀 수를 함께 낸다.
+    - 폐기 회차(명령 v_ref인데 실측 미달, 조이스틱 끊김, 수동 폐기)는 통계에서 빼고 폐기 수와 사유를 함께 낸다.
+    - S1은 d_e별로 나눈다. 안전 지표: 무충돌 비율, 충돌 속도(최대·평균, v_imp 이하/초과), 최소 TTC, 최소 거리.
+    - S2–S4에서 정지선 전에 AEB가 발동한 회차는 'AEB 오작동'으로 방법별로 따로 세고, 효율 통계에서 빼며 뺀 수를 함께 낸다.
 """
 
 import argparse
@@ -73,8 +73,17 @@ def summarize(runs):
             col = [r.get('collision') for r in kept if r.get('collision') is not None]
             row['collision_free_ratio'] = (col.count(False) / len(col)) if col else None
             row['n_collisions'] = col.count(True)
-            impacts = [r['impact_speed'] for r in kept if r.get('impact_speed') is not None]
+            impacts = [r['impact_speed'] for r in kept if r.get('collision') and r.get('impact_speed') is not None]
             row['impact_speed_mean'] = (sum(impacts) / len(impacts)) if impacts else None
+            row['impact_speed_max'] = max(impacts) if impacts else None
+            # 충돌 속도 대 v_imp (metrics.impact_class): v_imp 이하 충돌 / 초과 충돌
+            classes = [r.get('impact_class') for r in kept if r.get('collision')]
+            row['n_impact_le_vimp'] = classes.count('le_vimp')
+            row['n_impact_gt_vimp'] = classes.count('gt_vimp')
+            vimps = sorted({r.get('v_imp') for r in kept if r.get('v_imp') is not None})
+            row['v_imp'] = ','.join(f'{v:.3f}' for v in vimps)
+            mean, half, n = mean_ci95([r.get('d_e_actual') for r in kept])
+            row['d_e_actual'], row['d_e_actual_ci95'], row['d_e_actual_n'] = mean, half, n
         rows.append(row)
     return rows
 
@@ -100,11 +109,16 @@ def write(rows, out_dir):
             continue
         lines += [f'## {scen}', '']
         if scen == 'S1':
-            lines += ['| d_e | 방법 | 사용/전체 | 무충돌 비율 | 최소 TTC [s] | 최소 거리 [m] | ΔT cmd | ΔT meas | 폐기 사유 |',
-                      '|---|---|---|---|---|---|---|---|---|']
+            lines += ['충돌 속도: 충돌 회차의 최대·평균 [m/s], (v_imp 이하 충돌 수 / 초과 충돌 수). 실제 d_e = 천장 카메라(실차)·참값(시뮬).', '',
+                      '| d_e | 방법 | 사용/전체 | 실제 d_e [m] | 충돌 | 충돌 속도 최대 / 평균 | ≤v_imp / >v_imp | 최소 TTC [s] | 최소 거리 [m] | ΔT cmd | ΔT meas | 폐기 사유 |',
+                      '|---|---|---|---|---|---|---|---|---|---|---|---|']
             for r in sel:
                 lines.append(f'| {r["d_e"]} | {r["method"]} | {r["n_used"]}/{r["n_total"]} | '
-                             f'{fmt(r["collision_free_ratio"])} | {fmt(r["min_ttc"], r["min_ttc_ci95"])} | '
+                             f'{fmt(r["d_e_actual"], r["d_e_actual_ci95"])} | '
+                             f'{r["n_collisions"]}/{r["n_total"] - r["n_discarded"]} | '
+                             f'{fmt(r["impact_speed_max"])} / {fmt(r["impact_speed_mean"])} | '
+                             f'{r["n_impact_le_vimp"]} / {r["n_impact_gt_vimp"]} | '
+                             f'{fmt(r["min_ttc"], r["min_ttc_ci95"])} | '
                              f'{fmt(r["min_distance"], r["min_distance_ci95"])} | '
                              f'{fmt(r["dT_cmd"], r["dT_cmd_ci95"])} | {fmt(r["dT_meas"], r["dT_meas_ci95"])} | '
                              f'{r["discard_reasons"] or "–"} |')
@@ -119,8 +133,8 @@ def write(rows, out_dir):
                              f'{fmt(r["jerk_rms"], r["jerk_rms_ci95"])} | {r["discard_reasons"] or "–"} |')
         lines.append('')
     total = sum(r['n_discarded'] for r in rows)
-    lines.append(f'폐기 회차 총 {total}개 (v_ref 미도달 포함).')
-    lines += ['', '## AEB 오작동 (S2–S4, 돌출 없는데 AEB 발동) — 효율 통계에서 제외', '',
+    lines.append(f'폐기 회차 총 {total}개. 폐기 규칙: 가속 구간 끝 명령 = v_ref인데 실측 < 0.95 v_ref (metrics.discard_check).')
+    lines += ['', '## AEB 오작동 (S2–S4, 돌출 없는데 정지선 전에 AEB 발동) — 효율 통계에서 제외', '',
               '| 방법 | S2 | S3 | S4 | 합계 |', '|---|---|---|---|---|']
     for m in METHODS:
         counts = [sum(r['n_aeb_malfunction'] for r in rows if r['method'] == m and r['scenario'] == s)

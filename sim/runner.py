@@ -117,6 +117,9 @@ class Sim:
         self.T_base_lidar = mat(cfg.mount['lidar_xyz'][0], cfg.mount['lidar_xyz'][1], cfg.mount['lidar_rpy'][2],
                                 cfg.mount['lidar_xyz'][2])
         self.frame = None   # 현재 라이다 프레임의 TF
+        if self.car2 and s.get('timing_overrides', {}).get('popout_from_model'):
+            import popout_timing
+            cfg.timing = popout_timing.enter_time(cfg, self.dt)
         self.make_nodes()
 
     # ------------------------------------------------------------ 노드
@@ -405,6 +408,9 @@ def save(sim, log, frames, run_dir, wall):
             'world_boxes': [{'name': b.name, 'center': b.center, 'half': b.half} for b in sim.world.boxes],
             'car2_start': sim.world.car2_start, 'start_pose': sim.start,
             'sim_differences': ['조이스틱 데드맨·발행자 점검 끔', 'odom 참값', '운동학 차량 모델',
+                                f'v_cap t_r = t_r + tau = {sim.cfg.t_r_eff():.3f} (timing_overrides)',
+                                f'popout_enter_time = 시뮬 #2 모델 {sim.cfg.timing.get("popout_enter_time")}, '
+                                'trigger_latency = 0' if sim.cfg.timing else 'popout 시뮬 값 없음 (S1 아님)',
                                 ('단순 조향(시뮬 전용)' if sim.args.steering == 'simple' else '조향 = 실차 exp_steering_node')]}
     with open(os.path.join(run_dir, 'meta.json'), 'w', encoding='utf-8') as f:
         json.dump(meta, f, ensure_ascii=False, indent=2, default=float)

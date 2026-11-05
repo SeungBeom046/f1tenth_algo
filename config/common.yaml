@@ -12,7 +12,9 @@
   ros__parameters:
     # ---------- 속도 계층 (speed_layer_node, trigger_node) ----------
     v_ref: 2.0              # [EXP-FIXED] 목표 속도. 방법마다 다르면 손실 ΔT의 기준이 달라져 비교 불가
-    t_r: 0.15               # [EXP-FIXED][EXP0-MEASURE] 반응시간 [s]. v_cap 식 공통. Exp0 급제동으로 측정
+    t_r: 0.15               # [EXP-FIXED][EXP0-MEASURE] 전체 지연 [s] = 관측 → 실제 감속 시작 (인지 + 통신 + 제어 + 구동,
+                            #   속도 제어 1차 지연은 등가 지연으로 포함). v_cap 식 공통 (B2·P 같은 값).
+                            #   Exp0 c(급제동)·i(추종 지연)로 측정 → analysis/exp0_braking.py (EXPERIMENT_PLAN Exp0)
     a_b: 3.0                # [EXP-FIXED][EXP0-MEASURE] 최대 감속 [m/s^2]. v_cap 식 공통. Exp0에서 /imu로 측정
     s_m: 0.2                # [EXP-FIXED] 정지 여유 [m]. v_cap 식 공통
     v_imp: 0.867            # [EXP-TUNE] 허용 충돌속도 [m/s]. 하한 = V_MIN(=4000/4614=0.867, 플랫폼 최소 안정 속도).
@@ -46,7 +48,12 @@
     roi_x_max: 6.0          # [EXP-FIXED] phantom 탐색 앞쪽 한계 (base_link x) [m]
     roi_half_y: 1.5         # [EXP-FIXED] phantom 탐색 좌우 한계 [m]
     b1_roi_length: 3.0      # [EXP-TUNE] B1 ROI 길이 (앞 끝부터) [m]. 권장 2–4
-    b1_roi_half_width: 1.0  # [EXP-TUNE] B1 ROI 반폭 [m]. 권장 0.6–1.2
+    b1_roi_half_width: 0.35 # [EXP-TUNE] B1 ROI 반폭 [m]. 기본값은 결과와 무관한 트랙 기준으로 정한다:
+                            #   반폭 = 차선 중앙 ~ 트랙 구조물(좌측 벽 패널, 주차 박스) 차선 쪽 면 거리
+                            #        = 차선 폭 0.7 / 2 + 갓길(차선 경계 ~ 구조물 면, 계획서상 붙어 있음 = 0) = 0.35
+                            #   구조물 안·뒤 칸은 차가 들어갈 수 없고 늘 미관측이라 rho가 가림이 아니라 구조물을 재게 된다.
+                            #   좌우 갓길이 다르면 작은 쪽. 트랙 마킹 후 갓길 실측해 교체 (target_wall_distance의 w_off와 같은 값).
+                            #   민감도 0.6 / 0.8 / 1.0 (EXPERIMENT_PLAN 7절, sim/sweep.py --b1-roi-half-width)
     w_min: 0.35             # [EXP-TUNE] P 최소 틈 폭 [m]. 돌출 차량 폭 0.30 + 여유. 권장 0.25–0.45
     row_y_min: 0.30         # [EXP-FIXED] P 주차열로 보는 occupied 칸의 |y| 범위 [m]
     row_y_max: 1.20

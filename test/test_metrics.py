@@ -35,6 +35,42 @@ class LossTest(unittest.TestCase):
         su, vu = M.series_on_s(t_s, s, np.array([0.5, 1.2, 1.8, 2.5]), np.array([1, 0.3, 0.0, 1]))
         self.assertEqual(vu[np.argmin(np.abs(su - 1.0))], 0.0)
 
+    def test_discard_only_when_commanded_vref(self):
+        s = np.linspace(0, 5, 501)
+        # 명령 v_ref, 실측 1.8 (< 1.9) → 폐기
+        bad, why, info = M.discard_check(s, np.full_like(s, 2.0), s, np.full_like(s, 1.8), 2.5, 2.0)
+        self.assertTrue(bad)
+        self.assertEqual(why, 'vref_not_reached')
+        self.assertAlmostEqual(info['meas_at_accel_end'], 1.8)
+        # 알고리즘이 스스로 감속 (명령 1.5) → 실측 1.4여도 폐기하지 않음
+        bad, why, _ = M.discard_check(s, np.full_like(s, 1.5), s, np.full_like(s, 1.4), 2.5, 2.0)
+        self.assertFalse(bad)
+        # 명령 v_ref, 실측 1.95 (허용치 안) → 사용
+        self.assertFalse(M.discard_check(s, np.full_like(s, 2.0), s, np.full_like(s, 1.95), 2.5, 2.0)[0])
+        # 가속 구간 중간에 알고리즘이 감속(명령 1.0)했다가 끝에서 v_ref로 복귀, 실측 미달 → 폐기하지 않음
+        cmd = np.where((s > 1.0) & (s < 1.5), 1.0, 2.0)
+        bad, _, info = M.discard_check(s, cmd, s, np.full_like(s, 1.8), 2.5, 2.0)
+        self.assertFalse(bad)
+        self.assertAlmostEqual(info['cmd_min_accel'], 1.0)
+        # 출발 전(s < 0.05) 명령 0은 보지 않음
+        cmd = np.where(s < 0.02, 0.0, 2.0)
+        self.assertTrue(M.discard_check(s, cmd, s, np.full_like(s, 1.8), 2.5, 2.0)[0])
+        # 가속 구간 끝에 못 감
+        self.assertEqual(M.discard_check(s[:100], np.full(100, 2.0), s[:100], np.full(100, 2.0), 2.5, 2.0)[1],
+                         'accel_end_not_reached')
+
+    def test_aeb_malfunction_before_stop_line_only(self):
+        self.assertTrue(M.aeb_malfunction('S2', 3.0, 7.5))
+        self.assertFalse(M.aeb_malfunction('S2', 7.6, 7.5))   # 정지선 뒤
+        self.assertFalse(M.aeb_malfunction('S1', 3.0, 7.5))   # 돌출 있음
+        self.assertFalse(M.aeb_malfunction('S3', None, 7.5))
+
+    def test_impact_class(self):
+        self.assertEqual(M.impact_class(0.8, 0.867), 'le_vimp')
+        self.assertEqual(M.impact_class(0.867, 0.867), 'le_vimp')
+        self.assertEqual(M.impact_class(1.2, 0.867), 'gt_vimp')
+        self.assertIsNone(M.impact_class(None, 0.867))
+
     def test_vref_reached(self):
         s = np.linspace(0, 3, 301)
         self.assertTrue(M.vref_reached(s, np.minimum(2.0, s), 2.5, 2.0))

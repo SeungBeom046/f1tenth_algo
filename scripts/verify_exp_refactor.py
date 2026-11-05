@@ -197,7 +197,8 @@ def run_grid(module, frames, overrides):
 def run_phantom(module, grids, method):
     rosstub.set_time(rn, 0.0)
     rn.BUS.clear()
-    node = rosstub.make_node(rn, module.PhantomNode, {'method': method})
+    # B1 ROI 반폭 기본값은 이후 의도적으로 바꿨다 (1.0 → 0.35). 기준 커밋과 같은 값을 명시해 리팩터만 비교한다
+    node = rosstub.make_node(rn, module.PhantomNode, {'method': method, 'b1_roi_half_width': 1.0})
     out = []
     for msg, T_ob in grids:
         pose = (T_ob[0, 3], T_ob[1, 3], math.atan2(T_ob[1, 0], T_ob[0, 0]))

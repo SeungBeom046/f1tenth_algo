@@ -37,7 +37,7 @@ class PhantomNode(Node):
         defaults = [('method', 'B0'), ('vehicle_geometry_file', ''),
                     ('odom_frame', 'odom'), ('base_frame', 'base_link'),
                     ('roi_x_max', 6.0), ('roi_half_y', 1.5),
-                    ('b1_roi_length', 3.0), ('b1_roi_half_width', 1.0),
+                    ('b1_roi_length', 3.0), ('b1_roi_half_width', 0.35),
                     ('w_min', 0.35), ('row_y_min', 0.30), ('row_y_max', 1.20),
                     ('row_link_dist', 0.10), ('row_face_tol', 0.10), ('row_end_margin', 0.5),
                     ('p_lateral_filter', 0.0)]

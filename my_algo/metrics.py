@@ -8,7 +8,11 @@
     decel_length       v < 0.95 v_ref 인 구간 총 길이
     jerk_rms           IMU 종방향 가속도 → 2차 Butterworth 저역통과(JERK_CUTOFF_HZ, 양방향) → 미분 → RMS
     footprint_distance 장애물 점과 차체 다각형 최소 거리 → 최소 거리, 충돌 여부, 충돌 시 속도, 최소 TTC
-    vref_reached       가속 구간 끝에서 v_ref 도달 여부 (미도달 회차는 폐기, 폐기 수 보고)
+    vref_reached       가속 구간 끝에서 실측 속도 >= 0.95 v_ref 여부 (참고용. 폐기 판정은 discard_check)
+    discard_check      폐기 판정: 가속 구간 끝까지 명령 속도가 v_ref였는데 실측 속도가 v_ref(1 - 허용치) 미만일 때만 폐기.
+                       알고리즘이 스스로 감속한 회차(가속 구간 안 명령 < v_ref)는 폐기하지 않는다 (실차·시뮬 공통)
+    aeb_malfunction    S2–S4에서 정지선(stop_distance) 전에 AEB가 처음 걸린 회차 (실차·시뮬 공통)
+    impact_class       충돌 속도와 v_imp 비교 ('le_vimp' / 'gt_vimp')
 """
 
 import math
@@ -21,6 +25,8 @@ JERK_CUTOFF_HZ = 5.0     # [EXP-FIXED] jerk 저역통과 차단주파수. 방법
 V_FLOOR = 0.05           # 손실 적분에서 1/v 발산을 막는 하한 [m/s]. 이 값이 쓰이면 floored 플래그
 DECEL_RATIO = 0.95       # [EXP-FIXED] 감속 구간 판정 v < 0.95 v_ref
 VREF_REACH_RATIO = 0.95  # [EXP-FIXED] 가속 구간 끝 v_ref 도달 판정
+DISCARD_TOL = 1.0 - VREF_REACH_RATIO  # [EXP-FIXED] 폐기 허용치: 실측 < v_ref (1 - 0.05)
+CMD_AT_VREF_EPS = 1e-3   # 명령 속도가 v_ref와 이만큼 안이면 'v_ref 명령'으로 본다 [m/s]
 DS = 0.01                # 위치 격자 간격 [m]
 
 
@@ -83,6 +89,43 @@ def vref_reached(s, v, accel_end, v_ref, ratio=VREF_REACH_RATIO):
     if len(s) == 0 or s.max() < accel_end:
         return False
     return bool(np.interp(accel_end, s, v) >= ratio * v_ref)
+
+
+def discard_check(s_cmd, v_cmd, s_meas, v_meas, accel_end, v_ref, tol=DISCARD_TOL, eps=CMD_AT_VREF_EPS,
+                  s_moving=0.05):
+    """폐기 판정 (모든 방법 공통, 실차·시뮬 같은 함수).
+
+    s_cmd, v_cmd: 실제로 보낸 명령 속도(/exp/final_cmd)의 위치 계열. s_meas, v_meas: 실측 속도 위치 계열.
+    가속 구간 끝(accel_end)에서 실측이 v_ref (1 - tol) 미만이고, 그때까지 명령이 계속 v_ref였으면
+    (출발 후 s_moving ~ accel_end 전 구간에서 명령 >= v_ref - eps) 플랫폼 문제로 보고 폐기한다.
+    가속 구간 안에서 명령이 한 번이라도 v_ref 아래였으면(알고리즘이 스스로 감속, 최소 속도 정책, AEB)
+    미달의 원인이 알고리즘에 있으므로 폐기하지 않고 지표에 포함한다.
+    반환 (폐기 여부, 사유 또는 None, 정보 dict).
+    """
+    s_cmd, v_cmd, s_meas, v_meas = (np.asarray(x, float) for x in (s_cmd, v_cmd, s_meas, v_meas))
+    info = {'cmd_at_accel_end': None, 'cmd_min_accel': None, 'meas_at_accel_end': None}
+    if len(s_meas) == 0 or s_meas.max() < accel_end or len(s_cmd) == 0 or s_cmd.max() < accel_end:
+        return True, 'accel_end_not_reached', info
+    cmd = float(np.interp(accel_end, s_cmd, v_cmd))
+    win = (s_cmd >= s_moving) & (s_cmd <= accel_end)
+    cmd_min = float(min(v_cmd[win].min(), cmd)) if win.any() else cmd
+    meas = float(np.interp(accel_end, s_meas, v_meas))
+    info.update(cmd_at_accel_end=cmd, cmd_min_accel=cmd_min, meas_at_accel_end=meas)
+    if cmd_min >= v_ref - eps and meas < v_ref * (1.0 - tol):
+        return True, 'vref_not_reached', info
+    return False, None, info
+
+
+def aeb_malfunction(scenario, aeb_first_s, stop_distance):
+    """S2–S4(돌출 없음)에서 정지선 전에 AEB가 처음 걸리면 오작동. 정지선 뒤(감속 중 방호벽 근접)는 제외."""
+    return bool(scenario != 'S1' and aeb_first_s is not None and aeb_first_s <= float(stop_distance))
+
+
+def impact_class(impact_speed, v_imp):
+    """충돌 속도 구분: v_imp 이하 충돌('le_vimp') / 초과 충돌('gt_vimp'). 충돌 없음이면 None."""
+    if impact_speed is None:
+        return None
+    return 'le_vimp' if impact_speed <= float(v_imp) + 1e-9 else 'gt_vimp'
 
 
 def butter2_lowpass(x, fs, fc):

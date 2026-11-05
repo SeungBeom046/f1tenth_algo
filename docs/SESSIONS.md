@@ -366,12 +366,18 @@ python3 analysis/odom_travel.py ~/exp_logs/<날짜>/E0_B0_dena_run0{1,2,3} --tap
 ```
 결과(비율)는 보내기만 한다 — **ERPM_GAIN 변경은 drive 속도도 바꾸므로 승인 후 별도 커밋** ([OPEN_ITEMS 2절](OPEN_ITEMS.md)).
 
-### 2-5. 급제동 a_b·t_r (c) — 30분
+### 2-5. 급제동 a_b (c) + 추종 지연 t_r (i) — 45분
 ```bash
-ros2 launch my_algo bringup.launch.py mode:=exp method:=B0 scenario:=E0 run_id:=<n>    # n = 21..30
+ros2 launch my_algo bringup.launch.py mode:=exp method:=B0 scenario:=E0 run_id:=<n>    # c: n = 21..30
 bash $S/record_run.sh exp B0 E0 na <n>
 ```
-노트북: `python3 analysis/exp0_braking.py ~/exp_logs/<날짜>` → `exp0_braking.json` 권장값.
+i (S2 배치로 박스를 놓고, #2 없음): 명령이 v_cap 곡선을 따라 완만히 내려가는 동안 실측 속도가 얼마나 늦게 따라오는지 잰다.
+```bash
+ros2 launch my_algo bringup.launch.py mode:=exp method:=B2 scenario:=S2 run_id:=<n>    # i: n = 31..35
+bash $S/record_run.sh exp B2 S2 na <n>
+```
+노트북: `python3 analysis/exp0_braking.py ~/exp_logs/<날짜> --tracking S2_B2_dena_run31 S2_B2_dena_run32 ...`
+→ `exp0_braking.json` 권장값 (a_b = 급제동 CI 하한, **t_r = 인지 지연 + 추종 지연 CI 상한**). i 회차는 비교 실험에 넣지 않는다.
 
 ### 2-6. AEB 단독 정지 (g) — 15분 ⚠ 정지 박스
 빈 트랙, 차선 중앙 x ≈ 5 m에 박스 하나(폼). S2 정지선(7.5 m)보다 앞.

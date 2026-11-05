@@ -6,7 +6,7 @@
     run_meta.py discard <run_dir> <사유>                               → 수동 폐기 표시 (예: battery_low)
 
 meta.json 필드: mode, method, scenario, d_e, run_id, 시작/종료 시각, 시작 배터리 전압,
-    AEB 발동 여부·횟수·첫 발동 시각·위치·원인 점(aeb), S2–S4 발동 시 aeb_malfunction=true,
+    AEB 발동 여부·횟수·첫 발동 시각·위치·원인 점(aeb), S2–S4에서 정지선 전 발동 시 aeb_malfunction=true,
     git commit hash(+dirty), common.yaml sha256과 세션 첫 회차 일치 여부,
     ERPM_GAIN, MIN_DRIVING_RPM, V_MIN, VESC speed_to_erpm_gain, 폐기 여부·사유.
 확인 전 이름은 환경변수로 바꾼다:
@@ -23,6 +23,7 @@ import subprocess
 import sys
 import time
 
+from my_algo.metrics import aeb_malfunction
 from my_algo.run_paths import run_dir, session_dir
 from my_algo.speed_policy import V_MIN
 from my_algo.vehicle_utils import ERPM_GAIN, MIN_DRIVING_RPM
@@ -153,6 +154,16 @@ def start(mode, method, scenario, d_e, run_id):
     print(rdir)
 
 
+def scenario_stop_distance(scenario):
+    """설치된 scenario yaml의 stop_distance (없으면 inf: 모든 발동을 정지선 전으로 본다)."""
+    try:
+        import yaml
+        with open(share_path('config', f'scenario_{scenario}.yaml'), encoding='utf-8') as f:
+            return float(yaml.safe_load(f)['/**']['ros__parameters']['stop_distance'])
+    except (OSError, KeyError, ImportError, TypeError, ValueError):
+        return float('inf')
+
+
 def finish(rdir):
     path = os.path.join(rdir, 'meta.json')
     with open(path, encoding='utf-8') as f:
@@ -180,8 +191,10 @@ def finish(rdir):
                    'first_travel_m': None if first is None else first['travel_m'],
                    'first_cause_point': None if first is None else first['cause_point'],
                    'events': aeb_events}
-    # 돌출이 없는 시나리오에서 AEB가 걸리면 오작동: 효율 지표에서 빼고 방법별로 따로 센다
-    meta['aeb_malfunction'] = bool(in_run) and meta['scenario'] != 'S1'
+    # 돌출이 없는 시나리오에서 정지선 전에 AEB가 걸리면 오작동 (analysis/extract_run.py·시뮬과 같은 함수).
+    # 효율 지표에서 빼고 방법별로 따로 센다. 최종 판정은 extract_run이 bag으로 다시 한다
+    meta['aeb_malfunction'] = aeb_malfunction(meta['scenario'], meta['aeb']['first_travel_m'],
+                                              scenario_stop_distance(meta['scenario']))
     bag = os.path.join(rdir, 'bag')
     meta['bag_bytes'] = sum(os.path.getsize(os.path.join(dp, fn))
                             for dp, _, fns in os.walk(bag) for fn in fns) if os.path.isdir(bag) else 0
