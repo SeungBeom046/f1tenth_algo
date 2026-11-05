@@ -12,6 +12,7 @@ exp_steering_node(기본, --steering simple이면 시뮬 전용 단순 조향), 
 """
 import argparse
 import datetime
+import hashlib
 import json
 import math
 import os
@@ -247,17 +248,21 @@ class Sim:
         d_static = min(polygon_distance(ego_poly, p) for p in self.static_polys)
         return d_car2, d_static
 
-    def run(self, viewer=None):
+    def run(self, hook=None):
+        """고정 스텝 루프. hook(뷰어 오버레이·배속)은 스텝이 끝난 뒤 상태를 읽기만 한다 → 배치와 같은 결과.
+
+        hook.after_step(sim)이 False를 돌려주면(창 닫힘) 멈춘다. 일시정지·배속은 hook 안에서 벽시계로만 기다린다.
+        """
         s = self.cfg.sim['sim']
         lidar_period = 1.0 / float(self.cfg.sim['lidar']['hz'])
         self.t, next_lidar, auto_sent, stopped_since = 0.0, 0.0, False, None
         log = {k: [] for k in ('t', 'x', 'y', 'yaw', 'v', 'steer', 's', 'final_cmd', 'v_cmd', 'v_raw', 'v_cap',
                                'd', 'rho', 'aeb', 'stop_reason', 'flag', 'car2_x', 'car2_y', 'car2_v',
                                'dist_car2', 'dist_static')}
-        frames = {'t': [], 'phantoms': [], 'boundary': [], 'grid': [], 'grid_origin': []}
+        frames = {'t': [], 'phantoms': [], 'boundary': [], 'grid': [], 'grid_origin': [], 'cloud_digest': []}
         travel0 = None
         steps = int(round(float(s['max_time']) / self.dt))
-        wall0 = time.time()
+        self.log, self.frames = log, frames
         for k in range(steps):
             self.t = round((k + 1) * self.dt, 9)
             rosstub.set_time(rn, self.t)
@@ -280,13 +285,8 @@ class Sim:
                 self.route()
             self.apply_commands()
             self.log_step(log, travel0)
-            if viewer is not None:
-                viewer.sync()
-                lag = (wall0 + self.t) - time.time()
-                if lag > 0:
-                    time.sleep(lag)
-                if not viewer.is_running():
-                    break
+            if hook is not None and hook.after_step(self) is False:
+                break
             reason = self.tap.get('/exp/stop_reason', '')
             if reason in ('stop_line', 'aeb', 'joy_timeout') and self.ego.v < 0.02:
                 stopped_since = stopped_since or self.t
@@ -297,6 +297,9 @@ class Sim:
     def lidar_frame(self, frames):
         pose = self.ego.pose()
         pts_l, pts_w, origin = self.lidar.scan(self.d, pose)
+        self.last_points_world = pts_w        # 뷰어 표시용 (읽기 전용)
+        # 점군 지문: 배치·뷰어 결과가 비트 단위로 같은지 확인용 (격자는 점 몇 개가 달라도 같을 수 있다)
+        frames['cloud_digest'].append(hashlib.sha1(np.ascontiguousarray(pts_l, '<f8').tobytes()).hexdigest())
         ox, oy, oyaw = self.to_odom(*pose)
         T_odom_base = mat(ox, oy, oyaw)
         self.frame = {'odom_base': T_odom_base, 'odom_lidar': T_odom_base @ self.T_base_lidar,
@@ -428,6 +431,8 @@ def parse(argv=None):
     ap.add_argument('--out-dir', default=None, help='회차 폴더를 직접 지정')
     ap.add_argument('--tag', default='')
     ap.add_argument('--viewer', action='store_true', help='대화형 뷰어 (macOS: mjpython으로 실행)')
+    ap.add_argument('--viewer-max-points', type=int, default=4000,
+                    help='뷰어에 그릴 라이다 점 수 상한 (표시용 솎아내기, 알고리즘 입력은 그대로)')
     ap.add_argument('--video', action='store_true', help='위에서 본 영상 mp4 저장')
     ap.add_argument('--verbose', action='store_true', help='노드 상태 출력 보이기')
     for k in simconfig.TUNE_KEYS:
@@ -448,8 +453,11 @@ def main(argv=None):
     with quiet:   # 노드 상태 출력(planner의 [LiDAR] 줄 등)을 숨긴다
         if args.viewer:
             import mujoco.viewer
-            with mujoco.viewer.launch_passive(sim.m, sim.d) as v:
-                log, frames = sim.run(viewer=v)
+            import viewer_ui
+            ui = viewer_ui.ViewerUI(sim, max_points=args.viewer_max_points)
+            with mujoco.viewer.launch_passive(sim.m, sim.d, key_callback=ui.on_key) as v:
+                ui.attach(v)
+                log, frames = sim.run(hook=ui)
         else:
             log, frames = sim.run()
     meta = save(sim, log, frames, args.out_dir, time.time() - wall0)
