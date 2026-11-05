@@ -133,7 +133,7 @@ def write(rows, out_dir):
                              f'{fmt(r["jerk_rms"], r["jerk_rms_ci95"])} | {r["discard_reasons"] or "–"} |')
         lines.append('')
     total = sum(r['n_discarded'] for r in rows)
-    lines.append(f'폐기 회차 총 {total}개. 폐기 규칙: 가속 구간 끝 명령 = v_ref인데 실측 < 0.95 v_ref (metrics.discard_check).')
+    lines.append(f'폐기 회차 총 {total}개. 폐기 규칙: 가속 구간 끝까지 명령이 v_ref였는데 실측 < 0.95 v_ref (metrics.discard_check).')
     lines += ['', '## AEB 오작동 (S2–S4, 돌출 없는데 정지선 전에 AEB 발동) — 효율 통계에서 제외', '',
               '| 방법 | S2 | S3 | S4 | 합계 |', '|---|---|---|---|---|']
     for m in METHODS:
