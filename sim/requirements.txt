@@ -1,0 +1,7 @@
+# sim/.venv (Python 3.12, Homebrew, arm64). 실제로 쓰는 것만, 이 Mac에서 검증한 버전으로 고정.
+mujoco==3.12.0          # 물리·레이캐스트(mj_multiRay)·렌더·뷰어(mjpython)
+numpy==2.5.4            # my_algo 순수 모듈 (numpy 2.5에서 레포 테스트 통과 확인)
+PyYAML==6.0.3           # config/*.yaml, vehicle_geometry.yaml
+matplotlib==3.11.2      # 위에서 본 영상 프레임, 그림 5·6 시뮬판
+imageio==2.38.1         # mp4 저장
+imageio-ffmpeg==0.8.1   # imageio의 ffmpeg 바이너리
