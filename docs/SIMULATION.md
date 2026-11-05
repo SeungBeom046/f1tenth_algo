@@ -87,6 +87,7 @@ python sim/check_env.py       # (venv 활성화 후) 점검만: mujoco 버전, m
 | `--viewer`, `--video` | | 대화형 뷰어 (mjpython), 위에서 본 mp4 (`<회차>/topdown.mp4`, 있는 회차는 `python sim/video.py <회차>`) |
 | `--viewer-max-points` | 4000 | 뷰어에 그릴 라이다 점 수 (표시용) |
 | `--start-paused` | | 뷰어가 일시정지 상태로 뜬다. Enter로 시작 |
+| `--boundary-pillars` | | 뷰어 가림 경계를 얇은 기둥으로 (비스듬한 시점용). 기본은 바닥 위 얇은 마커 |
 | `--test-step-v`, `--test-step-x` | 1.2, 2.5 | Exp0 i 시뮬판: 주행 거리 x에서 속도 명령을 v로 계단처럼 내림 (`--method B0 --scenario E0`). `metrics.json` `step_lag` = 실차 `exp0_braking.py`와 같은 함수 |
 
 [EXP-TUNE] 값만 덮어쓸 수 있다 (실차 bringup 인자와 같은 이름, 다른 값은 오류):
@@ -107,8 +108,16 @@ python sim/sweep.py --scenarios S2 S3 --methods B2 P --seeds 0 1 --name quick
 
 - 키는 MuJoCo 기본 단축키(A–Z 표시 토글, 0–5 그룹, Space, 화살표, Backspace 리셋, Tab, `[` `]`, `+` `-`, F1–F5)와 겹치지 않는 것만 쓴다.
   같은 목록이 화면 왼쪽 아래에도 나온다. MuJoCo의 Space·Backspace는 이 시뮬 루프에 영향이 없다.
-- 오버레이 모양: 라이다 점 = 작은 상자(초록: base_link z 0.05–0.30 m 대역 안, 회색: 바닥·박스 위 등 대역 밖), 가림 경계 = 납작한 파란
-  사각형(이번 프레임 `/exp/boundary_frame`), phantom = 세운 원기둥(P 주황, B2 초록, B0·B1은 없음).
+- 오버레이 모양: 라이다 점 = 작은 상자(초록: base_link z 0.05–0.30 m 대역 안, 회색: 바닥·박스 위 등 대역 밖),
+  phantom = 세운 원기둥(P 주황, B2 초록, B0·B1은 없음).
+- 가림 경계 (보라): 기본은 N 프레임 누적 `/exp/boundary`, 키 7로 이번 프레임 `/exp/boundary_frame`(RQ4 흔들림 확인용) → 끔.
+  칸(0.05 m)의 60% 크기 얇은 마커를 바닥에서 2 cm 띄워 그리고, 이웃 칸(8방향)끼리 가는 선으로 이어 윤곽선처럼 보이게 한다.
+  `--boundary-pillars`면 높이 12 cm 얇은 기둥. **표시용 연결·크기만 바꾼다** (경계 계산, N, 히스테리시스, 로그는 그대로).
+- 미관측 바닥 (PgDn, 기본 끔): 마지막 발행 격자의 UNKNOWN 칸을 0.2 m 타일로 묶어 절반 이상 미관측이면 반투명 남색으로 칠한다
+  (에고 −1 ~ +7 m, |y| ≤ 2.2 m). 반투명 도형도 매 프레임 user_scn을 비우고 새로 그려 겹치지 않는다.
+- 재시작 후 화면이 어두워지던 문제: `mj_resetData`가 조명 위치·방향을 0으로 만들고 시뮬 루프는 `mj_kinematics`만 불러 다시 계산되지
+  않았다 (밝기 64.8 → 33.6). 재시작 때 `mj_forward` 한 번으로 고침. `sim/tests/test_viewer_render.py`가 재시작 3회 후 첫 프레임 픽셀·
+  오버레이 도형 수가 처음과 같은지 오프스크린 렌더로 확인한다.
 - 왼쪽 위 글자: method / scenario, 실제 속도, 명령 속도(`/exp/final_cmd`), v_cap, d(최근접 phantom), AEB 상태, 시뮬 시간,
   재생 상태(RUN / PAUSED / STEP / ENDED와 배속), phantom 색, 그린 라이다 점 수. MuJoCo 내장 글꼴이 ASCII만 그려서 영어다.
 - 라이다 점은 프레임당 최대 2만 개(`rays_per_frame`). 추가 도형 한도(`user_scn.maxgeom`)는 100,000개라 넘지 않지만 그리기 부담 때문에
@@ -132,7 +141,8 @@ python sim/sweep.py --scenarios S2 S3 --methods B2 P --seeds 0 1 --name quick
 - [ ] `mjpython sim/runner.py --method P --scenario S1 --d-e 1.0 --viewer`로 창이 뜬다
 - [ ] 왼쪽 위 글자 패널에 method, scenario, 속도, v_cap, d, AEB, sim time, playback이 보이고 시간이 흐른다
 - [ ] 초록·회색 라이다 점이 박스·벽 위에 보인다. 박스 윗면 위 점은 회색이다
-- [ ] 박스 사이 틈 근처에 파란 경계 칸이 보인다
+- [ ] 박스 뒤 가림을 따라 보라 경계선이 이어져 보인다. 7: 이번 프레임(끊기고 흔들림) → 끔 → 누적. PgDn: 박스 뒤 바닥이 남색
+- [ ] Home으로 재시작해도 화면 밝기가 처음과 같다
 - [ ] P에서 주황 phantom이 틈 입구에 보인다 (`--method B2`면 초록, 경계 칸 위)
 - [ ] Enter: 멈춘다 (PAUSED). 다시 Enter: 이어서 간다
 - [ ] 멈춘 상태에서 `.`: 시뮬 시간이 0.1 s씩 늘고 점·경계가 한 프레임씩 바뀐다

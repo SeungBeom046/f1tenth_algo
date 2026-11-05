@@ -340,6 +340,9 @@ class Sim:
                 xy = np.array([[mk.pose.position.x, mk.pose.position.y] for mk in msg.markers
                                if mk.action != 3]).reshape(-1, 2)
                 frames['phantoms'].append(to_world(xy))
+            elif topic == '/exp/boundary':
+                # N 프레임 누적 경계: 뷰어 표시용으로만 보관 (로그에 넣지 않음)
+                self.last_boundary_acc = to_world(np.array([[c.x, c.y] for c in msg.cells]).reshape(-1, 2))
             elif topic == '/exp/boundary_frame':
                 xy = np.array([[c.x, c.y] for c in msg.cells]).reshape(-1, 2)
                 frames['boundary'].append(to_world(xy))
@@ -452,6 +455,8 @@ def parse(argv=None):
     ap.add_argument('--test-step-x', type=float, default=2.5)
     ap.add_argument('--start-paused', action='store_true',
                     help='뷰어가 일시정지 상태로 뜬다 (창을 앞으로 가져올 시간). Enter로 시작')
+    ap.add_argument('--boundary-pillars', action='store_true',
+                    help='뷰어 가림 경계를 얇은 기둥으로 (비스듬한 시점에서 잘 보임). 기본은 바닥 위 얇은 마커')
     ap.add_argument('--viewer-max-points', type=int, default=4000,
                     help='뷰어에 그릴 라이다 점 수 상한 (표시용 솎아내기, 알고리즘 입력은 그대로)')
     ap.add_argument('--video', action='store_true', help='위에서 본 영상 mp4 저장')
@@ -516,7 +521,8 @@ def main(argv=None):
         if args.viewer:
             import mujoco.viewer
             import viewer_ui
-            ui = viewer_ui.ViewerUI(sim, max_points=args.viewer_max_points, start_paused=args.start_paused)
+            ui = viewer_ui.ViewerUI(sim, max_points=args.viewer_max_points, start_paused=args.start_paused,
+                                    pillars=args.boundary_pillars)
             with mujoco.viewer.launch_passive(sim.m, sim.d, key_callback=ui.on_key) as v:
                 ui.attach(v)
                 done = viewer_session(args, sim, ui, echo)

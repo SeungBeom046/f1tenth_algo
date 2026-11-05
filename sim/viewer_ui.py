@@ -10,7 +10,8 @@ MuJoCo 내장 글꼴은 ASCII만 그리므로 화면 글자는 영어다.
 
 키 (MuJoCo 기본 단축키와 겹치지 않는 것만: 기본은 A–Z 표시 토글, 0–5 그룹, Space·화살표·Backspace·Tab·[ ]·+ -·F1–F5):
     Enter  일시정지 / 재개          .  일시정지 중 라이다 1프레임(0.1 s) 진행      9  배속 1x <-> 0.25x
-    6      라이다 점                 7  가림 경계 칸                               8  phantom
+    6      라이다 점                 7  가림 경계: 누적 -> 이번 프레임 -> 끔         8  phantom
+    PgDn   미관측 영역 바닥 칠하기 (Mac: fn + 아래 화살표)
     End    글자 패널 (Mac: fn + 오른쪽 화살표)
     Home   재시작: 같은 설정·시드로 처음부터 (Mac: fn + 왼쪽 화살표). 지금 회차를 저장하고 _r1, _r2 ... 폴더로 새 회차
 MuJoCo 기본 Reset/Run/Pause(Backspace, Space, 왼쪽 패널 버튼)는 이 시뮬 루프에 영향이 없다.
@@ -20,18 +21,21 @@ import time
 import mujoco
 import numpy as np
 
-KEY_ENTER, KEY_PERIOD, KEY_END, KEY_HOME = 257, 46, 269, 268
+KEY_ENTER, KEY_PERIOD, KEY_END, KEY_HOME, KEY_PGDN = 257, 46, 269, 268, 267
 KEY_6, KEY_7, KEY_8, KEY_9 = 54, 55, 56, 57
 KEYS = [('Enter', 'pause / resume'), ('.', 'step 1 lidar frame (0.1 s) while paused'),
         ('9', 'speed 1x <-> 0.25x'), ('6', 'lidar points (green in band / grey out)'),
-        ('7', 'occlusion boundary cells (blue)'), ('8', 'phantoms'), ('End', 'text panel (Mac: fn+Right)'),
+        ('7', 'boundary (purple): accumulated -> this frame -> off'), ('8', 'phantoms'),
+        ('PgDn', 'unknown area floor shading, navy (Mac: fn+Down)'), ('End', 'text panel (Mac: fn+Right)'),
         ('Home', 'restart run, same seed (Mac: fn+Left)'),
         ('note', 'MuJoCo Reset/Run/Pause buttons do not work here')]
 
 # 색 (RGBA). 방법별 phantom 색은 그림(analysis/plots.py)과 같은 계열
 RGBA_IN_BAND = np.array([0.10, 0.75, 0.30, 0.9], np.float32)    # 높이 대역 안 점 (격자에 쓰임)
 RGBA_OUT_BAND = np.array([0.55, 0.55, 0.55, 0.5], np.float32)   # 대역 밖 점 (바닥, 박스 위)
-RGBA_BOUNDARY = np.array([0.15, 0.45, 0.95, 0.8], np.float32)   # 가림 경계 칸
+RGBA_BOUNDARY = np.array([0.62, 0.20, 0.86, 1.0], np.float32)   # 가림 경계 (보라: 라이다 초록·phantom 주황/초록과 구분)
+RGBA_UNKNOWN = np.array([0.08, 0.12, 0.38, 0.30], np.float32)   # 미관측 영역 바닥 (반투명 남색)
+UNKNOWN_TILE = 0.20      # 미관측 바닥 칠하기 타일 [m] (표시용: 격자 0.05 칸 4x4를 하나로, 절반 이상 미관측이면 칠함)
 RGBA_PHANTOM = {'B2': np.array([0.10, 0.65, 0.45, 0.9], np.float32),
                 'P': np.array([0.95, 0.60, 0.05, 0.9], np.float32),
                 'B0': np.array([0.20, 0.45, 0.85, 0.9], np.float32),
@@ -41,7 +45,8 @@ EYE3 = np.eye(3).flatten()
 
 
 class ViewerUI:
-    def __init__(self, sim, max_points=4000, clock=time.monotonic, sleep=time.sleep, start_paused=False):
+    def __init__(self, sim, max_points=4000, clock=time.monotonic, sleep=time.sleep, start_paused=False,
+                 pillars=False):
         self.sim = sim
         self.max_points = int(max_points)
         self.clock, self.sleep = clock, sleep
@@ -51,7 +56,9 @@ class ViewerUI:
         self.run_index = 0
         self.speed = 1.0
         self.step_until = None        # 프레임 진행 목표 시뮬 시각
-        self.show = {'points': True, 'boundary': True, 'phantoms': True, 'text': True}
+        self.show = {'points': True, 'boundary': True, 'phantoms': True, 'text': True, 'unknown': False}
+        self.boundary_mode = 'acc'    # 'acc' = /exp/boundary (N 프레임 누적), 'frame' = /exp/boundary_frame (RQ4 흔들림)
+        self.pillars = bool(pillars)
         self.keys_pending = []
         c = sim.cfg.common
         self.band = (float(c['band_z_min']), float(c['band_z_max']))
@@ -95,8 +102,15 @@ class ViewerUI:
                 self.anchor = None
             elif key == KEY_6:
                 self.show['points'] = not self.show['points']
-            elif key == KEY_7:
-                self.show['boundary'] = not self.show['boundary']
+            elif key == KEY_7:          # 누적 -> 이번 프레임 -> 끔 -> 누적
+                if not self.show['boundary']:
+                    self.show['boundary'], self.boundary_mode = True, 'acc'
+                elif self.boundary_mode == 'acc':
+                    self.boundary_mode = 'frame'
+                else:
+                    self.show['boundary'] = False
+            elif key == KEY_PGDN:
+                self.show['unknown'] = not self.show['unknown']
             elif key == KEY_8:
                 self.show['phantoms'] = not self.show['phantoms']
             elif key == KEY_END:
@@ -197,16 +211,64 @@ class ViewerUI:
                 n += 1
         self.drawn_points = n
         frames = sim.frames
-        if self.show['boundary'] and frames['boundary']:
-            for x, y in frames['boundary'][-1]:
-                if not self._geom(scn, mujoco.mjtGeom.mjGEOM_BOX, (0.025, 0.025, 0.004), (x, y, 0.006),
-                                  RGBA_BOUNDARY):
-                    break
+        if self.show['unknown'] and frames['grid']:
+            self.draw_unknown(scn, frames['grid'][-1], frames['grid_origin'][-1])
+        if self.show['boundary']:
+            xy = (getattr(sim, 'last_boundary_acc', None) if self.boundary_mode == 'acc'
+                  else (frames['boundary'][-1] if frames['boundary'] else None))
+            if xy is not None and len(xy):
+                res = frames['grid_origin'][-1][2] if frames['grid_origin'] else 0.05
+                self.draw_boundary(scn, np.asarray(xy), float(res))
         if self.show['phantoms'] and frames['phantoms']:
             rgba = RGBA_PHANTOM.get(sim.args.method, RGBA_PHANTOM['P'])
             for x, y in frames['phantoms'][-1]:
                 if not self._geom(scn, mujoco.mjtGeom.mjGEOM_CYLINDER, (0.05, 0.15, 0.0), (x, y, 0.15), rgba):
                     break
+
+    def draw_boundary(self, scn, xy, res):
+        """경계 칸: 칸의 60% 크기 얇은 마커(또는 얇은 기둥) + 이웃 칸끼리 선으로 이어 윤곽선처럼 (표시용 연결만)."""
+        z = 0.02
+        half = 0.3 * res
+        for x, y in xy:
+            if self.pillars:
+                ok = self._geom(scn, mujoco.mjtGeom.mjGEOM_CYLINDER, (0.2 * res, 0.06, 0.0), (x, y, 0.06),
+                                RGBA_BOUNDARY)
+            else:
+                ok = self._geom(scn, mujoco.mjtGeom.mjGEOM_BOX, (half, half, 0.003), (x, y, z), RGBA_BOUNDARY)
+            if not ok:
+                return
+        cells = {(int(round(x / res)), int(round(y / res))): (x, y) for x, y in xy}
+        zl = 0.12 if self.pillars else z
+        for (i, j), (x, y) in cells.items():
+            for di, dj in ((1, 0), (0, 1), (1, 1), (1, -1)):
+                q = cells.get((i + di, j + dj))
+                if q is None:
+                    continue
+                if scn.ngeom >= scn.maxgeom:
+                    self.dropped = True
+                    return
+                g = scn.geoms[scn.ngeom]
+                mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_CAPSULE, np.zeros(3), np.zeros(3), EYE3,
+                                    RGBA_BOUNDARY)
+                mujoco.mjv_connector(g, mujoco.mjtGeom.mjGEOM_CAPSULE, 0.004,
+                                     np.array([x, y, zl]), np.array([q[0], q[1], zl]))
+                scn.ngeom += 1
+
+    def draw_unknown(self, scn, grid, origin):
+        """미관측(UNKNOWN) 칸을 UNKNOWN_TILE 타일로 묶어 바닥에 반투명하게 (표시용). 에고 주변 -1 ~ +7 m만."""
+        ox, oy, res = origin
+        k = max(1, int(round(UNKNOWN_TILE / res)))
+        h, w = grid.shape
+        unk = (grid[:h - h % k, :w - w % k] == -1).reshape(h // k, k, w // k, k).mean(axis=(1, 3))
+        ex = self.sim.ego.x
+        for r, c in zip(*np.nonzero(unk >= 0.5)):
+            cx = ox + (c + 0.5) * k * res
+            cy = oy + (r + 0.5) * k * res
+            if not (ex - 1.0 <= cx <= ex + 7.0 and abs(cy) <= 2.2):
+                continue
+            if not self._geom(scn, mujoco.mjtGeom.mjGEOM_BOX, (0.5 * k * res, 0.5 * k * res, 0.001),
+                              (cx, cy, 0.002), RGBA_UNKNOWN):
+                return
 
     def texts(self):
         sim = self.sim
@@ -236,7 +298,10 @@ class ViewerUI:
                  ('' if method in ('B2', 'P') else ' (no phantoms for this method)')),
                 ('lidar points', f'{self.drawn_points} drawn (green=in band '
                                  f'{self.band[0]:.2f}-{self.band[1]:.2f} m, grey=out)'),
-                ('boundary cells', 'blue')]
+                ('boundary (purple)', ('off' if not self.show['boundary'] else
+                                       'accumulated /exp/boundary' if self.boundary_mode == 'acc'
+                                       else 'this frame /exp/boundary_frame')),
+                ('unknown floor', 'navy' if self.show['unknown'] else 'off (PgDn)')]
         if self.dropped:
             rows.append(('warning', 'user_scn geom limit reached, some overlay not drawn'))
         keys = [(k, d) for k, d in KEYS]
