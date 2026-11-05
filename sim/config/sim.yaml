@@ -1,0 +1,52 @@
+# MuJoCo 시뮬 전용 값. 실차 설정(config/*.yaml)은 그대로 읽고, 여기에는 시뮬에만 필요한 값만 둔다.
+# 트랙 좌표(주차열 시작, 박스 길이, 틈 폭, 정지선 등)는 config/scenario_*.yaml이 유일 출처다.
+
+sim:
+  dt: 0.01                 # 시뮬 고정 스텝 [s]. 노드 타이머(50 Hz)·라이다(10 Hz)는 이 스텝의 배수로 돈다
+  max_time: 15.0           # 회차 최대 시간 [s]
+  auto_start_time: 0.3     # /autonomous_mode=true를 보내는 시각 (실차의 LB 누름)
+  end_after_stop: 1.0      # 정지(속도 < 0.02) 후 이만큼 더 돌고 끝낸다 [s]
+
+track:                     # 트랙 x = AUTO 시작 시 에고 차체 앞 끝 = 0
+  start_x: -0.6            # 트랙 뒤 끝 (뒤 벽) [m]
+  end_x: 9.0               # 방호벽 위치 [m] (가정, 트랙 마킹 후 실측)
+  lane_width: 0.7          # 차선 폭 (계획서) [m]. 차선 중앙 y = 0
+  left_wall_offset: 0.0    # 좌측 벽 ~ 차선 왼쪽 경계 거리 w_off [m] (가정, common.yaml target_wall_distance 0.355와 같은 가정)
+  left_wall_height: 0.5    # 좌측 벽 높이 [m] (가정)
+  box_depth: 0.30          # 주차 박스 폭 (y) [m] (계획서 0.55 × 0.30 × 0.35)
+  box_height: 0.35         # 주차 박스 높이 [m]
+  box_offset_from_lane: 0.0  # 박스 차선 쪽 면 ~ 차선 오른쪽 경계 거리 [m] (가정)
+  right_wall_height: 0.35  # S4 우측 연속 벽 높이 [m] (박스와 같은 가림 높이로 가정)
+  track_width: 2.5         # 좌측 벽에서 오른쪽 방 벽까지 [m] (계획서 9.0 × 2.5)
+  room_wall_height: 0.5
+  barrier_height: 0.5
+
+ego:
+  body_height: 0.20        # 시각화용 차체 높이 [m] (레이캐스트에서는 제외)
+
+car2:                      # 돌출 차량 #2 (F1TENTH). 치수는 가정 — 실측 후 교체
+  length: 0.50             # [m] (가정)
+  width: 0.30              # 계획서 폭 0.3 m
+  rear_overhang: 0.09      # 뒤축 → 뒤 끝 [m] (에고와 같은 차종 가정)
+  height: 0.25             # [m] (가정, 높이 대역 0.05–0.30 안에 걸려야 격자에 보인다)
+  t_r: 0.0                 # #2 구동 지연 (트리거 지연은 common.yaml trigger_latency에 포함)
+
+vehicle:                   # 에고 종방향 응답 (t_r, a_b는 common.yaml에서 읽는다)
+  tau: 0.10                # 속도 1차 지연 시정수 [s] (가정)
+  a_max: 2.5               # 최대 가속 [m/s^2] (가정)
+  steer_rate: 6.0          # 조향각 변화율 한계 [rad/s] (서보, 가정)
+
+lidar:                     # Livox Mid-360 근사
+  hz: 10.0
+  rays_per_frame: 20000
+  pattern: nonrepetitive   # nonrepetitive = 프레임마다 방위·고도 무작위(시드 고정) | grid = 고정 격자
+  vfov_min_deg: -7.0
+  vfov_max_deg: 52.0
+  range_min: 0.1
+  range_max: 40.0
+  range_noise_std: 0.0     # 거리 노이즈 [m]. 0 = RQ4 기준선 (완벽한 가림)
+  grid_azimuth: 720        # pattern=grid일 때 방위 개수 (rays_per_frame = 방위 × 고도)
+
+mux_overrides:             # 시뮬에서 끄는 exp_drive_mux 항목 (실차 common.yaml은 그대로)
+  require_joy: false       # 조이스틱 데드맨 없음
+  require_preflight: false # 발행자 점검 없음
