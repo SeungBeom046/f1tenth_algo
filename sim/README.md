@@ -5,7 +5,7 @@
 ```bash
 bash sim/setup_env.sh                       # 처음 한 번 (sim/.venv 설치·점검)
 source sim/.venv/bin/activate               # 터미널마다
-mjpython sim/runner.py --method P --scenario S2 --viewer
+mjpython sim/runner.py --method P --scenario S2 --viewer --start-paused     # 창이 뜨면 Enter로 시작
 ```
 
 세부(설치·출력 파일·가정값·결정성·시뮬 전용 차이·알 수 있는 것/없는 것)는 [docs/SIMULATION.md](../docs/SIMULATION.md).
@@ -49,12 +49,14 @@ mjpython sim/runner.py --method P --scenario S2 --viewer
 | Enter | 일시정지 / 재개 | | 6 | 라이다 점 켜기/끄기 |
 | `.` | 일시정지 중 1프레임(0.1 s) 진행 | | 7 | 가림 경계 켜기/끄기 |
 | 9 | 배속 1× ↔ 0.25× | | 8 | phantom 켜기/끄기 |
-| End (fn + →) | 글자 패널 켜기/끄기 | | 마우스 | 끌기 회전, 오른쪽 끌기 이동, 스크롤 확대 |
+| End (fn + →) | 글자 패널 켜기/끄기 | | Home (fn + ←) | 재시작: 같은 설정·시드로 처음부터 |
+| 마우스 | 끌기 회전, 오른쪽 끌기 이동, 스크롤 확대 | | | |
 
 색: 라이다 점 **초록** = 높이 대역 안(격자에 쓰임), **회색** = 대역 밖 · 가림 경계 **파랑** · phantom **P 주황 / B2 초록**.
 
-- 회차가 시뮬 5–11초라 금방 끝난다. 창이 뜨자마자 `9`(0.25배속)이나 Enter(일시정지).
-- MuJoCo 기본 Reset/Run/Pause 버튼(Backspace, Space)은 이 시뮬에 동작하지 않는다. 다시 보려면 창을 닫고 재실행(터미널 ↑ Enter).
+- 회차가 시뮬 5–11초라 금방 끝난다. `--start-paused`를 붙이면 멈춘 채로 뜬다 (창을 앞으로 가져온 뒤 Enter로 시작). 보는 중엔 `9`(0.25배속).
+- 다시 보려면 **Home**: 창은 그대로, 카메라·토글 유지, 같은 시드로 새 회차. 직전 회차는 저장되고 새 회차는 `_r1`, `_r2` 폴더.
+- MuJoCo 기본 Reset/Run/Pause 버튼(Backspace, Space, 왼쪽 패널)은 이 시뮬에서 동작하지 않는다 (화면 키 목록 아래에도 표시).
 
 ## 배치·일괄 실행
 
@@ -74,4 +76,4 @@ python sim/sweep.py --methods P --w-min 0.25 0.35 0.45 --name wmin     # [EXP-TU
 - ``RuntimeError: `launch_passive` requires ... `mjpython` `` → `python`이 아니라 `mjpython`으로
 - 창이 안 보임 → 다른 창 뒤. Dock의 Python(로켓) 아이콘이나 Cmd+Tab
 - `ModuleNotFoundError: mujoco` → venv 미활성. `source sim/.venv/bin/activate` (프롬프트에 `(.venv)`)
-- Reset 버튼으로 다시 안 됨 → 창을 닫고 재실행
+- Reset 버튼으로 다시 안 됨 → Home(fn + ←)으로 재시작

@@ -156,9 +156,9 @@
 | [my_algo/phantom.py:53](../my_algo/phantom.py#L53) | `row_face_tol: float = 0.10   # [EXP-TUNE] P 주차열 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m].` |
 | [my_algo/speed_layer_node.py:13](../my_algo/speed_layer_node.py#L13) | `v_imp, b1_k                 [EXP-TUNE] (v_imp 하한 = V_MIN)` |
 | [my_algo/speed_policy.py:10](../my_algo/speed_policy.py#L10) | `[EXP-TUNE]    v_imp (하한 = v_min), k` |
-| [sim/README.md:66](../sim/README.md#L66) | `python sim/sweep.py --methods P --w-min 0.25 0.35 0.45 --name wmin     # [EXP-TUNE] 덮어쓰기 (값마다 별도 회차)` |
+| [sim/README.md:68](../sim/README.md#L68) | `python sim/sweep.py --methods P --w-min 0.25 0.35 0.45 --name wmin     # [EXP-TUNE] 덮어쓰기 (값마다 별도 회차)` |
 | [sim/runner.py:6](../sim/runner.py#L6) | `sim/.venv/bin/python sim/runner.py --method P --scenario S3 --w-min 0.30 --video         # [EXP-TUNE] + 위에서 본 영상` |
-| [sim/runner.py:445](../sim/runner.py#L445) | `ap.add_argument('--' + k.replace('_', '-'), dest=k, type=typ, default=None, help='[EXP-TUNE]')` |
+| [sim/runner.py:457](../sim/runner.py#L457) | `ap.add_argument('--' + k.replace('_', '-'), dest=k, type=typ, default=None, help='[EXP-TUNE]')` |
 | [sim/simconfig.py:4](../sim/simconfig.py#L4) | `< 회차 값(d_e, run_id) < [EXP-TUNE] 인자 < 시뮬 전용(sim.yaml mux_overrides·timing_overrides, 지오메트리 파일 경로).` |
 | [sim/simconfig.py:59](../sim/simconfig.py#L59) | `raise ValueError(f'[EXP-TUNE]가 아닌 값은 바꿀 수 없다: {sorted(bad)}')` |
 

@@ -12,17 +12,21 @@ MuJoCo 내장 글꼴은 ASCII만 그리므로 화면 글자는 영어다.
     Enter  일시정지 / 재개          .  일시정지 중 라이다 1프레임(0.1 s) 진행      9  배속 1x <-> 0.25x
     6      라이다 점                 7  가림 경계 칸                               8  phantom
     End    글자 패널 (Mac: fn + 오른쪽 화살표)
+    Home   재시작: 같은 설정·시드로 처음부터 (Mac: fn + 왼쪽 화살표). 지금 회차를 저장하고 _r1, _r2 ... 폴더로 새 회차
+MuJoCo 기본 Reset/Run/Pause(Backspace, Space, 왼쪽 패널 버튼)는 이 시뮬 루프에 영향이 없다.
 """
 import time
 
 import mujoco
 import numpy as np
 
-KEY_ENTER, KEY_PERIOD, KEY_END = 257, 46, 269
+KEY_ENTER, KEY_PERIOD, KEY_END, KEY_HOME = 257, 46, 269, 268
 KEY_6, KEY_7, KEY_8, KEY_9 = 54, 55, 56, 57
 KEYS = [('Enter', 'pause / resume'), ('.', 'step 1 lidar frame (0.1 s) while paused'),
         ('9', 'speed 1x <-> 0.25x'), ('6', 'lidar points (green in band / grey out)'),
-        ('7', 'occlusion boundary cells (blue)'), ('8', 'phantoms'), ('End', 'text panel (Mac: fn+Right)')]
+        ('7', 'occlusion boundary cells (blue)'), ('8', 'phantoms'), ('End', 'text panel (Mac: fn+Right)'),
+        ('Home', 'restart run, same seed (Mac: fn+Left)'),
+        ('note', 'MuJoCo Reset/Run/Pause buttons do not work here')]
 
 # 색 (RGBA). 방법별 phantom 색은 그림(analysis/plots.py)과 같은 계열
 RGBA_IN_BAND = np.array([0.10, 0.75, 0.30, 0.9], np.float32)    # 높이 대역 안 점 (격자에 쓰임)
@@ -37,12 +41,14 @@ EYE3 = np.eye(3).flatten()
 
 
 class ViewerUI:
-    def __init__(self, sim, max_points=4000, clock=time.monotonic, sleep=time.sleep):
+    def __init__(self, sim, max_points=4000, clock=time.monotonic, sleep=time.sleep, start_paused=False):
         self.sim = sim
         self.max_points = int(max_points)
         self.clock, self.sleep = clock, sleep
         self.handle = None
-        self.paused = False
+        self.paused = bool(start_paused)   # --start-paused: 창이 뜨면 멈춘 상태, Enter로 시작
+        self.restart_requested = False
+        self.run_index = 0
         self.speed = 1.0
         self.step_until = None        # 프레임 진행 목표 시뮬 시각
         self.show = {'points': True, 'boundary': True, 'phantoms': True, 'text': True}
@@ -58,6 +64,16 @@ class ViewerUI:
     # ------------------------------------------------------------ 연결
     def attach(self, handle):
         self.handle = handle
+
+    def reset(self, sim):
+        """재시작: 새 Sim에 붙인다. 오버레이 토글·배속·카메라(뷰어 쪽 상태)는 유지, 재생 상태만 처음으로."""
+        self.sim = sim
+        self.paused = False
+        self.step_until = None
+        self.anchor = None
+        self.ended = False
+        self.restart_requested = False
+        self.run_index += 1
 
     def on_key(self, key):
         """뷰어 스레드에서 불린다. 상태 변경은 after_step에서 처리하도록 쌓기만 한다."""
@@ -85,12 +101,16 @@ class ViewerUI:
                 self.show['phantoms'] = not self.show['phantoms']
             elif key == KEY_END:
                 self.show['text'] = not self.show['text']
+            elif key == KEY_HOME:
+                self.restart_requested = True
 
     # ------------------------------------------------------------ 루프 훅
     def after_step(self, sim):
         """시뮬 한 스텝 뒤에 불린다. 시뮬 상태는 읽기만 한다. False = 창 닫힘."""
         h = self.handle
         self._apply_keys()
+        if self.restart_requested:
+            return False                       # 회차를 여기서 끝내고 viewer_session이 저장 후 새로 시작
         if self.step_until is not None and sim.t + 1e-9 >= self.step_until:
             self.step_until = None            # 한 프레임 진행 끝 → 다시 일시정지 상태
         self.draw()
@@ -101,6 +121,8 @@ class ViewerUI:
         while self.paused and self.step_until is None:
             self.sleep(0.02)
             self._apply_keys()
+            if self.restart_requested:
+                return False
             self.draw()
             h.sync()
             if not h.is_running():
@@ -122,7 +144,7 @@ class ViewerUI:
         """회차가 끝난 뒤 창을 닫을 때까지 마지막 장면을 둔다 (시뮬은 이미 끝남, 토글만 동작)."""
         self.ended = True
         h = self.handle
-        while h.is_running():
+        while h.is_running() and not self.restart_requested:
             self._apply_keys()
             self.draw()
             h.sync()
@@ -191,12 +213,13 @@ class ViewerUI:
                 return '-'
             v = float(v)
             return 'inf' if not np.isfinite(v) else f'{v:.2f}{unit}'
-        state = 'PAUSED' if self.paused and self.step_until is None else ('STEP' if self.step_until else 'RUN')
+        state = 'PAUSED (Enter = start/resume)' if self.paused and self.step_until is None else ('STEP' if self.step_until else 'RUN')
         if self.ended:
-            state = 'ENDED (close window to save)'
+            state = 'ENDED (saved; Home = restart)'
         de = '' if sim.args.d_e is None else f' d_e={sim.args.d_e:.1f}'
         method = sim.args.method
-        rows = [('method / scenario', f'{method} / {sim.args.scenario}{de} seed={sim.args.seed}'),
+        rows = [('method / scenario', f'{method} / {sim.args.scenario}{de} seed={sim.args.seed}'
+                 + (f'  (restart #{self.run_index})' if self.run_index else '')),
                 ('speed actual', f(sim.ego.v, ' m/s')),
                 ('speed command', f(num('/exp/final_cmd'), ' m/s')),
                 ('v_cap', f(num('/exp/v_cap'), ' m/s')),

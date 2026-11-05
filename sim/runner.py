@@ -78,7 +78,10 @@ class SimpleSteering:
 
 
 class Sim:
-    def __init__(self, args):
+    def __init__(self, args, reuse=None):
+        """reuse = (MjModel, MjData): 뷰어 재시작 때 창이 붙어 있는 모델·데이터를 다시 쓴다 (같은 설정이어야 함).
+        데이터는 초기화하고, 매 스텝 차량 위치를 시뮬 모델 값으로 다시 놓으므로 이전 회차 상태가 남지 않는다.
+        나머지(노드, 격자 누적, phantom 유지, AEB 래치, #2, 트리거, 라이다 난수)는 모두 새로 만든다."""
         self.args = args
         tune = {k: getattr(args, k) for k in simconfig.TUNE_KEYS}
         self.cfg = cfg = simconfig.RunConfig(args.method, args.scenario, args.d_e, args.seed, tune)
@@ -89,8 +92,15 @@ class Sim:
         self.geom = load_geometry(cfg.geometry_path)
         self.world, ego_h = world_mod.build(cfg)
         xml = self.world.xml.replace('{EGO_GEOM}', world_mod.ego_geom_xml(self.geom.footprint, ego_h))
-        self.m = mujoco.MjModel.from_xml_string(xml)
-        self.d = mujoco.MjData(self.m)
+        m = mujoco.MjModel.from_xml_string(xml)
+        if reuse is None:
+            self.m, self.d = m, mujoco.MjData(m)
+        else:
+            self.m, self.d = reuse
+            if not (m.ngeom == self.m.ngeom and np.array_equal(m.geom_size, self.m.geom_size)
+                    and np.array_equal(m.geom_pos, self.m.geom_pos) and np.array_equal(m.body_pos, self.m.body_pos)):
+                raise RuntimeError('재시작: 월드가 처음 회차와 다르다')
+            mujoco.mj_resetData(self.m, self.d)
         self.ego_body = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, 'ego')
         self.car2_body = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, 'car2')
         s = cfg.sim
@@ -436,6 +446,8 @@ def parse(argv=None):
     ap.add_argument('--test-step-v', type=float, default=None,
                     help='Exp0 i 전용: 주행 거리 --test-step-x에서 속도 명령을 이 값으로 계단처럼 내림 (보통 E0, B0)')
     ap.add_argument('--test-step-x', type=float, default=2.5)
+    ap.add_argument('--start-paused', action='store_true',
+                    help='뷰어가 일시정지 상태로 뜬다 (창을 앞으로 가져올 시간). Enter로 시작')
     ap.add_argument('--viewer-max-points', type=int, default=4000,
                     help='뷰어에 그릴 라이다 점 수 상한 (표시용 솎아내기, 알고리즘 입력은 그대로)')
     ap.add_argument('--video', action='store_true', help='위에서 본 영상 mp4 저장')
@@ -446,6 +458,45 @@ def parse(argv=None):
     return ap.parse_args(argv)
 
 
+def finish(sim, log, frames, wall, echo=print):
+    """회차 저장 → 지표 계산 → (요청 시) 영상 → 한 줄 출력."""
+    out_dir = sim.args.out_dir
+    meta = save(sim, log, frames, out_dir, wall)
+    if os.path.join(ROOT, 'analysis') not in sys.path:
+        sys.path.insert(0, os.path.join(ROOT, 'analysis'))
+    import sim_reader
+    m = sim_reader.compute(out_dir)
+    if sim.args.video:
+        import video
+        video.render(out_dir)
+    echo(f"{os.path.basename(out_dir)}: sim {meta['sim_time_s']:.1f}s (wall {meta['wall_time_s']:.1f}s) "
+         f"dT_cmd={m.get('dT_cmd')} min_speed_cmd={m.get('min_speed_cmd')} "
+         f"collision={m.get('collision')} aeb={m.get('aeb_triggered')} → {out_dir}")
+    return m
+
+
+def viewer_session(args, sim, ui, echo=print):
+    """뷰어 회차들. 재시작 키(ViewerUI)면 현재 회차를 저장하고 같은 설정·시드로 새 Sim을 만들어 같은 창에서 이어 간다.
+    새 회차 폴더는 <원래 이름>_r1, _r2 ... 반환: 회차별 (sim, log, frames, metrics) 목록."""
+    import copy
+    base = args.out_dir
+    done = []
+    n = 0
+    while True:
+        wall0 = time.time()
+        log, frames = sim.run(hook=ui)
+        done.append((sim, log, frames, finish(sim, log, frames, time.time() - wall0, echo)))
+        if not ui.restart_requested:
+            ui.hold_until_closed()          # 끝난 장면 유지. 여기서도 재시작 키를 받는다
+        if not ui.restart_requested:
+            return done
+        n += 1
+        new_args = copy.copy(args)
+        new_args.out_dir = f'{base}_r{n}'
+        sim = Sim(new_args, reuse=(sim.m, sim.d))
+        ui.reset(sim)
+
+
 def main(argv=None):
     args = parse(argv)
     if args.scenario != 'S1':
@@ -454,29 +505,20 @@ def main(argv=None):
     sim = Sim(args)
     wall0 = time.time()
     import contextlib
+    real_out = sys.stdout
+    echo = lambda msg: print(msg, file=real_out, flush=True)  # noqa: E731
     quiet = contextlib.redirect_stdout(open(os.devnull, 'w')) if not args.verbose else contextlib.nullcontext()
     with quiet:   # 노드 상태 출력(planner의 [LiDAR] 줄 등)을 숨긴다
         if args.viewer:
             import mujoco.viewer
             import viewer_ui
-            ui = viewer_ui.ViewerUI(sim, max_points=args.viewer_max_points)
+            ui = viewer_ui.ViewerUI(sim, max_points=args.viewer_max_points, start_paused=args.start_paused)
             with mujoco.viewer.launch_passive(sim.m, sim.d, key_callback=ui.on_key) as v:
                 ui.attach(v)
-                log, frames = sim.run(hook=ui)
-                ui.hold_until_closed()      # 회차가 끝나도 창을 닫을 때까지 마지막 장면 유지
-        else:
-            log, frames = sim.run()
-    meta = save(sim, log, frames, args.out_dir, time.time() - wall0)
-    sys.path.insert(0, os.path.join(ROOT, 'analysis'))
-    import sim_reader
-    m = sim_reader.compute(args.out_dir)
-    if args.video:
-        import video
-        video.render(args.out_dir)
-    print(f"{os.path.basename(args.out_dir)}: sim {meta['sim_time_s']:.1f}s (wall {meta['wall_time_s']:.1f}s) "
-          f"dT_cmd={m.get('dT_cmd')} min_speed_cmd={m.get('min_speed_cmd')} "
-          f"collision={m.get('collision')} aeb={m.get('aeb_triggered')} → {args.out_dir}")
-    return m
+                done = viewer_session(args, sim, ui, echo)
+            return done[-1][3]
+        log, frames = sim.run()
+    return finish(sim, log, frames, time.time() - wall0, echo)
 
 
 if __name__ == '__main__':

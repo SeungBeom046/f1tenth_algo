@@ -1,4 +1,4 @@
-"""뷰어 모드(오버레이·배속·일시정지·프레임 진행·토글)와 배치 모드가 같은 시드에서 비트 단위로 같은지.
+"""뷰어 모드(오버레이·배속·일시정지·프레임 진행·토글·재시작)와 배치 모드가 같은 시드에서 비트 단위로 같은지.
 
 창 없이 돈다: 가짜 Handle(user_scn = 실제 MjvScene, lock/sync/set_texts는 기록만)과 가짜 시계로
 ViewerUI.after_step 경로 전체(그리기 포함)를 실행한다. 진짜 창에서만 다른 것은 화면 출력뿐이다.
@@ -26,6 +26,7 @@ class FakeHandle:
         self.syncs = 0
         self.texts = None
         self.max_ngeom = 0
+        self.closed = False
 
     def lock(self):
         return contextlib.nullcontext()
@@ -35,7 +36,7 @@ class FakeHandle:
         self.max_ngeom = max(self.max_ngeom, self.user_scn.ngeom)
 
     def is_running(self):
-        return True
+        return not self.closed
 
     def set_texts(self, texts):
         self.texts = texts
@@ -96,6 +97,76 @@ def run(viewer, out_dir):
     ui.attach(h)
     log, frames = sim.run(hook=ui)
     return sim, log, frames, (ui, h, clock)
+
+
+class RestartUI(viewer_ui.ViewerUI):
+    """회차 번호별 키 스크립트. 0회차: 중간(t 1.5 s)에 재시작. 1회차: 토글·배속 후 끝까지, 끝난 장면(ENDED)에서 재시작.
+    2회차: 일시정지·재개 후 끝까지, 끝난 장면에서 창 닫기."""
+
+    def __init__(self, sim, clock):
+        super().__init__(sim, max_points=1500, clock=clock.time, sleep=self._sleep, start_paused=True)
+        self.fake = clock
+        K = viewer_ui
+        self.scripts = {0: [(1.5, K.KEY_HOME)],
+                        1: [(0.5, K.KEY_9), (1.0, K.KEY_6), (2.0, K.KEY_8)],
+                        2: [(0.7, K.KEY_ENTER), (1.2, K.KEY_7)]}
+        self.sleeps = 0
+
+    def _sleep(self, dt):
+        self.fake.sleep(dt)
+        self.sleeps += 1
+        if self.sleeps % 3:
+            return
+        if self.ended:
+            if self.run_index == 1:
+                self.on_key(viewer_ui.KEY_HOME)        # ENDED에서 재시작
+            else:
+                self.handle.closed = True              # 창 닫기
+        elif self.paused and self.step_until is None:
+            self.on_key(viewer_ui.KEY_ENTER)           # --start-paused 시작, 2회차 일시정지 재개
+
+    def after_step(self, sim):
+        script = self.scripts.get(self.run_index, [])
+        while script and sim.t + 1e-9 >= script[0][0]:
+            self.on_key(script.pop(0)[1])
+        return super().after_step(sim)
+
+
+def assert_same_run(tc, la, fa, ea, lb, fb, eb, label):
+    tc.assertEqual(sorted(la), sorted(lb), label)
+    for k in la:
+        a, b = np.asarray(la[k]), np.asarray(lb[k])
+        tc.assertEqual(a.shape, b.shape, (label, k))
+        tc.assertTrue(np.array_equal(a, b, equal_nan=a.dtype.kind == 'f'), (label, k))
+    tc.assertEqual(fa['cloud_digest'], fb['cloud_digest'], label)
+    for k in ('t', 'phantoms', 'boundary', 'grid', 'grid_origin'):
+        tc.assertEqual(len(fa[k]), len(fb[k]), (label, k))
+        for x, y in zip(fa[k], fb[k]):
+            tc.assertTrue(np.array_equal(np.asarray(x), np.asarray(y)), (label, k))
+    tc.assertEqual([(e['t'], e['topic']) for e in ea], [(e['t'], e['topic']) for e in eb], label)
+
+
+class ViewerRestartTest(unittest.TestCase):
+    def test_restart_equals_fresh_run_bitwise(self):
+        with tempfile.TemporaryDirectory() as d, open(os.devnull, 'w') as null, contextlib.redirect_stdout(null):
+            sa, la, fa, _ = run(False, os.path.join(d, 'batch'))
+            args = runner.parse(['--method', 'P', '--scenario', 'S1', '--d-e', '1.0', '--seed', '3',
+                                 '--out-dir', os.path.join(d, 'view')])
+            sim = runner.Sim(args)
+            clock = FakeClock()
+            ui = RestartUI(sim, clock)
+            h = FakeHandle(sim.m)
+            ui.attach(h)
+            done = runner.viewer_session(args, sim, ui, echo=lambda msg: None)
+            names = sorted(os.listdir(d))
+        self.assertEqual(len(done), 3)
+        self.assertEqual(names, ['batch', 'view', 'view_r1', 'view_r2'])     # 덮어쓰지 않고 번호를 붙여 저장
+        self.assertLess(len(done[0][1]['t']), len(la['t']))                   # 0회차는 중간에 재시작 (잘린 회차)
+        self.assertIs(done[1][0].m, sim.m)                                    # 같은 창(모델·데이터)에서 이어 실행
+        self.assertFalse(ui.show['points'] and ui.show['phantoms'])           # 토글 상태 유지 (1회차에 끈 것)
+        for i in (1, 2):                                                      # 중간 재시작 후, ENDED 후 재시작
+            s_i, l_i, f_i, _ = done[i]
+            assert_same_run(self, la, fa, sa.events, l_i, f_i, s_i.events, f'restart {i}')
 
 
 class ViewerDeterminismTest(unittest.TestCase):

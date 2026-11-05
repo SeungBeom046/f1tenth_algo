@@ -86,6 +86,7 @@ python sim/check_env.py       # (venv 활성화 후) 점검만: mujoco 버전, m
 | `--verbose` | | 노드 상태 출력 보이기 (기본 숨김) |
 | `--viewer`, `--video` | | 대화형 뷰어 (mjpython), 위에서 본 mp4 (`<회차>/topdown.mp4`, 있는 회차는 `python sim/video.py <회차>`) |
 | `--viewer-max-points` | 4000 | 뷰어에 그릴 라이다 점 수 (표시용) |
+| `--start-paused` | | 뷰어가 일시정지 상태로 뜬다. Enter로 시작 |
 | `--test-step-v`, `--test-step-x` | 1.2, 2.5 | Exp0 i 시뮬판: 주행 거리 x에서 속도 명령을 v로 계단처럼 내림 (`--method B0 --scenario E0`). `metrics.json` `step_lag` = 실차 `exp0_braking.py`와 같은 함수 |
 
 [EXP-TUNE] 값만 덮어쓸 수 있다 (실차 bringup 인자와 같은 이름, 다른 값은 오류):
@@ -112,12 +113,18 @@ python sim/sweep.py --scenarios S2 S3 --methods B2 P --seeds 0 1 --name quick
   재생 상태(RUN / PAUSED / STEP / ENDED와 배속), phantom 색, 그린 라이다 점 수. MuJoCo 내장 글꼴이 ASCII만 그려서 영어다.
 - 라이다 점은 프레임당 최대 2만 개(`rays_per_frame`). 추가 도형 한도(`user_scn.maxgeom`)는 100,000개라 넘지 않지만 그리기 부담 때문에
   표시용으로만 4000개로 솎아낸다 (고정 간격, 난수 안 씀). `--viewer-max-points 20000`이면 전부 그린다. 알고리즘 입력은 그대로.
-- 회차가 끝나도 창은 남는다(ENDED). 창을 닫으면 저장·분석하고 터미널에 결과 한 줄. 중간에 닫으면 거기까지 잘린 회차.
+- 회차가 끝나면 바로 저장·분석하고 터미널에 결과 한 줄을 낸 뒤 창은 남는다(ENDED). 중간에 창을 닫으면 거기까지 잘린 회차로 저장.
+- **재시작 (Home, Mac fn + ←):** 진행 중이든 ENDED든 지금 회차를 저장하고(진행 중이면 잘린 회차) 같은 설정·시드로 처음부터 다시 돈다.
+  창(MuJoCo 모델·데이터)은 그대로 쓰되 데이터를 초기화하고, 러너·가짜 rclpy 노드·점유격자 누적·phantom 유지·AEB 래치·#2·트리거·
+  라이다 난수는 모두 새로 만든다 (`runner.viewer_session`, `Sim(args, reuse=...)`). 카메라 시점·오버레이 토글·배속은 유지.
+  새 회차 폴더는 `<원래 이름>_r1`, `_r2` ... (덮어쓰지 않음). 키 목록 아래에 MuJoCo 기본 Reset/Run/Pause가 동작하지 않는다는 문구가 나온다.
 
 **배치와 같은 결과 (결정성).** 오버레이·배속·일시정지는 화면 표시와 벽시계 대기만 바꾼다. 시뮬은 같은 고정 스텝(dt 0.01 s)으로 돌고,
 노드 시계(가짜 rclpy)도 시뮬 시간을 따른다. 0.25×는 스텝마다 벽시계로 더 기다릴 뿐 dt는 그대로다.
 `sim/tests/test_viewer_determinism.py`가 같은 시드에서 배치와 뷰어 경로(그리기·배속·일시정지·프레임 진행·토글)의
 궤적·명령·로그·프레임별 점군 지문·이벤트가 비트 단위로 같은지 확인한다 (창 없이 가짜 화면으로).
+재시작도 같다: `--start-paused`로 시작해 중간(t 1.5 s)에 재시작한 회차와, 끝난 뒤(ENDED) 재시작한 회차가 새로 실행한 같은 시드
+배치 회차와 비트 단위로 같다 (`ViewerRestartTest`). 이전 회차의 phantom 유지 기억이나 라이다 난수 상태를 넘기는 변이를 둘 다 검출한다.
 화면 조작(마우스 끌기, Reset 등)이 MuJoCo 데이터를 바꿔도 다음 스텝에서 차량 위치를 시뮬 모델 값으로 다시 놓은 뒤 라이다를 쏘므로 결과에 들어가지 않는다.
 
 **직접 확인할 것 (체크리스트)**
@@ -133,7 +140,10 @@ python sim/sweep.py --scenarios S2 S3 --methods B2 P --seeds 0 1 --name quick
 - [ ] 6 / 7 / 8: 점 / 경계 / phantom이 사라졌다 다시 나온다
 - [ ] End (fn + →): 글자 패널이 사라졌다 다시 나온다
 - [ ] 위 키를 눌러도 MuJoCo 기본 동작(표시 토글 등)이 같이 바뀌지 않는다
-- [ ] 회차가 끝나면 ENDED가 되고 창이 남는다. 창을 닫으면 터미널에 결과 한 줄이 나온다
+- [ ] 회차가 끝나면 ENDED가 되고 창이 남으며 터미널에 결과 한 줄이 나온다
+- [ ] `--start-paused`: 창이 PAUSED로 뜨고 Enter로 시작한다
+- [ ] Home: 진행 중·ENDED 모두 처음부터 다시 돈다. 카메라·토글은 그대로, 글자 패널에 `restart #1`, 터미널에 `_r1` 회차 줄
+- [ ] 키 목록 아래에 "MuJoCo Reset/Run/Pause buttons do not work here"가 보인다
 - [ ] 같은 명령을 `--viewer` 없이 돌린 결과와 `analysis/metrics.json`의 dT_cmd·collision이 같다 (끝까지 둔 경우)
 
 ## 7. 출력
