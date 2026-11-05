@@ -3,7 +3,7 @@
 자동 생성 파일 (`python3 scripts/gen_exp_tags.py`). 직접 고치지 말 것.
 같은 줄에 태그가 여러 개면 각 표에 모두 나온다.
 
-## [EXP-VAR] 독립변인 — 바꾸면 비교 조건이 바뀜 (14개)
+## [EXP-VAR] 독립변인 — 바꾸면 비교 조건이 바뀜 (18개)
 
 | 위치 | 내용 |
 |---|---|
@@ -12,17 +12,21 @@
 | [config/method_B2.yaml:1](../config/method_B2.yaml#L1) | `# [EXP-VAR] 방법 B2: 모든 가림 경계 칸에 phantom` |
 | [config/method_P.yaml:1](../config/method_P.yaml#L1) | `# [EXP-VAR] 방법 P: 틈 폭 >= w_min 입구와 주차열 양 끝에만 phantom (제안)` |
 | [config/scenario_S1.yaml:1](../config/scenario_S1.yaml#L1) | `# [EXP-VAR] 시나리오 S1: 틈 0.45 m, 돌출 있음 (d_e = 1.0 / 1.5 / 2.0 m는 bringup 인자 d_e:=)` |
+| [config/scenario_S1.yaml:6](../config/scenario_S1.yaml#L6) | `gap_width: 0.45            # [EXP-VAR] 틈 폭 [m]. 트랙 배치 계산 입력 (track_layout.py)` |
 | [config/scenario_S2.yaml:1](../config/scenario_S2.yaml#L1) | `# [EXP-VAR] 시나리오 S2: 틈 0.45 m, 돌출 없음 (정당한 감속 비용)` |
+| [config/scenario_S2.yaml:6](../config/scenario_S2.yaml#L6) | `gap_width: 0.45            # [EXP-VAR] 틈 폭 [m]. 트랙 배치 계산 입력 (track_layout.py)` |
 | [config/scenario_S3.yaml:1](../config/scenario_S3.yaml#L1) | `# [EXP-VAR] 시나리오 S3: 틈 0.15 m (통과 불가), 돌출 없음 (B2 대비 P의 불필요 감속)` |
+| [config/scenario_S3.yaml:6](../config/scenario_S3.yaml#L6) | `gap_width: 0.15            # [EXP-VAR] 틈 폭 [m]. 트랙 배치 계산 입력 (track_layout.py)` |
 | [config/scenario_S4.yaml:1](../config/scenario_S4.yaml#L1) | `# [EXP-VAR] 시나리오 S4: 우측도 연속 벽, 돌출 없음 (B1 과잉 감속)` |
+| [config/scenario_S4.yaml:6](../config/scenario_S4.yaml#L6) | `gap_width: 0.0            # [EXP-VAR] 틈 폭 [m]. 트랙 배치 계산 입력 (track_layout.py)` |
 | [launch/bringup.launch.py:132](../launch/bringup.launch.py#L132) | `DeclareLaunchArgument('method', default_value='B0', description='[EXP-VAR] B0 \| B1 \| B2 \| P'),` |
 | [launch/bringup.launch.py:133](../launch/bringup.launch.py#L133) | `DeclareLaunchArgument('scenario', default_value='S2', description='[EXP-VAR] S1 \| S2 \| S3 \| S4'),` |
 | [launch/bringup.launch.py:134](../launch/bringup.launch.py#L134) | `DeclareLaunchArgument('d_e', default_value='', description='[EXP-VAR] S1 돌출 시점 1.0 \| 1.5 \| 2.0'),` |
 | [my_algo/phantom_node.py:11](../my_algo/phantom_node.py#L11) | `파라미터: method ([EXP-VAR], config/method_*.yaml), ROI·w_min 등은 config/common.yaml,` |
 | [my_algo/speed_layer_node.py:16](../my_algo/speed_layer_node.py#L16) | `method                      [EXP-VAR] config/method_*.yaml` |
-| [my_algo/trigger_node.py:14](../my_algo/trigger_node.py#L14) | `d_e [EXP-VAR] (launch 인자), collision_x (config/scenario_S1.yaml)` |
+| [my_algo/trigger_node.py:16](../my_algo/trigger_node.py#L16) | `d_e [EXP-VAR] (launch 인자), collision_x (config/scenario_S1.yaml)` |
 
-## [EXP-FIXED] 통제변인 — 방법 간 절대 바꾸지 말 것 (86개)
+## [EXP-FIXED] 통제변인 — 방법 간 절대 바꾸지 말 것 (91개)
 
 | 위치 | 내용 |
 |---|---|
@@ -70,18 +74,23 @@
 | [config/popout.yaml:11](../config/popout.yaml#L11) | `stop_distance: 1.0                 # [EXP-FIXED] 출발 후 이 거리에서 정지 [m] (차선 반대편 전에 멈추도록 트랙에 맞춰 교체)` |
 | [config/popout.yaml:13](../config/popout.yaml#L13) | `max_time: 3.0                      # [EXP-FIXED] 무조건 정지 [s]` |
 | [config/preflight.yaml:7](../config/preflight.yaml#L7) | `mode: enforce            # [EXP-FIXED] enforce = 위반 시 회차 거부 \| warn = 경고만` |
+| [config/scenario_E0.yaml:15](../config/scenario_E0.yaml#L15) | `box_len: 0.55              # [EXP-FIXED] 주차 박스 진행 방향 길이 [m] (0.55 × 0.30 × 0.35). 트랙 배치 계산용` |
 | [config/scenario_S1.yaml:9](../config/scenario_S1.yaml#L9) | `stop_distance: 7.5         # [EXP-FIXED] 소프트웨어 정지선: AUTO 후 주행 거리 > 이 값이면 0 명령 [m]` |
 | [config/scenario_S1.yaml:11](../config/scenario_S1.yaml#L11) | `accel_end_x: 2.5           # [EXP-FIXED] 가속 구간 끝 (v_ref 도달 판정 위치) [m]` |
 | [config/scenario_S1.yaml:12](../config/scenario_S1.yaml#L12) | `test_x_start: 2.5          # [EXP-FIXED] 시험 구간 (손실 ΔT 적분 범위) [m]` |
+| [config/scenario_S1.yaml:16](../config/scenario_S1.yaml#L16) | `box_len: 0.55              # [EXP-FIXED] 주차 박스 진행 방향 길이 [m] (0.55 × 0.30 × 0.35). 트랙 배치 계산용` |
 | [config/scenario_S2.yaml:9](../config/scenario_S2.yaml#L9) | `stop_distance: 7.5         # [EXP-FIXED] 소프트웨어 정지선: AUTO 후 주행 거리 > 이 값이면 0 명령 [m]` |
 | [config/scenario_S2.yaml:11](../config/scenario_S2.yaml#L11) | `accel_end_x: 2.5           # [EXP-FIXED] 가속 구간 끝 (v_ref 도달 판정 위치) [m]` |
 | [config/scenario_S2.yaml:12](../config/scenario_S2.yaml#L12) | `test_x_start: 2.5          # [EXP-FIXED] 시험 구간 (손실 ΔT 적분 범위) [m]` |
+| [config/scenario_S2.yaml:16](../config/scenario_S2.yaml#L16) | `box_len: 0.55              # [EXP-FIXED] 주차 박스 진행 방향 길이 [m] (0.55 × 0.30 × 0.35). 트랙 배치 계산용` |
 | [config/scenario_S3.yaml:9](../config/scenario_S3.yaml#L9) | `stop_distance: 7.5         # [EXP-FIXED] 소프트웨어 정지선: AUTO 후 주행 거리 > 이 값이면 0 명령 [m]` |
 | [config/scenario_S3.yaml:11](../config/scenario_S3.yaml#L11) | `accel_end_x: 2.5           # [EXP-FIXED] 가속 구간 끝 (v_ref 도달 판정 위치) [m]` |
 | [config/scenario_S3.yaml:12](../config/scenario_S3.yaml#L12) | `test_x_start: 2.5          # [EXP-FIXED] 시험 구간 (손실 ΔT 적분 범위) [m]` |
+| [config/scenario_S3.yaml:16](../config/scenario_S3.yaml#L16) | `box_len: 0.55              # [EXP-FIXED] 주차 박스 진행 방향 길이 [m] (0.55 × 0.30 × 0.35). 트랙 배치 계산용` |
 | [config/scenario_S4.yaml:9](../config/scenario_S4.yaml#L9) | `stop_distance: 7.5         # [EXP-FIXED] 소프트웨어 정지선: AUTO 후 주행 거리 > 이 값이면 0 명령 [m]` |
 | [config/scenario_S4.yaml:11](../config/scenario_S4.yaml#L11) | `accel_end_x: 2.5           # [EXP-FIXED] 가속 구간 끝 (v_ref 도달 판정 위치) [m]` |
 | [config/scenario_S4.yaml:12](../config/scenario_S4.yaml#L12) | `test_x_start: 2.5          # [EXP-FIXED] 시험 구간 (손실 ΔT 적분 범위) [m]` |
+| [config/scenario_S4.yaml:16](../config/scenario_S4.yaml#L16) | `box_len: 0.55              # [EXP-FIXED] 주차 박스 진행 방향 길이 [m] (0.55 × 0.30 × 0.35). 트랙 배치 계산용` |
 | [config/vehicle_geometry.yaml:3](../config/vehicle_geometry.yaml#L3) | `# 모든 방법(B0/B1/B2/P)이 이 파일 하나를 공유한다.  [EXP-FIXED]` |
 | [launch/bringup.launch.py:69](../launch/bringup.launch.py#L69) | `# Exp0 odom 보정·Exp1 저속 주행 전용. v_ref는 [EXP-FIXED]라 방법 비교(Exp2·Exp3) 회차에는 쓰지 않는다.` |
 | [launch/tf_static.launch.py:3](../launch/tf_static.launch.py#L3) | `base_link 원점 = 뒤축 중심, z = 0 바닥.  모든 값 [EXP-FIXED].` |
@@ -111,7 +120,7 @@
 | [my_algo/speed_layer_node.py:14](../my_algo/speed_layer_node.py#L14) | `min_speed_policy, restart_margin   [EXP-FIXED]` |
 | [my_algo/speed_policy.py:9](../my_algo/speed_policy.py#L9) | `[EXP-FIXED]   t_r, a_b, s_m, v_ref, 최소 속도 정책 → config/common.yaml (3단계)` |
 | [my_algo/speed_policy.py:56](../my_algo/speed_policy.py#L56) | `"""목표 속도를 플랫폼이 낼 수 있는 속도로 바꾼다. 모든 방법에 같은 정책을 쓴다. [EXP-FIXED]` |
-| [my_algo/trigger_node.py:16](../my_algo/trigger_node.py#L16) | `v_ref [EXP-FIXED] (config/common.yaml)` |
+| [my_algo/trigger_node.py:18](../my_algo/trigger_node.py#L18) | `v_ref [EXP-FIXED] (config/common.yaml)` |
 
 ## [EXP-TUNE] 민감도 분석 대상 — bringup 인자로 덮어쓰기 허용 (23개)
 
@@ -141,7 +150,7 @@
 | [my_algo/speed_layer_node.py:13](../my_algo/speed_layer_node.py#L13) | `v_imp, b1_k                 [EXP-TUNE] (v_imp 하한 = V_MIN)` |
 | [my_algo/speed_policy.py:10](../my_algo/speed_policy.py#L10) | `[EXP-TUNE]    v_imp (하한 = v_min), k` |
 
-## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (29개)
+## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (37개)
 
 | 위치 | 내용 |
 |---|---|
@@ -158,10 +167,18 @@
 | [config/popout.yaml:14](../config/popout.yaml#L14) | `erpm_gain: 4614.0                  # [EXP0-MEASURE] #2 차량의 m/s -> ERPM. 에고 값과 다를 수 있음. #2에서 실측` |
 | [config/popout.yaml:15](../config/popout.yaml#L15) | `servo_center: 0.5                  # [EXP0-MEASURE] #2 직진 서보값` |
 | [config/scenario_E0.yaml:9](../config/scenario_E0.yaml#L9) | `stop_distance: 4.5         # [EXP0-MEASURE] 제동 시작 위치 = v_ref 도달 후. 트랙 끝까지 정지거리(약 1 m) + 여유 확보` |
-| [config/scenario_S1.yaml:8](../config/scenario_S1.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
-| [config/scenario_S2.yaml:8](../config/scenario_S2.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
-| [config/scenario_S3.yaml:8](../config/scenario_S3.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
-| [config/scenario_S4.yaml:8](../config/scenario_S4.yaml#L8) | `collision_x: 5.0           # [EXP0-MEASURE] 앞 끝 시작점 → 충돌 지점(#2 진입선과 에고 경로 교점) [m]` |
+| [config/scenario_S1.yaml:8](../config/scenario_S1.yaml#L8) | `collision_x: 4.775          # [EXP0-MEASURE] P1–P2 틈 중앙. track_layout.layout()의 계산값 사본 (다르면 실행 시 경고)` |
+| [config/scenario_S1.yaml:14](../config/scenario_S1.yaml#L14) | `row_x_start: 4.0           # [EXP0-MEASURE] 주차열 P1 시작 x [m]. 트랙 배치의 유일 출처 (track_layout.py)` |
+| [config/scenario_S1.yaml:15](../config/scenario_S1.yaml#L15) | `row_x_end: 6.55             # [EXP0-MEASURE] track_layout 계산값 사본 (row_x_start + n box_len + (n-1) gap)` |
+| [config/scenario_S2.yaml:8](../config/scenario_S2.yaml#L8) | `collision_x: 4.775          # [EXP0-MEASURE] P1–P2 틈 중앙. track_layout.layout()의 계산값 사본 (다르면 실행 시 경고)` |
+| [config/scenario_S2.yaml:14](../config/scenario_S2.yaml#L14) | `row_x_start: 4.0           # [EXP0-MEASURE] 주차열 P1 시작 x [m]. 트랙 배치의 유일 출처 (track_layout.py)` |
+| [config/scenario_S2.yaml:15](../config/scenario_S2.yaml#L15) | `row_x_end: 6.55             # [EXP0-MEASURE] track_layout 계산값 사본 (row_x_start + n box_len + (n-1) gap)` |
+| [config/scenario_S3.yaml:8](../config/scenario_S3.yaml#L8) | `collision_x: 4.625          # [EXP0-MEASURE] P1–P2 틈 중앙. track_layout.layout()의 계산값 사본 (다르면 실행 시 경고)` |
+| [config/scenario_S3.yaml:14](../config/scenario_S3.yaml#L14) | `row_x_start: 4.0           # [EXP0-MEASURE] 주차열 P1 시작 x [m]. 트랙 배치의 유일 출처 (track_layout.py)` |
+| [config/scenario_S3.yaml:15](../config/scenario_S3.yaml#L15) | `row_x_end: 5.95             # [EXP0-MEASURE] track_layout 계산값 사본 (row_x_start + n box_len + (n-1) gap)` |
+| [config/scenario_S4.yaml:8](../config/scenario_S4.yaml#L8) | `collision_x: 4.55          # [EXP0-MEASURE] P1–P2 틈 중앙. track_layout.layout()의 계산값 사본 (다르면 실행 시 경고)` |
+| [config/scenario_S4.yaml:14](../config/scenario_S4.yaml#L14) | `row_x_start: 4.0           # [EXP0-MEASURE] 주차열 P1 시작 x [m]. 트랙 배치의 유일 출처 (track_layout.py)` |
+| [config/scenario_S4.yaml:15](../config/scenario_S4.yaml#L15) | `row_x_end: 5.65             # [EXP0-MEASURE] track_layout 계산값 사본 (row_x_start + n box_len + (n-1) gap)` |
 | [config/vehicle_geometry.yaml:11](../config/vehicle_geometry.yaml#L11) | `wheel_diameter: 0.0          # A5  [EXP0-MEASURE] 미측정 — odom 보정 검산용` |
 | [launch/car2.launch.py:46](../launch/car2.launch.py#L46) | `# #2 계수는 popout.yaml (#2 실측 [EXP0-MEASURE]), 휠베이스·서보 게인은 에고와 같은 차종으로 가정 (TBD(세션 1))` |
 | [launch/tf_static.launch.py:4](../launch/tf_static.launch.py#L4) | `실측 2026-11-03. 표시된 [EXP0-MEASURE] 값은 아직 가정값이므로 측정 후 교체.` |
@@ -172,5 +189,5 @@
 | [my_algo/imu_republisher.py:12](../my_algo/imu_republisher.py#L12) | `파라미터 (config/imu.yaml): accel_unit (기본 g), gyro_unit, gyro_bias [EXP0-MEASURE], gravity_ref,` |
 | [my_algo/speed_layer_node.py:12](../my_algo/speed_layer_node.py#L12) | `v_ref, t_r, a_b, s_m        [EXP-FIXED] (t_r, a_b는 [EXP0-MEASURE])` |
 | [my_algo/speed_policy.py:11](../my_algo/speed_policy.py#L11) | `[EXP0-MEASURE] t_r, a_b` |
-| [my_algo/trigger_node.py:15](../my_algo/trigger_node.py#L15) | `trigger_latency, popout_enter_time [EXP0-MEASURE] (config/common.yaml)` |
+| [my_algo/trigger_node.py:17](../my_algo/trigger_node.py#L17) | `trigger_latency, popout_enter_time [EXP0-MEASURE] (config/common.yaml)` |
 | [scripts/measure_lidar_height.py:2](../scripts/measure_lidar_height.py#L2) | `"""평평한 바닥에서 라이다 원점 높이와 장착 roll/pitch를 측정한다. [EXP0-MEASURE]` |

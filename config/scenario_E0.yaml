@@ -12,3 +12,6 @@
     test_x_end: 4.5
     row_x_start: 0.0
     row_x_end: 0.0
+    box_len: 0.55              # [EXP-FIXED] 주차 박스 진행 방향 길이 [m] (0.55 × 0.30 × 0.35). 트랙 배치 계산용
+    n_boxes: 0                 # 주차 박스 개수 (P1–P3). E0은 0
+    right_wall: false          # S4: 우측도 연속 벽 (시뮬 월드 생성용)

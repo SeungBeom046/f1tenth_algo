@@ -5,6 +5,8 @@
     d_e 정의: #2의 앞부분이 차선 경계에 닿는 순간, 에고 차체 앞 끝과 충돌 지점 사이 거리
     trigger_distance = collision_x - d_e - v_ref * (trigger_latency + popout_enter_time)
     collision_x: AUTO 시작 시 에고 차체 앞 끝에서 충돌 지점(#2 진입선과 에고 경로의 교점)까지 거리 [m]
+        = track_layout.layout(row_x_start, box_len, gap_width, n_boxes).collision_x (P1–P2 틈 중앙).
+        yaml의 collision_x는 사본이며 다르면 경고 후 계산값을 쓴다
     주행 거리는 AUTO 시작부터 odom 위치 변화를 누적한 값 (앞 끝 이동 거리와 같다)
 파이프라인 위치: [odom] → (trigger_node) → /trigger → [#2 popout_vehicle_node]
 구독: odom_topic (nav_msgs/Odometry), /autonomous_mode (std_msgs/Bool)
@@ -26,6 +28,8 @@ from rclpy.node import Node
 from std_msgs.msg import Bool, Header, String
 
 from my_algo.ros_util import publish_string
+from my_algo.track_layout import check as check_layout
+from my_algo.track_layout import layout
 from my_algo.trigger_math import trigger_distance  # noqa: F401 (순수 함수, 시뮬과 공유)
 
 
@@ -34,13 +38,28 @@ class TriggerNode(Node):
         super().__init__('trigger_node')
         defaults = [('odom_topic', '/vesc/odom'), ('trigger_enabled', False), ('run_id', ''),
                     ('d_e', 1.5), ('collision_x', 6.0), ('v_ref', 2.0),
-                    ('trigger_latency', 0.05), ('popout_enter_time', 0.2)]
+                    ('trigger_latency', 0.05), ('popout_enter_time', 0.2),
+                    # 트랙 배치 (scenario yaml, 유일 출처). row_x_start < 0이면 collision_x 파라미터를 그대로 쓴다
+                    ('row_x_start', -1.0), ('row_x_end', 0.0), ('box_len', 0.55), ('gap_width', 0.0),
+                    ('n_boxes', 3)]
         for k, v in defaults:
             self.declare_parameter(k, v)
         gp = lambda k: self.get_parameter(k).value  # noqa: E731
         self.enabled = bool(gp('trigger_enabled'))
         self.run_id = str(gp('run_id'))
-        self.distance = trigger_distance(float(gp('collision_x')), float(gp('d_e')),
+        collision_x = float(gp('collision_x'))
+        if float(gp('row_x_start')) >= 0.0:
+            # 충돌 지점은 track_layout으로 계산한다 (시뮬·분석과 같은 함수). yaml 사본과 다르면 경고
+            p = {k: gp(k) for k in ('row_x_start', 'row_x_end', 'box_len', 'gap_width', 'n_boxes',
+                                    'collision_x')}
+            for w in check_layout(p):
+                self.get_logger().warn(f'트랙 배치 불일치 (계산값 사용): {w}')
+            lay = layout(float(p['row_x_start']), float(p['box_len']), float(p['gap_width']),
+                         int(p['n_boxes']))
+            if lay.collision_x is not None:
+                collision_x = lay.collision_x
+        self.collision_x = collision_x
+        self.distance = trigger_distance(collision_x, float(gp('d_e')),
                                          float(gp('v_ref')), float(gp('trigger_latency')),
                                          float(gp('popout_enter_time')))
         self.auto = False

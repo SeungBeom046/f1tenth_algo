@@ -17,7 +17,7 @@
 | 트리거 지연 | 0.05 s | Exp0: `/trigger` stamp vs #2 `latency_s`, LED+카메라 | `config/common.yaml` `trigger_latency` |
 | #2 진입 시간 | 0.2 s | Exp0: #2 출발 → 앞 끝 차선 경계 (천장 카메라) | `config/common.yaml` `popout_enter_time` |
 | #2 ERPM 계수, 직진 서보 | 4614, 0.5 | #2에서 odom 스케일 보정과 같은 방법 | `config/popout.yaml` `erpm_gain`, `servo_center` |
-| 트랙 좌표 | collision_x 5.0, stop_distance 7.5, accel_end_x 2.5, test_x 2.5–7.0, row_x 4.0–6.3 | 트랙 마킹 후 줄자 | `config/scenario_S*.yaml` |
+| 트랙 좌표 | row_x_start 4.0 (유일 출처), stop_distance 7.5, accel_end_x 2.5, test_x 2.5–7.0. row_x_end·collision_x는 `track_layout` 계산값 사본 | 트랙 마킹 후 줄자 (row_x_start, box_len, gap_width) | `config/scenario_S*.yaml` (8절) |
 | 좌측 벽 목표 거리 | 0.355 | 좌측 벽 ~ 차선 왼쪽 경계 거리 실측 → 식은 `common.yaml` 주석 | `config/common.yaml` `target_wall_distance` |
 | 점별 시각 필드 (deskew) | `timestamp`, 1e-9, absolute | `check_vehicle.sh` 점군 필드 목록 | `config/common.yaml` `time_field`, `time_scale`, `time_mode` |
 
@@ -154,3 +154,26 @@ common_interfaces, joystick_drivers foxy-devel, f1tenth/vesc ros2, livox_ros_dri
 - **drive 모드는 수정하지 않는다.** 떨림 방지·최소 속도 튜닝이 이 상태에서 맞춰졌으므로, odom을 붙이면 drive 동작이 달라진다.
   odom을 붙인 drive 모드 재튜닝은 별도 과제로 남긴다 (승인 필요, verify_refactor 기준선 다시 잡기).
 - exp 모드는 영향 없음: `vesc_odom.launch.py`로 odom을 내고, exp AEB·트리거·지표는 odom 속도를 쓴다.
+
+## 8. 트랙 배치 정합 (2026-11-05, sim/mujoco 브랜치)
+
+scenario yaml 안에서 값이 서로 맞지 않았다 (박스 0.55 × 3, 틈 0.45 × 2, row_x_start 4.0 기준):
+row_x_end 6.3 → 계산 6.55, collision_x(P1–P2 틈 중앙) 5.0 → 계산 4.775. S3(틈 0.15)은 row_x_end 5.95.
+
+- `my_algo/track_layout.py`의 `layout(row_x_start, box_len, gap_width, n_boxes)`가 유일한 계산이다.
+  시뮬 월드, trigger_node(충돌 지점), analysis/extract_run(주차열 창)이 모두 이 함수를 쓴다.
+- yaml의 row_x_end·collision_x는 계산값 사본으로 맞췄고 [EXP0-MEASURE]를 유지한다. 실행 시 사본과 계산값이
+  1 mm 넘게 다르면 경고하고 계산값을 쓴다 (trigger_node, extract_run, 시뮬).
+
+| 시나리오 | row_x_end (전 → 후) | collision_x (전 → 후) |
+|---|---|---|
+| S1, S2 | 6.3 → 6.55 | 5.0 → 4.775 |
+| S3 | 6.3 → 5.95 | 5.0 → 4.625 (트리거 없음, 사본) |
+| S4 | 6.3 → 5.65 (틈 0) | 5.0 → 4.55 (트리거 없음, 사본) |
+| E0 | 0.0 (박스 없음) | 5.0 그대로 (박스 2개 미만이면 검사 안 함) |
+
+- 새 키 (scenario yaml, 모든 시나리오): `box_len` 0.55 [EXP-FIXED], `n_boxes` 3 (E0 0), `right_wall` (S4 true).
+  박스 길이는 트리거·분석(실차)도 쓰는 트랙 좌표라 sim.yaml이 아니라 scenario yaml에 두었다.
+  박스 폭·높이, 벽 치수, 차선 위치처럼 시뮬 월드만 쓰는 값은 `sim/config/sim.yaml`.
+- 결과: S1 트리거 거리가 0.225 m 짧아진다 (collision_x 변화량). 실제 d_e는 천장 카메라로 사후 계산한다.
+- `test/_track.py`(P1 시작 3.0 m)는 단위 테스트 전용이라 그대로 둔다.

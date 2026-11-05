@@ -25,6 +25,8 @@ from bag_io import read_bag, stamp  # noqa: E402
 
 from my_algo import metrics as M  # noqa: E402
 from my_algo.geometry import load_geometry  # noqa: E402
+from my_algo.track_layout import check as check_layout  # noqa: E402
+from my_algo.track_layout import from_params as layout_from_params  # noqa: E402
 
 OBSTACLE_CORRIDOR_HALF = 0.30  # 좌측 벽(약 0.35 m)과 주차 박스(0.45 m)는 제외, 차선에 들어온 #2만 남김
 
@@ -126,7 +128,14 @@ def extract(run_dir):
     s_fin, vf_s = M.series_on_s(t_o, s, t_fin, v_fin) if len(t_fin) else (np.empty(0), np.empty(0))
 
     x0, x1 = float(scen['test_x_start']), float(scen['test_x_end'])
-    r0, r1 = float(scen['row_x_start']), float(scen['row_x_end'])
+    # 주차열 구간은 track_layout으로 계산한다 (트리거·시뮬과 같은 함수). 옛 설정 사본(box_len 없음)은 yaml 값 사용
+    if 'box_len' in scen:
+        for w in check_layout(scen):
+            print(f'경고 {os.path.basename(run_dir)}: 트랙 배치 불일치 (계산값 사용): {w}', file=sys.stderr)
+        lay = layout_from_params(scen)
+        r0, r1 = lay.row_x_start, lay.row_x_end
+    else:
+        r0, r1 = float(scen['row_x_start']), float(scen['row_x_end'])
     out = {'run': os.path.basename(run_dir), 'method': meta['method'], 'scenario': meta['scenario'],
            'd_e': meta['d_e'], 'run_id': meta['run_id'], 'discard': meta.get('discard', False),
            'discard_reason': meta.get('discard_reason')}
