@@ -70,6 +70,8 @@ python sim/sweep.py --methods P --w-min 0.25 0.35 0.45 --name wmin     # [EXP-TU
 ```
 
 결과: `sim_logs/<날짜>/<회차>/` (sweep은 `sim_logs/<날짜>/sweep_<name>/`, 표·그림은 그 아래 `analysis/`).
+회차마다 **`report.html`** (브라우저로 열기: 속도·d·ρ·이벤트·궤적 그래프 + 판정 체크리스트 통과/주의/실패 + 같은 조건 다른 방법 비교),
+sweep 폴더에는 회차 목록과 판정 요약 **`index.html`**. 기존 회차는 `python sim/report.py <회차>` / `--index <sweep 폴더>`.
 
 ## 자주 나는 문제
 

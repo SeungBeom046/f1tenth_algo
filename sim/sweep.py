@@ -13,6 +13,7 @@
 """
 import argparse
 import datetime
+import glob
 import itertools
 import multiprocessing as mp
 import os
@@ -103,6 +104,11 @@ def report(root):
     runs = [r for r in plots.load_runs([root]) if not r.get('static')]
     plots.fig5(runs, out, plt)
     plots.fig6(runs, out, plt)
+    import report as run_report                       # 회차별 report.html 목록 + 판정 요약 (index.html)
+    # 회차별 리포트는 회차가 끝날 때 만들어지지만, 같은 조건 비교는 모든 회차가 끝난 뒤에야 완전하므로 다시 만든다
+    for d in sorted(glob.glob(os.path.join(root, '*', 'analysis', 'metrics.json'))):
+        run_report.render(os.path.dirname(os.path.dirname(d)))
+    run_report.index(root)
     return out
 
 

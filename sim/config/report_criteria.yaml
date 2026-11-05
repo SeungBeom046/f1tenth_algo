@@ -1,0 +1,22 @@
+# 회차 판단 리포트(sim/report.py) 판정 기준. 결과를 보고 바꾸지 않는다 (2026-11-05 결과 보기 전 고정).
+# 다른 값(v_ref, v_imp, w_min, w_max, t_r, lane_width, accel_end_x, test_x 구간, stop_distance)은 회차 meta.json의 설정에서 읽는다.
+# v_ref 도달 비율(0.95)과 폐기·AEB 오작동 판정은 my_algo/metrics.py 함수 그대로 (실차 분석과 같은 기준, 여기에 복사하지 않음).
+
+collision:
+  # 통과 = 충돌 없음. 주의 = 충돌 속도 <= v_imp (v_cap 식이 허용한 결과). 실패 = 충돌 속도 > v_imp (metrics.impact_class)
+  {}
+
+cmd_le_vcap:
+  eps: 1.0e-6            # [m/s] 부동소수 오차. 시험 구간에서 v_raw(min(v_ref, v_cap)) <= v_cap + eps 이면 통과
+
+tracking:
+  # 실제 속도가 '속도 계층 명령(v_cmd, 최소 속도 정책 후)'을 가정한 지연 안에서 따르는지.
+  # 초과량(t) = v(t) - max(v_cmd, [t - t_r_eff - window_extra, t]). t_r_eff = 시뮬 v_cap 식의 t_r (sim.yaml timing_overrides,
+  # = t_r + tau). 이 창 안의 가장 큰 명령보다 빠르면 v_cap 식의 전제(지연 t_r_eff 뒤에는 명령을 따른다)가 깨진 것.
+  window_extra: 0.05     # [s] 명령 주기(50 Hz) 2개 + 스텝(0.01) 양자화 여유
+  tol: 0.05              # [m/s] 최소 ERPM 반올림(4614 ERPM/(m/s) 기준 1 ERPM = 0.0002 m/s)보다 크고, v_imp 여유보다 충분히 작은 값
+
+phantom:
+  pos_tol: 0.15          # [m] P 기대 위치(틈 입구 중앙, 열 끝)와의 허용 거리 = 격자 3칸 (칸 양자화 + 틈 중앙 계산 오차)
+  face_tol: 0.15         # [m] P phantom의 y가 주차열 차선 쪽 면(-lane_width/2)에서 이만큼 안이어야 함
+  lane_margin: 0.05      # [m] B2: |y| < lane_width/2 - lane_margin (보이는 차선 안쪽)의 경계 phantom은 기대 밖 (격자 누적 전 가짜 경계)

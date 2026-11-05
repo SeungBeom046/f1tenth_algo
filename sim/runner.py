@@ -475,6 +475,11 @@ def finish(sim, log, frames, wall, echo=print):
         sys.path.insert(0, os.path.join(ROOT, 'analysis'))
     import sim_reader
     m = sim_reader.compute(out_dir)
+    try:                                   # 회차별 판단 리포트 (report.html). 실패해도 회차 결과는 남긴다
+        import report
+        report.render(out_dir)
+    except Exception as exc:  # noqa: BLE001
+        echo(f'경고: report.html 생성 실패 ({type(exc).__name__}: {exc})')
     if sim.args.video:
         import video
         video.render(out_dir)
