@@ -172,36 +172,41 @@ class ViewerUI:
         return pts, (z >= self.band[0]) & (z <= self.band[1])
 
     def draw(self):
+        """매 프레임 user_scn을 비우고(ngeom = 0) 오버레이를 새로 그린다. 누적하지 않는다 (반투명 도형이 겹치면 어두워짐)."""
         h = self.handle
-        sim = self.sim
         with h.lock():
             scn = h.user_scn
             scn.ngeom = 0
             self.dropped = False
-            n = 0
-            if self.show['points']:
-                pts, inb = self.points_to_draw()
-                for p, ok in zip(pts, inb):
-                    if not self._geom(scn, mujoco.mjtGeom.mjGEOM_BOX, (0.012, 0.012, 0.012), p,
-                                      RGBA_IN_BAND if ok else RGBA_OUT_BAND):
-                        break
-                    n += 1
-            self.drawn_points = n
-            frames = sim.frames
-            if self.show['boundary'] and frames['boundary']:
-                for x, y in frames['boundary'][-1]:
-                    if not self._geom(scn, mujoco.mjtGeom.mjGEOM_BOX, (0.025, 0.025, 0.004), (x, y, 0.006),
-                                      RGBA_BOUNDARY):
-                        break
-            if self.show['phantoms'] and frames['phantoms']:
-                rgba = RGBA_PHANTOM.get(sim.args.method, RGBA_PHANTOM['P'])
-                for x, y in frames['phantoms'][-1]:
-                    if not self._geom(scn, mujoco.mjtGeom.mjGEOM_CYLINDER, (0.05, 0.15, 0.0), (x, y, 0.15), rgba):
-                        break
+            self.fill_scene(scn)
         if self.show['text']:
             h.set_texts(self.texts())
         else:
             h.clear_texts()
+
+    def fill_scene(self, scn):
+        """오버레이 도형을 scn 뒤에 덧붙인다 (뷰어 user_scn, 또는 테스트의 오프스크린 렌더 장면)."""
+        sim = self.sim
+        n = 0
+        if self.show['points']:
+            pts, inb = self.points_to_draw()
+            for p, ok in zip(pts, inb):
+                if not self._geom(scn, mujoco.mjtGeom.mjGEOM_BOX, (0.012, 0.012, 0.012), p,
+                                  RGBA_IN_BAND if ok else RGBA_OUT_BAND):
+                    break
+                n += 1
+        self.drawn_points = n
+        frames = sim.frames
+        if self.show['boundary'] and frames['boundary']:
+            for x, y in frames['boundary'][-1]:
+                if not self._geom(scn, mujoco.mjtGeom.mjGEOM_BOX, (0.025, 0.025, 0.004), (x, y, 0.006),
+                                  RGBA_BOUNDARY):
+                    break
+        if self.show['phantoms'] and frames['phantoms']:
+            rgba = RGBA_PHANTOM.get(sim.args.method, RGBA_PHANTOM['P'])
+            for x, y in frames['phantoms'][-1]:
+                if not self._geom(scn, mujoco.mjtGeom.mjGEOM_CYLINDER, (0.05, 0.15, 0.0), (x, y, 0.15), rgba):
+                    break
 
     def texts(self):
         sim = self.sim

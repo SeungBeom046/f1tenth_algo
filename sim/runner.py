@@ -101,6 +101,10 @@ class Sim:
                     and np.array_equal(m.geom_pos, self.m.geom_pos) and np.array_equal(m.body_pos, self.m.body_pos)):
                 raise RuntimeError('재시작: 월드가 처음 회차와 다르다')
             mujoco.mj_resetData(self.m, self.d)
+            # mj_resetData는 조명·카메라 위치(light_xpos/xdir 등)도 0으로 만든다. 시뮬 루프는 mj_kinematics만 부르므로
+            # 다시 계산되지 않아 화면이 어두워진다 → 창을 처음 띄울 때(launch_passive)처럼 mj_forward 한 번.
+            # 라이다(mj_multiRay)는 매 스텝 mj_kinematics로 다시 놓은 도형 위치만 쓰므로 결과에 영향 없음 (결정성 테스트)
+            mujoco.mj_forward(self.m, self.d)
         self.ego_body = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, 'ego')
         self.car2_body = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_BODY, 'car2')
         s = cfg.sim
