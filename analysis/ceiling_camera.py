@@ -25,7 +25,7 @@ import os
 
 import numpy as np
 
-from my_algo.geometry import load_geometry, point_polygon_distance
+from my_algo.geometry import load_geometry, polygon_distance  # noqa: F401 (다각형 거리: 시뮬과 공유)
 
 
 def detector(dict_name):
@@ -55,17 +55,6 @@ def crossing_time(t, x, line):
 def transform(poly, x, y, yaw):
     c, s = math.cos(yaw), math.sin(yaw)
     return [(x + c * px - s * py, y + s * px + c * py) for px, py in poly]
-
-
-def polygon_distance(a, b, samples=20):
-    """두 다각형 최소 거리 (변 위 표본점 → 상대 다각형, 양방향)."""
-    best = math.inf
-    for p, q in ((a, b), (b, a)):
-        for i in range(len(p)):
-            (x1, y1), (x2, y2) = p[i], p[(i + 1) % len(p)]
-            for f in np.linspace(0, 1, samples):
-                best = min(best, point_polygon_distance(x1 + f * (x2 - x1), y1 + f * (y2 - y1), q))
-    return best
 
 
 def main():

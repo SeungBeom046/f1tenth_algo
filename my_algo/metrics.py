@@ -170,3 +170,31 @@ def mean_ci95(values):
     df = n - 1
     tcrit = T95.get(df) or (T95[max(k for k in T95 if k <= df)] if df < 30 else 1.96)
     return float(x.mean()), float(tcrit * x.std(ddof=1) / math.sqrt(n)), n
+
+
+def boundary_jitter(frames_xy, bin_size=0.1, min_frames=5):
+    """RQ4: 프레임별 가림 경계 위치의 흔들림.
+
+    frames_xy: 프레임마다 경계 칸 중심 (N, 2) 목록. x를 bin_size로 묶고, 각 bin에서 차선에 가장 가까운
+    (|y| 최소) 경계 y를 프레임마다 뽑아 그 표준편차를 bin 평균한다. 반환 (평균 표준편차 [m] 또는 None, bin 수).
+    """
+    per_bin = {}
+    for xy in frames_xy:
+        if len(xy) == 0:
+            continue
+        xy = np.asarray(xy, float)
+        bins = np.round(xy[:, 0] / bin_size).astype(int)
+        for b in np.unique(bins):
+            ys = xy[bins == b, 1]
+            per_bin.setdefault(int(b), []).append(float(ys[np.argmin(np.abs(ys))]))
+    stds = [np.std(v) for v in per_bin.values() if len(v) >= min_frames]
+    return (float(np.mean(stds)) if stds else None), len(stds)
+
+
+def phantom_flicker(counts):
+    """phantom 수 변화 횟수와 있음/없음 전환 횟수."""
+    counts = np.asarray(counts)
+    if len(counts) < 2:
+        return 0, 0
+    return int(np.count_nonzero(np.diff(counts))), int(np.count_nonzero(np.diff((counts > 0).astype(int))))
+

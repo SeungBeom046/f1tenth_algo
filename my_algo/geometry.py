@@ -56,3 +56,19 @@ def point_polygon_distance(px, py, polygon):
         cx, cy = x1 + t * dx, y1 + t * dy
         best = min(best, ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5)
     return 0.0 if inside else best
+
+
+def polygon_distance(a, b, samples=20):
+    """두 다각형 최소 거리 (변 위 표본점 → 상대 다각형, 양방향). 겹치면 0.
+
+    analysis/ceiling_camera.py(천장 카메라 최소 거리·충돌)와 sim/runner.py(시뮬 충돌)가 같이 쓴다.
+    """
+    import numpy as np
+    best = float('inf')
+    for p, q in ((a, b), (b, a)):
+        for i in range(len(p)):
+            (x1, y1), (x2, y2) = p[i], p[(i + 1) % len(p)]
+            for f in np.linspace(0, 1, samples):
+                best = min(best, point_polygon_distance(x1 + f * (x2 - x1), y1 + f * (y2 - y1), q))
+    return best
+

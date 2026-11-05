@@ -73,21 +73,11 @@ def scan_distances(scan_msgs, offset, footprint):
 def rq4(bag, s_of_t):
     """프레임별 가림 경계의 흔들림과 phantom 깜빡임."""
     frames = bag.get('/exp/boundary_frame', [])
-    per_bin = {}
-    for _, m in frames:
-        if not m.cells:
-            continue
-        xy = np.array([(p.x, p.y) for p in m.cells])
-        bins = np.round(xy[:, 0] / 0.1).astype(int)
-        for b in np.unique(bins):
-            ys = xy[bins == b, 1]
-            per_bin.setdefault(int(b), []).append(float(ys[np.argmin(np.abs(ys))]))
-    stds = [np.std(v) for v in per_bin.values() if len(v) >= 5]
+    xy = [np.array([(p.x, p.y) for p in m.cells]).reshape(-1, 2) for _, m in frames]
+    std_mean, bins = M.boundary_jitter(xy)                 # 시뮬(sim_reader)과 같은 함수
     counts = [json.loads(m.data)['n_phantoms'] for _, m in bag.get('/exp/phantom_debug', [])]
-    changes = int(np.count_nonzero(np.diff(counts))) if len(counts) > 1 else 0
-    toggles = int(np.count_nonzero(np.diff((np.array(counts) > 0).astype(int)))) if len(counts) > 1 else 0
-    return {'boundary_y_std_mean': float(np.mean(stds)) if stds else None,
-            'boundary_bins': len(stds), 'boundary_frames': len(frames),
+    changes, toggles = M.phantom_flicker(counts)
+    return {'boundary_y_std_mean': std_mean, 'boundary_bins': bins, 'boundary_frames': len(frames),
             'phantom_count_changes': changes, 'phantom_on_off_toggles': toggles}
 
 
