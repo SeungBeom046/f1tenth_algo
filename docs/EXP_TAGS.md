@@ -122,7 +122,7 @@
 | [my_algo/speed_policy.py:56](../my_algo/speed_policy.py#L56) | `"""목표 속도를 플랫폼이 낼 수 있는 속도로 바꾼다. 모든 방법에 같은 정책을 쓴다. [EXP-FIXED]` |
 | [my_algo/trigger_node.py:18](../my_algo/trigger_node.py#L18) | `v_ref [EXP-FIXED] (config/common.yaml)` |
 
-## [EXP-TUNE] 민감도 분석 대상 — bringup 인자로 덮어쓰기 허용 (23개)
+## [EXP-TUNE] 민감도 분석 대상 — bringup 인자로 덮어쓰기 허용 (27개)
 
 | 위치 | 내용 |
 |---|---|
@@ -149,6 +149,10 @@
 | [my_algo/phantom.py:40](../my_algo/phantom.py#L40) | `row_face_tol: float = 0.10   # [EXP-TUNE] P 주차열 차선 쪽 면에서 이 깊이 안의 칸만 열로 묶음 [m].` |
 | [my_algo/speed_layer_node.py:13](../my_algo/speed_layer_node.py#L13) | `v_imp, b1_k                 [EXP-TUNE] (v_imp 하한 = V_MIN)` |
 | [my_algo/speed_policy.py:10](../my_algo/speed_policy.py#L10) | `[EXP-TUNE]    v_imp (하한 = v_min), k` |
+| [sim/runner.py:6](../sim/runner.py#L6) | `sim/.venv/bin/python sim/runner.py --method P --scenario S3 --w-min 0.30 --video         # [EXP-TUNE] + 위에서 본 영상` |
+| [sim/runner.py:429](../sim/runner.py#L429) | `ap.add_argument('--' + k.replace('_', '-'), dest=k, type=typ, default=None, help='[EXP-TUNE]')` |
+| [sim/simconfig.py:4](../sim/simconfig.py#L4) | `< 회차 값(d_e, run_id) < [EXP-TUNE] 인자 < 시뮬 전용(sim.yaml mux_overrides, 지오메트리 파일 경로).` |
+| [sim/simconfig.py:58](../sim/simconfig.py#L58) | `raise ValueError(f'[EXP-TUNE]가 아닌 값은 바꿀 수 없다: {sorted(bad)}')` |
 
 ## [EXP0-MEASURE] Exp0 실측 후 교체할 가정값 (37개)
 
