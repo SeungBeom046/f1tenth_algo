@@ -16,9 +16,9 @@ ORIGIN_H = 0.03    # [EXP0-MEASURE] 장착면 -> 점군 원점 O 높이. 임시�
                    #     C2(평평한 바닥 점군의 z 평균)로 교체할 것.
 LIDAR_Z = MOUNT_Z + ORIGIN_H
 
-LIDAR_YAW = 0.0    # [EXP0-MEASURE] B5: 로고가 전방이면 0, 후방이면 3.14159, 좌측 1.5708, 우측 -1.5708
-LIDAR_ROLL = 0.0   # [EXP0-MEASURE] C1: 정지 IMU 평균 roll = atan2(ay, az)
-LIDAR_PITCH = 0.0  # [EXP0-MEASURE] C1: 정지 IMU 평균 pitch = atan2(-ax, sqrt(ay^2 + az^2))
+LIDAR_YAW = 0.0    # B5 (세션 1, 2026-11-06): 로고 전방 → 0. (후방 3.14159, 좌측 1.5708, 우측 -1.5708)
+LIDAR_ROLL = 0.0023   # C1 (세션 1): 정지 IMU roll = atan2(ay, az). 0°/180° 두 방향 평균(바닥 경사 상쇄): 0.00037, 0.00424
+LIDAR_PITCH = 0.0557  # C1 (세션 1): 정지 IMU pitch = atan2(-ax, sqrt(ay^2 + az^2)). 0°/180° 평균: 0.05027, 0.06108 (3.2°, 앞이 숙여짐)
 
 # ---- livox_frame -> livox_imu (Livox 매뉴얼 값, 회전 없음) ------------------
 IMU_X, IMU_Y, IMU_Z = 0.011, 0.02329, -0.04412

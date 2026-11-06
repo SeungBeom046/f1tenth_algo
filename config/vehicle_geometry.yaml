@@ -8,7 +8,7 @@ vehicle_geometry:
     rear_axle_to_rear: 0.09      # A3
     body_length: 0.50            # A2 + A3
     body_width: 0.27             # A4
-    wheel_diameter: 0.0          # A5  [EXP0-MEASURE] 미측정 — odom 보정 검산용
+    wheel_diameter: 0.10         # A5  세션 1 (2026-11-06): 타이어 포함 바깥 지름 — odom 보정 검산용
 
     # footprint (base_link 기준 다각형, 반시계)
     footprint: [0.41, 0.135, -0.09, 0.135, -0.09, -0.135, 0.41, -0.135]
