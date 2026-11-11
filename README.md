@@ -1,493 +1,127 @@
 # my_algo
 
-실차 F1TENTH용 ROS2 자율주행 스택이다. 현재 기본 주행은 LiDAR 기반이며,
-카메라는 Intel RealSense D455로 객체/거리/차선 인식 상태를 확인하는
-perception overlay 용도로 사용한다.
+실차 F1TENTH용 ROS2 자율주행 패키지. LiDAR만으로 지도 없이(mapless) 주행한다.
 
-## 코드 구조
-
-```text
-my_algo/
-├── launch/
-│   ├── lidar_drive.launch.py
-│   │   └── 라이다 기반 실차 자율주행 실행용 launch
-│   ├── autonomous_drive.launch.py
-│   │   └── 라이다/카메라 노드를 같이 띄우는 통합 launch
-│   └── camera_drive.launch.py
-│       └── 카메라 주행 인터페이스 확인용 launch
-├── my_algo/
-│   ├── vehicle_utils.py
-│   │   └── RPM, 조향, JSON command, 공통 수학 유틸
-│   ├── lidar_reactive_drive.py
-│   │   └── LaserScan 기반 gap/corridor/cone/open-space 주행 판단
-│   ├── autonomous_drive.py
-│   │   └── planner command 선택, AEB 검사, VESC 명령 발행
-│   ├── aeb.py
-│   │   └── TTC와 제동거리 기반 긴급제동 안전 모델
-│   ├── joy_controller.py
-│   │   └── MANUAL/AUTO 토글과 수동 조이스틱 제어
-│   ├── camera_reactive_drive.py
-│   │   └── D455 RGB/depth, YOLO 객체, 거리, 차선, AEB 경고 overlay
-│   └── autonomous_metrics_logger.py
-│       └── trial 기반 성능 측정 및 CSV 로깅
-├── package.xml
-├── setup.py
-└── README.md
-```
-
-## 런타임 토픽
-
-```text
-입력:
-  /livox/lidar                         Livox PointCloud2 원본
-  /scan                                pointcloud_to_laserscan 변환 결과
-  /vesc/odom                           현재 차량 odometry
-  /joy                                 조이스틱 입력
-  /camera/camera/color/image_raw       D455 RGB 이미지
-  /camera/camera/aligned_depth_to_color/image_raw
-                                       RGB와 정렬된 D455 depth 이미지
-
-내부 상태:
-  /autonomous_mode                     AUTO/MANUAL 상태
-  /joy_active                          사람이 조이스틱을 조작 중인지 여부
-  /reactive/lidar_command              라이다 reactive drive 결과 JSON
-  /reactive/camera_command             추후 카메라 제어용 예약 토픽
-  /aeb/active                          AEB 작동 여부
-  /aeb/status                          AEB 상태/작동 이유
-  /camera/perception/status            카메라 인식 결과 JSON
-
-출력:
-  /commands/motor/speed                VESC 모터 ERPM 명령
-  /commands/servo/position             VESC 조향 servo position 명령
-  /camera/perception/annotated_image   객체/거리/차선/AEB overlay 이미지
-```
-
-## 노드 흐름
-
-```text
-/livox/lidar
-  -> pointcloud_to_laserscan
-  -> /scan
-  -> lidar_reactive_drive
-  -> /reactive/lidar_command
-  -> autonomous_drive
-     ├── drive_source에 맞는 command 선택
-     ├── /vesc/odom 속도로 AEB 검사
-     └── /commands/motor/speed + /commands/servo/position 발행
-
-/joy
-  -> joy_controller
-     ├── /autonomous_mode 발행
-     ├── /joy_active 발행
-     └── MANUAL 모드에서는 VESC 명령 직접 발행
-
-/camera/camera/color/image_raw + /camera/camera/aligned_depth_to_color/image_raw
-  -> camera_reactive_drive
-     ├── YOLO 객체 인식
-     ├── depth median 기반 객체 거리 추정
-     ├── 하단 ROI 차선 후보 검출
-     ├── /aeb/active를 받아 경고 overlay 표시
-     └── /camera/perception/annotated_image 발행
-```
+- 차량: Jetson Orin Nano, ROS2 **Foxy**, Python 3.8
+- 주행 입력: Livox 점군 → `/scan`, VESC `/vesc/odom`. **IMU·TF는 쓰지 않는다.**
+- 카메라(RealSense D455)는 켜지지만 화면 표시만 한다. 제어 명령은 내지 않는다.
+- 실험 코드(phantom, MuJoCo 시뮬 등)는 `exp/occlusion-speed` 브랜치와 태그 `archive/occlusion-mujoco-20261110`에 있다.
 
 ## 실행
 
-라이다 기반 주행은 아래 launch가 기본이다.
-
-```bash
-ros2 launch my_algo lidar_drive.launch.py
-```
-
-단, 이 launch는 자율주행 알고리즘 launch다. 실차에서 실제로 움직이려면
-Livox 라이다 드라이버와 VESC 드라이버가 먼저 떠 있어야 한다.
-
-```text
-필수 하드웨어 토픽:
-  /livox/lidar
-  /vesc/odom
-  /commands/motor/speed
-  /commands/servo/position
-```
-
-통합 launch는 라이다와 카메라 reactive drive 노드를 같이 띄우지만, 현재 기본
-선택은 `drive_source=lidar`이다. 아직 카메라-라이다 센서퓨전은 아니다.
-
-```bash
-ros2 launch my_algo autonomous_drive.launch.py
-```
-
-카메라 launch는 현재 주행 제어용이 아니다. D455 드라이버와 카메라 perception
-overlay만 실행해서 객체/거리/차선/AEB 표시가 정상인지 확인한다. 차량 제어는
-하지 않는다.
-
-```bash
-ros2 launch my_algo camera_drive.launch.py
-```
-
-## D455 카메라 perception
-
-현재 목표는 카메라가 실차 제어에 개입하지 않고, 주행 중 주변 정보를 제대로
-받고 처리하는지 확인하는 것이다.
-
-```text
-camera_drive.launch.py
-├── realsense2_camera_node
-│   ├── color image publish
-│   ├── depth image publish
-│   └── align_depth.enable: True
-└── camera_reactive_drive
-    ├── RGB frame 수신
-    ├── aligned depth frame 수신
-    ├── YOLO 객체 인식
-    ├── bbox 중앙부 depth median으로 객체 거리 계산
-    ├── 하단 ROI에서 흰색/노란색 차선 후보 검출
-    ├── AEB active topic을 받아 화면 경고 표시
-    ├── OpenCV 창 표시
-    └── /camera/perception/annotated_image publish
-```
-
-카메라 제어는 현재 의도적으로 꺼져 있다.
-
-```text
-camera_reactive_drive.py는 /commands/motor/speed를 발행하지 않는다.
-camera_reactive_drive.py는 /commands/servo/position을 발행하지 않는다.
-camera_drive.launch.py는 autonomous_drive를 실행하지 않는다.
-LiDAR 주행 중 카메라는 perception 확인용 보조 노드로만 둔다.
-```
-
-YOLO와 OpenCV overlay가 정상 동작하면 화면에는 다음 정보가 표시된다.
-
-```text
-D455 PERCEPTION | YOLO:ON/OFF | DEPTH:ON/WAIT | CONTROL:DISABLED
-객체 bbox
-객체 class
-confidence
-distance
-decision
-LANE: YES/NO
-AEB WARNING
-```
-
-객체별 decision은 현재 표시용이다. 예를 들어 작은 부드러운 물체는
-`IGNORE_CANDIDATE`, 사람/자전거 등은 `STOP_CANDIDATE`, 차량류는 `WATCH`로
-표시한다. 이 값은 추후 카메라 기반 판단 정책을 만들 때 확장한다.
-
-필요한 Jetson 패키지:
-
-```bash
-sudo apt install ros-humble-realsense2-camera ros-humble-cv-bridge
-pip3 install ultralytics
-```
-
-YOLO 모델은 기본값 `yolov8n.pt`를 사용한다. 네트워크가 없는 차량 환경에서는
-미리 모델 파일을 받아 두고 launch의 `yolo_model` 값을 해당 경로로 바꾼다.
-
-## 차량 치수 파라미터
-
-실차 크기와 라이다 위치는 launch 파일에서 바로 볼 수 있게 노출했다.
-
-```text
-lidar_drive.launch.py
-├── lidar_reactive_drive
-│   ├── vehicle_width: 0.30
-│   ├── safety_margin: 0.18
-│   ├── target_wall_distance: 0.85
-│   ├── lookahead_distance: 2.2
-│   ├── max_steering: 0.78
-│   └── lidar_to_bumper_dist: 0.30
-└── autonomous_drive
-    ├── aeb_ttc_threshold: 0.55
-    ├── aeb_vehicle_half_width: 0.15
-    ├── aeb_path_margin: 0.10
-    ├── lidar_to_bumper_dist: 0.30
-    └── max_steering: 0.78
-```
-
-차량 전체 길이는 현재 공식에 직접 쓰지 않는다. 전방 충돌과 장애물 거리는
-라이다 원점 기준이 아니라 앞범퍼 기준으로 보정한다.
-
-```text
-앞범퍼 기준 x = 라이다 range*cos(theta) - lidar_to_bumper_dist
-lidar_to_bumper_dist = 0.30 m
-```
-
-## 적용된 알고리즘
-
-### 1. 라이다 좌표 변환
-
-`lidar_reactive_drive.py`와 `aeb.py`에서 LaserScan의 극좌표를 차량 좌표계로 바꾼다.
-
-```text
-x = r*cos(theta) - lidar_to_bumper_dist
-y = r*sin(theta)
-```
-
-- `r`: LaserScan range
-- `theta`: LaserScan angle
-- `x`: 앞범퍼 기준 전방 거리
-- `y`: 차량 중심선 기준 좌우 거리
-
-라이다 x축이 차량 정면을 향한다는 현재 장착 상태를 기준으로 한다. 별도 yaw
-offset 보정은 넣지 않았다.
-
-### 2. Gap 기반 주행
-
-`lidar_reactive_drive.py`는 전방 +/-120도 안의 scan point를 보고 차량이 지나갈 수
-있는 틈새를 찾는다.
-
-```text
-통과 필요 폭 = vehicle_width + 2*safety_margin
-기본값: 0.30 + 2*0.18 = 0.66 m
-```
-
-장애물이 전방 `lookahead_distance` 안에 있고, 차량 중심선 기준 좌우 허용 폭
-안에 들어오면 그 방향은 막힌 것으로 본다.
-
-```text
-lateral_limit = max((vehicle_width + 2*safety_margin)/2, 0.12)
-blocked = 0 <= x <= lookahead_distance and abs(y) <= lateral_limit
-```
-
-틈새 폭은 좌우 경계점 사이의 유클리드 거리로 계산한다.
-
-```text
-gap_width = sqrt(dx^2 + dy^2)
-```
-
-틈새 중심각은 좌우 경계각 평균이다.
-
-```text
-center_angle = (left_angle + right_angle) / 2
-```
-
-### 3. Gap 점수 계산
-
-여러 틈새가 있으면 폭, 전방 여유거리, 조향 부담, 조향 변화량을 같이 본다.
-
-```text
-width_score = clamp(gap_width / 1.6, 0, 1)
-clearance_score = clamp(clearance / lookahead_distance, 0, 1)
-steering_penalty = abs(center_angle) / radians(120)
-change_penalty = abs(center_angle - previous_steering)
-
-score =
-  1.4*width_score
-  + clearance_score
-  - 0.45*steering_penalty
-  - 0.25*change_penalty
-```
-
-이 점수식은 넓고 전방 여유가 큰 틈새를 선호하면서, 갑작스러운 좌우 전환을
-줄이도록 만든 것이다.
-
-gap 점수 높음 = 폭도 넓고, 앞도 비어 있고, 너무 급하게 꺾지 않아도 되고, 이전 조향과도 크게 안 달라서 안정적임을 의미
-gap 점수는 폭 + 거리 + 조향 안정성을 고려하여 판단한 종합 점수임.
-
-### 4. 조향과 RPM 계산
-
-선택된 gap의 중심각을 조향 목표로 쓴다. 장애물 회피 모드에서는 조금 더 강하게
-돌도록 1.25배를 적용한다.
-
-```text
-steering = clamp(center_angle * gain, -max_steering, max_steering)
-gain = 1.25 if obstacle_avoidance else 1.0
-```
-
-틈새가 넓을수록 RPM을 높이고, 조향을 많이 할수록 감속한다.
-
-```text
-steer_ratio = clamp(abs(steering) / max_steering, 0, 1)
-width_ratio = clamp(gap_width / 1.5, 0, 1)
-
-rpm = CRUISE_RPM + (MAX_RPM - CRUISE_RPM)*width_ratio
-rpm = rpm * (1 - 0.35*steer_ratio)
-```
-
-현재 기본값:
-
-```text
-CRUISE_RPM = 8200
-MAX_RPM = 12000
-MIN_DRIVING_RPM = 2000
-```
-
-명령 RPM은 `sanitize_rpm()`을 거쳐 0 또는 최소 2000 RPM 이상으로 제한된다.
-출발 토크가 부족해서 안 움직이는 문제를 줄이기 위한 규칙이다.
-
-### 5. Corridor 기반 wall-follow
-
-현재 코드의 wall-follow는 이미지에 있는 전통적인 두 점 기반 공식과 다르다.
-현재 적용된 방식은 좌우 측면 point의 `abs(y)` 분위값으로 벽과의 거리를 추정하고,
-단순 P 제어로 조향한다.
-
-```text
-양쪽 벽이 보일 때:
-  error = left_dist - right_dist
-
-왼쪽 벽만 보일 때:
-  error = left_dist - target_wall_distance
-
-오른쪽 벽만 보일 때:
-  error = target_wall_distance - right_dist
-
-steering = clamp(0.55*error, -max_steering, max_steering)
-rpm = CRUISE_RPM * (1 - 0.2*abs(steering)/max_steering)
-```
-
-네가 올린 공식은 아래 형태의 고전적인 wall-follow다.
-
-```text
-alpha = atan((a*sin(theta) - b) / (a*cos(theta)))
-D_t = b*cos(alpha)
-D_t+1 = D_t + L*sin(alpha)
-```
-
-이 공식은 현재 코드에 그대로 적용되어 있지 않다. 현재 코드는 고전 wall-follow
-하나만 쓰는 방식이 아니라, gap 주행을 기본으로 하고 corridor가 안정적으로
-보일 때만 벽 추종 모드로 들어간다.
-
-### 6. Cone track
-
-좌우 cone처럼 보이는 point가 충분히 있으면 좌우 평균 y 좌표로 중앙선을 만든다.
-
-```text
-track_width = left_y - right_y
-center_y = (left_y + right_y) / 2
-target_angle = atan2(center_y, lookahead_distance)
-```
-
-cone 추종에서도 많이 꺾을수록 감속한다.
-
-```text
-rpm = CRUISE_RPM * (1 - 0.25*abs(steering)/max_steering)
-```
-
-### 7. AEB 긴급제동
-
-AEB는 차량 전체 주변이 아니라 현재 차량이 지나갈 전방 띠만 검사한다.
-
-```text
-corridor_half_width = aeb_vehicle_half_width + aeb_path_margin
-기본값: 0.15 + 0.10 = 0.25 m
-```
-
-이 띠 안에서 가장 가까운 앞 장애물 거리 `closest_x`를 찾고, TTC와 제동거리로
-긴급정지 여부를 판단한다.
-
-```text
-TTC = closest_x / current_speed
-stopping_distance = speed^2 / (2*comfortable_decel) + stopping_margin
-```
-
-현재 기본값:
-
-```text
-aeb_ttc_threshold = 0.55 s
-comfortable_decel = 2.8 m/s^2
-stopping_margin = 0.20 m
-```
-
-아래 둘 중 하나라도 참이면 AEB가 모터 RPM을 0으로 보낸다.
-
-```text
-TTC <= aeb_ttc_threshold
-closest_x <= stopping_distance
-```
-
-### 8. 속도와 조향 변환
-
-VESC 모터 명령은 m/s가 아니라 ERPM이다.
-
-```text
-ERPM = speed_mps * 4614
-speed_mps = ERPM / 4614
-```
-
-조향각은 VESC servo position으로 변환한다.
-
-```text
-servo_position = SERVO_CENTER - steering_rad*SERVO_GAIN
-```
-
-현재 기본값:
-
-```text
-SERVO_CENTER = 0.5
-SERVO_GAIN = 0.60
-SERVO_MIN = 0.03
-SERVO_MAX = 0.97
-```
-
-## Trial 로깅 공식
-
-`autonomous_metrics_logger.py`는 AUTO 구간을 하나의 trial로 보고 CSV를 저장한다.
-
-```text
-주행거리 step = sqrt(dx^2 + dy^2)
-총 주행거리 = step 누적합
-평균속도 = 총 주행거리 / AUTO 지속시간
-평면속도 = sqrt(vx^2 + vy^2)
-조향 변화량 = abs(current_steering - previous_steering)
-조향 변화율 = 조향 변화량 / dt
-성공률 = success_count / evaluated_count * 100
-```
-
-## Jetson 적용 순서
-
 ```bash
 cd ~/f1tenth_ws
-git pull
 colcon build --packages-select my_algo
 source install/setup.bash
+# Livox 드라이버와 VESC 드라이버를 먼저 띄운 뒤
 ros2 launch my_algo lidar_drive.launch.py
 ```
 
-실차 첫 테스트에서는 바퀴를 띄운 상태에서 `/commands/motor/speed`,
-`/commands/servo/position`, `/scan`, `/vesc/odom` 토픽이 정상인지 먼저 확인한다.
+launch 인자 (기본값 = 평소 주행):
 
-## 별도 LiDAR IMU 속도·거리 기록 (실험용)
+| 인자 | 기본 | 설명 |
+|---|---|---|
+| `use_camera` | `true` | RealSense 드라이버와 `camera_reactive_drive` 실행 |
+| `use_metrics_logger` | `true` | trial CSV 로거 실행 |
+| `use_sim_time` | `false` | rosbag 재생 검증용 |
 
-기존 주행/AEB/`/vesc/odom` 및 기존 metrics logger는 변경하지 않는다.
-`imu_motion_logger`는 `/livox/imu`와 `/autonomous_mode`를 구독하고,
-`/imu_motion/status`만 발행한다. 센서 모델과 실제 토픽은 차량에서 확인해야 한다.
+`autonomous_drive.launch.py`는 같은 노드에 rosbridge(9090)를 더한 것이고, `camera_drive.launch.py`는 카메라만 띄운다 (제어 없음).
 
-```bash
-colcon build --packages-select my_algo
-source install/setup.bash
-# 드라이버를 먼저 켜고 차를 지면에 완전히 정지시킨 상태에서 실행
-ros2 launch my_algo imu_motion.launch.py imu_topic:=/livox/imu logs_dir:=/tmp/imu_logs
-# 'IMU calibration ready' 메시지 확인 후, 다른 터미널에서 기존 주행 launch 실행
-ros2 launch my_algo lidar_drive.launch.py
+처음에는 바퀴를 띄운 상태에서 `/scan`, `/vesc/odom`, `/commands/motor/speed`, `/commands/servo/position`을 확인한다.
+
+## ⚠ 조이스틱 없이 바로 자율주행을 시작한다
+
+`lidar_drive.launch.py`를 실행하면 **바로 AUTO로 출발한다.**
+`lidar_reactive_drive`와 `autonomous_drive`의 `start_autonomous`가 `True`이고, launch에서 `joy_node`·`joy_controller`가 주석 처리되어 있다.
+(joy_controller를 켜면 시작 시 `/autonomous_mode=False`를 발행하므로 LB를 눌러야 출발한다.)
+
+이 상태에서 쓸 수 있는 정지 수단:
+
+| 수단 | 동작 |
+|---|---|
+| 소프트웨어 정지 | `ros2 topic pub --once /autonomous_mode std_msgs/msg/Bool "{data: false}"` → 두 노드가 AUTO를 해제하고 rpm 0·조향 중앙. autonomous_drive가 이후 False를 계속 발행해 유지된다 |
+| planner 정지선 | 진행 띠(±0.25 m) 안 최근접 장애물 ≤ `0.35 + 0.45·v + 0.20` m (최대 1.5 m)이면 rpm 0 |
+| gap 없음 정지 | 통과할 틈이 없고 전방 ≤ 0.75 m이면 rpm 0 |
+| AEB | 띠(±0.30 m) 안 최근접 ≤ max(0.25, v²/(2·2.8)+0.20, 0.55·v) m이면 rpm 0. `/scan`이 안 들어와도 정지 |
+| 명령 타임아웃 | planner 명령이 1.0 s 넘게 안 오면 rpm 0, 조향 중앙 |
+| Ctrl+C | 노드 종료 시 정지 명령 발행을 시도한다. Foxy에서 실제로 나가는지는 확인되지 않았다 |
+
+조이스틱 B 버튼(비상 정지)은 joy 노드가 꺼져 있으므로 **쓸 수 없다.** VESC 드라이버의 명령 타임아웃 동작도 확인되지 않았다. 손으로 차를 잡을 수 있는 상태에서 시험한다.
+
+## 노드와 토픽
+
+```text
+/livox/lidar ─ pointcloud_to_laserscan ─ /scan
+/scan, /vesc/odom ─ lidar_reactive_drive ─ /reactive/lidar_command (JSON)
+/reactive/lidar_command, /scan, /vesc/odom ─ autonomous_drive (AEB 포함, 50 Hz)
+    ─ /commands/motor/speed (ERPM), /commands/servo/position
+    ─ /autonomous_mode (10 Hz heartbeat), /aeb/active, /aeb/status
+/camera/color/image_raw, /camera/depth/image_rect_raw ─ camera_reactive_drive
+    ─ /camera/perception/annotated_image, /camera/perception/status   (제어 없음)
+autonomous_metrics_logger ─ logs/*.csv
 ```
 
-처음 정지 상태의 유효한 200 sample로 중력 벡터와 자이로 bias를 보정한다.
-가속도 단위는 m/s², 각속도는 rad/s여야 한다. 정지 가속도 크기는 약 9.81이어야
-한다. 드라이버가 g 단위라면 별도 실행 시 `-p acceleration_scale:=9.80665`를
-지정한다. 드라이버가 이미 SI 단위를 내보내면 기본값 1.0을 유지한다.
-차체의 기울기는 시작 중력 벡터로 처리하며, 자세 출력이 없는 IMU도 자이로를
-적분해 회전을 보정한다. 각 trial 시작 시 실제 차량이 정지해 있어야 한다.
-등속 이동과 정지는 IMU만으로 구별할 수 없으므로 자동 영속도 판정은 하지 않는다.
+| 파일 | 역할 |
+|---|---|
+| `my_algo/lidar_reactive_drive.py` | scan → 주행 모드 선택 → 조향·RPM 계획 |
+| `my_algo/autonomous_drive.py` | planner 명령 선택, AEB 검사, VESC 명령 발행 |
+| `my_algo/aeb.py` | TTC·제동거리 기반 긴급 정지 판정 |
+| `my_algo/vehicle_utils.py` | RPM·서보 변환, 최소 속도 규칙, 공통 유틸 |
+| `my_algo/joy_controller.py` | 수동 주행·AUTO 토글·B 비상 정지 (현재 launch에서 꺼짐) |
+| `my_algo/camera_reactive_drive.py` | D455 YOLO·거리·차선·AEB overlay |
+| `my_algo/autonomous_metrics_logger.py` | AUTO 구간 trial 기록 |
 
-AUTO 시작~해제를 한 trial로 기록한다. 노드 Ctrl+C, 또는 AUTO heartbeat가
-1초 이상 끊겨도 종료 기록을 저장한다. AEB 정지나 RPM 0만으로 trial을 끝내지는
-않는다(AUTO 상태가 유지되기 때문). SIGKILL/전원 차단은 종료 저장을 보장하지 않는다.
+## 속도 상수 (`my_algo/vehicle_utils.py`)
 
-- `imu_<session>_<trial>.csv`: 센서 timestamp, 경과시간, 순간 속도, 누적 이동거리.
-  실행 중 0.2초마다 flush한다.
-- `imu_trials.csv`: 주행시간, 총 이동거리, 평균/최대 속도, sample 수,
-  누락·불량 sample 수, 상태와 종료 사유. 주행 종료 시 자동 추가한다.
-- `incomplete`: 보정 전 출발, IMU 미수신/끊김, timestamp 이상 등으로 불완전한 기록.
-  유효 측정이 없으면 속도·거리 칸을 비워 실제 정지 기록과 구별한다.
-- `imu_only_drifting`: IMU 단독 적분 추정값. 정확도 보증을 뜻하지 않는다.
-
-정지 보정 재실행은 AUTO 해제 후 차를 완전히 멈추고 다음을 발행한다.
-
-```bash
-ros2 topic pub --once /imu_motion/recalibrate std_msgs/msg/Bool '{data: true}'
+```text
+ERPM_GAIN       = 4614    ERPM = m/s × 4614
+MIN_DRIVING_RPM = 4000    약 0.87 m/s
+CRUISE_RPM      = 5740
+MAX_RPM         = 12000
+SERVO           = 0.5 − 0.60 × steering_rad, [0.03, 0.97]로 제한
 ```
 
-IMU 가속도 적분은 작은 bias와 자세 오차가 속도·거리 오차로 계속 누적된다.
-따라서 장시간 실제 이동거리 계측이나 제어 피드백에는 LiDAR scan matching /
-LiDAR-inertial odometry 같은 외부 위치 보정이 필요하다. 이 노드는 IMU 단독
-결과를 기존 VESC 기반 로그와 비교하기 위한 용도다. 현재 환경에서는 실차 ROS2
-실행을 검증하지 못했으므로 IMU 토픽·단위·정지 보정 및 실제 거리 비교가 필요하다.
+모든 모터 명령은 `sanitize_rpm()`을 거친다: 0이면 0, 0이 아니고 |rpm| < 4000이면 ±4000으로 올림, ±12000으로 제한, NaN은 0.
+출발 토크 부족을 막기 위한 값이라 바꾸지 않는다 (`test/test_drive_regression.py`가 값을 고정한다).
+
+## 파라미터
+
+- 차량·AEB 값은 `launch/lidar_drive.launch.py` 안 dict에 있다 (vehicle_width 0.30, safety_margin 0.25, lookahead 2.6 m, max_steering 0.78, aeb_ttc_threshold 0.55, aeb_vehicle_half_width 0.15, aeb_path_margin 0.15, lidar_to_bumper_dist 0.30 …).
+- planner 내부 상수 38개는 `lidar_reactive_drive.py`의 `PLANNER_CONSTANTS`, AEB 감속도·여유는 `aeb_comfortable_decel`(2.8), `aeb_stopping_margin`(0.20) 파라미터다. launch는 이 값들을 덮어쓰지 않는다.
+- **실제로 적용된 값 확인**: Foxy에서는 `--params-file`이 launch dict/`-p`보다 우선할 수 있다. 두 노드는 시작할 때 다음 한 줄을 출력한다.
+
+  ```text
+  [lidar_reactive_drive]: effective parameters: blocked_stop_distance=0.75, ...
+  ```
+
+  실행 중에는 `ros2 param dump /lidar_reactive_drive --print` (Foxy는 `--print`가 있어야 표준출력으로 나온다) 또는 `ros2 param get /autonomous_drive aeb_ttc_threshold`.
+
+## 알고리즘 요약 (`lidar_reactive_drive.py`)
+
+1. 좌표: 전방 ±120° 유효 빔을 `x = r·cosθ − 0.30` (앞범퍼 기준), `y = r·sinθ`로. yaw 보정 없음.
+2. lookahead = clamp(2.6 + 0.9·v, 2.6, 4.5).
+3. 모드: 진행 띠 안 최근접이 회피 거리(1.2 + 0.45·v)보다 가깝고 gap이 있으면 `OBSTACLE_AVOIDANCE`, 측면 벽 신뢰도 > 0.5면 `WALL_FOLLOW`, 아니면 `OPEN_SPACE`. 모드는 최소 0.45 s 유지. cone 모드는 꺼져 있다.
+4. gap 점수 = 1.2·폭/1.6 + 여유/lookahead + 0.55·중앙 보너스(45°) − 0.75·|각|/120° − 0.45·|각 − 이전 조향| (각 항은 0–1로 제한).
+5. gap 조향 = 중심각 × 0.70 (회피 모드 1.10), |조향| < 0.055면 0.
+   RPM = (5740 + (12000 − 5740)·min(폭/1.5, 1)) × (1 − 0.35·조향비) × (0.45 + 0.55·전방 여유비).
+   gap이 없으면 열린 쪽으로 최대 조향의 55%, RPM 4000.
+6. 벽 추종: 오차 = 왼쪽 − 오른쪽 거리 (한쪽만 보이면 목표 0.85 m 기준), 지수 필터 α = 0.25, 조향 = 0.30·오차, RPM = 5740 × (1 − 0.2·조향비).
+7. 조향 변화는 scan마다 0.08 rad (회피·정지 0.22 rad)로 제한.
+
+## 테스트
+
+ROS 없이 개발 PC에서 돈다.
+
+```bash
+python3 -m pytest test                          # 회귀 비교 + 최소 속도 규칙 + IMU 계산
+python3 scripts/verify_refactor_offline.py --seeds 12   # 리팩터링 전 main(b054758)과 발행 메시지 전체 비교
+```
+
+`verify_refactor_offline.py`는 가짜 rclpy로 두 노드를 합성 입력(벽, 주차 박스, 접근 장애물, inf/NaN, 속도 변화, AUTO 토글, 명령 누락)에 돌려 메시지를 하나씩 비교한다.
+합성 입력은 최소 속도 클램프 구간을 거의 지나지 않으므로 그 규칙은 별도 테스트로 고정한다.
+rosbag 재생 검증(`scripts/replay_drive.sh`)은 Foxy에서 아직 돌지 않는다 (`docs/OPEN_ITEMS.md`).
+
+## 그 밖
+
+- IMU 단독 속도 기록 도구(`my_algo/imu_motion_logger.py`, `launch/imu_motion.launch.py`)는 코드만 남아 있고 설치되지 않는다 (setup.py에서 등록 해제).
+- 카메라 의존성: `realsense2_camera`, `cv_bridge`, `ultralytics`(YOLO, 기본 `yolov8n.pt`). Foxy·Python 3.8에서 맞는 버전은 차량에 설치된 것을 기준으로 한다.
