@@ -14,7 +14,8 @@ rosbag 재생 검증(replay_drive.sh + verify_refactor.py)이 1순위다. 이 �
 한계: 합성 입력이라 실제 점군 분포와 다르다. 실시간 타이밍/메시지 유실은 재현하지 않는다.
 
 사용:
-    python3 scripts/verify_refactor_offline.py --baseline baseline-pre-refactor
+    python3 scripts/verify_refactor_offline.py              # 기준선 = b054758 (리팩터링 전 main)
+    python3 scripts/verify_refactor_offline.py --baseline <rev> --seeds 12
 """
 
 import argparse
@@ -276,7 +277,7 @@ def run(stub_dir, pkg_dir, params_path, seed):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument('--baseline', default='baseline-pre-refactor')
+    ap.add_argument('--baseline', default='b054758')  # 리팩터링 전 main
     ap.add_argument('--seeds', type=int, default=6)
     args = ap.parse_args()
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

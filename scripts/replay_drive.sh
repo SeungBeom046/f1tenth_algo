@@ -3,8 +3,10 @@
 # 리팩터링 전(baseline 태그)과 후에 같은 bag으로 한 번씩 실행하고 verify_refactor.py compare로 비교.
 #
 #   bash replay_drive.sh <bag 경로> <출력 csv> [재생 배속, 기본 0.5]
-#   예) git checkout baseline-pre-refactor && colcon build ... && bash replay_drive.sh ~/bags/drive1 baseline_cmd.csv
-#       git checkout exp/occlusion-speed   && colcon build ... && bash replay_drive.sh ~/bags/drive1 after_cmd.csv
+#   예) git checkout b054758                 && colcon build ... && bash replay_drive.sh ~/bags/drive1 baseline_cmd.csv
+#       git checkout refactor/main-baseline && colcon build ... && bash replay_drive.sh ~/bags/drive1 after_cmd.csv
+#   주의: Foxy의 ros2 bag play에는 --clock이 없어 이 스크립트는 Foxy에서 그대로 돌지 않는다.
+#         ros2 param dump도 Foxy에서는 --print를 줘야 stdout으로 나온다. docs/OPEN_ITEMS.md 참고.
 #       python3 verify_refactor.py compare baseline_cmd.csv after_cmd.csv
 #
 # 토픽 이름은 check_vehicle.sh로 확정 전까지 환경변수로 바꿀 수 있다.
