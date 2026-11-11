@@ -110,7 +110,7 @@ def sanitize_rpm(rpm):
     if abs(rpm) < 1e-6:
         return 0.0
     if abs(rpm) < MIN_DRIVING_RPM:
-        # 출발 토크 부족 방지: 0이 아닌 명령은 최소 2000 RPM으로 끌어올린다.
+        # 출발 토크 부족 방지: 0이 아닌 명령은 최소 MIN_DRIVING_RPM으로 끌어올린다.
         return math.copysign(MIN_DRIVING_RPM, rpm)
     return rpm
 
@@ -144,6 +144,18 @@ def erpm_to_speed(rpm):
     """ERPM 명령을 대략적인 m/s로 변환한다."""
     # 위 식의 역변환: 속도[m/s] = ERPM / 4614.
     return rpm / ERPM_GAIN
+
+
+def log_effective_parameters(node):
+    """노드에 실제 적용된 파라미터를 시작 시 한 줄로 출력한다.
+
+    Foxy에서는 --params-file 값이 launch의 -p/dict 값보다 우선할 수 있어,
+    launch 파일만 보고는 실제 값을 알 수 없다. 이 출력으로 확인한다.
+    """
+    # shortcut: rclpy 내부 속성 _parameters를 읽는다. rclpy가 이를 바꾸면 ros2 param dump로 대체.
+    params = getattr(node, '_parameters', {})
+    items = ', '.join(f'{name}={params[name].value}' for name in sorted(params))
+    node.get_logger().info(f'effective parameters: {items}')
 
 
 def print_status_line(text):

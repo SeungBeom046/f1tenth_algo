@@ -39,6 +39,7 @@ from my_algo.aeb import AEBSafetyModel
 from my_algo.vehicle_utils import (
     ReactiveDriveCommand,
     command_from_json,
+    log_effective_parameters,
     print_event_line,
     print_status_line,
     sanitize_rpm,
@@ -158,6 +159,7 @@ class AutonomousDriveNode(Node):
         self.control_timer = self.create_timer(0.02, self.control_timer_callback) # 제어 루프 0.02초마다 갱신 (50Hz)
         self.mode_timer = self.create_timer(0.10, self.publish_auto_mode_heartbeat)
 
+        log_effective_parameters(self)
         self.get_logger().info(
             f'Autonomous drive ready | mode={self.drive_source}'
         )

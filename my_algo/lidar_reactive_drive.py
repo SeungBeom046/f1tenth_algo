@@ -42,6 +42,7 @@ from my_algo.vehicle_utils import (
     clamp,
     command_to_json,
     is_valid_range,
+    log_effective_parameters,
     normalize_angle,
     print_status_line,
     sanitize_rpm,
@@ -232,6 +233,7 @@ class LidarReactiveDriveNode(Node):
         self.command_pub = self.create_publisher(
             String, '/reactive/lidar_command', 10)
 
+        log_effective_parameters(self)
         self.get_logger().info('LiDAR reactive drive ready')
 
     def auto_mode_callback(self, msg):
