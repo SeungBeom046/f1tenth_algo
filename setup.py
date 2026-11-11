@@ -12,7 +12,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
+        ('share/' + package_name + '/launch',
+            [f for f in glob('launch/*.launch.py') if not f.endswith('imu_motion.launch.py')]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -22,7 +23,6 @@ setup(
     license='MIT',
     entry_points={
         'console_scripts': [
-            'imu_motion_logger = my_algo.imu_motion_logger:main',
             'lidar_reactive_drive = my_algo.lidar_reactive_drive:main',
             'camera_reactive_drive = my_algo.camera_reactive_drive:main',
             'autonomous_drive = my_algo.autonomous_drive:main',
