@@ -5,17 +5,26 @@
 현재 회귀 검증은 합성 입력(`scripts/verify_refactor_offline.py`)뿐이다. 실제 점군으로 리팩터링 전후를 비교하려면 bag 재생이 필요하다.
 
 **문제**
-- Jetson `~/session1/` 녹화에는 `/scan`이 0개다. `/livox/lidar`(PointCloud2)와 `/vesc/odom`만 쓸 수 있다.
+- Jetson `~/session1/` 녹화에는 `/scan`이 0개이고 `/vesc/odom`도 없다 (VESC launch가 `vesc_to_odom`을 띄우지 않았음).
+  쓸 수 있는 건 `/livox/lidar`(PointCloud2)뿐이다.
 - `scripts/replay_drive.sh`는 Humble용이다. Foxy `ros2 bag play`에는 `--clock`이 없고, `ros2 param dump`는 `--print`가 있어야 표준출력으로 나온다.
 
 **방법**
-1. `/scan`은 따로 만들 필요 없다. `replay_drive.sh`는 `lidar_drive.launch.py use_camera:=false use_sim_time:=true use_metrics_logger:=false`를 띄우고, 이 launch에 `pointcloud_to_laserscan`(min_height −0.1, max_height 0.5, target_frame `livox_frame`, angle_increment 0.00436)이 들어 있다. bag에서 `/livox/lidar`와 `/vesc/odom`만 재생하면 `/scan`이 같은 설정으로 다시 만들어진다.
+1. `/scan`은 따로 만들 필요 없다. `replay_drive.sh`는 `lidar_drive.launch.py use_camera:=false use_sim_time:=true use_metrics_logger:=false`를 띄우고, 이 launch에 `pointcloud_to_laserscan`(min_height −0.1, max_height 0.5, target_frame `livox_frame`, angle_increment 0.00436)이 들어 있다. bag에서 `/livox/lidar`만 재생하면 `/scan`이 같은 설정으로 다시 만들어진다.
+   `bag_player.py --topics /livox/lidar`로 재생한다. `bag_player.py`는 bag에 없는 토픽을 그냥 건너뛰지만, `replay_drive.sh`는 기본으로
+   `ODOM_TOPIC`도 넘기므로 Foxy용으로 고칠 때 odom 없이 재생하도록 바꾼다 (스크립트 머리 주석의 "ODOM_TOPIC이 있어야 한다"도 함께).
 2. Foxy용으로 `exp/occlusion-speed`의 두 가지를 가져온다 (`714321f`에서 파일 단위로):
    - `scripts/bag_player.py` (+ `test/test_bag_player.py`): sqlite3 bag을 읽어 재생하면서 bag 시각으로 `/clock`을 발행. my_algo에 의존하지 않음.
    - `scripts/replay_drive.sh`의 Foxy 수정분: `ros2 bag play --clock` → `python3 bag_player.py`, `ros2 param dump ... --print`.
-3. 리팩터링 전(`b054758`)과 후(`refactor/main-baseline`)를 각각 빌드해 같은 bag으로 한 번씩 실행하고 `python3 scripts/verify_refactor.py compare before.csv after.csv`.
+3. **odom이 없으면 모든 속도 의존 계산이 속도 0 기준으로 돈다** (`current_speed` 초기값 0이 바뀌지 않음):
+   - AEB: 정지 한계 = max(0.25, 0²/5.6 + 0.20, 0.55·0) = **0.25 m 고정**. 제동거리·TTC 항은 효과가 없다.
+   - planner: lookahead 2.6 m 고정, 회피 진입 거리 1.2 m, 정지선 0.35 + 0.20 = 0.55 m 고정.
+   - 따라서 이 재생은 차가 실제로 한 판단을 재현하지 않는다. 리팩터링 전후를 같은 입력으로 비교하는 데만 쓴다.
+     속도 의존 분기(lookahead·정지선·AEB 제동거리)는 이 비교로 검증되지 않는다 (합성 입력 회귀가 이 부분을 다룬다).
+   - 실제 판단까지 재현하려면 다음 녹화부터 `vesc_to_odom`을 띄우고 `/vesc/odom`을 같이 기록한다.
+4. 리팩터링 전(`b054758`)과 후(`refactor/main-baseline`)를 각각 빌드해 같은 bag으로 한 번씩 실행하고 `python3 scripts/verify_refactor.py compare before.csv after.csv`.
    스크립트들은 두 빌드 모두에서 같은 사본(예: `~/session1/tools/`)으로 실행한다.
-4. VESC 드라이버는 끈다 (재생 중 명령이 `/commands/*`로 나간다. 스크립트가 VESC 노드를 감지하면 멈춘다).
+5. VESC 드라이버는 끈다 (재생 중 명령이 `/commands/*`로 나간다. 스크립트가 VESC 노드를 감지하면 멈춘다).
 
 **확인할 것**
 - bag의 `/livox/lidar` frame_id가 `livox_frame`인지 (pointcloud_to_laserscan target_frame과 같아야 TF 없이 변환된다).
