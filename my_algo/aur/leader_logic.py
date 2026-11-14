@@ -5,7 +5,7 @@ from my_algo.aur import safety
 
 
 class Leader:
-    def __init__(self, p, intent, run_id, brake_event=None):
+    def __init__(self, p, intent, run_id, brake_event=None, return_after=None):
         if intent not in ('Y', 'NY'):
             raise ValueError('intent는 Y|NY: %r' % (intent,))
         self.p = p
@@ -14,6 +14,7 @@ class Leader:
         rng = random.Random(str(run_id))    # 문자열 seed는 실행·플랫폼이 달라도 같은 값을 낸다
         self.d_y = rng.uniform(p.d_y_min, p.d_y_max)
         self.brake_delay = rng.uniform(p.brake_delay_min, p.brake_delay_max)
+        self.return_after = return_after    # 양보 시작 후 이 시간이 지나면 중앙으로 복귀 [s] (None = 복귀 안 함)
         self.t0 = None
         self.start_too_close = False    # t0에 후행차가 이미 반응 거리 근처: 시나리오 무효, 노드가 경고 로그
         self.yield_triggered = False
@@ -37,5 +38,7 @@ class Leader:
                 self.t_armed = t
         if self.t_armed is not None and not self.brake_fired and t >= self.t_armed + self.brake_delay:
             self.brake_fired, self.t_brake = True, t
-        y_ref = -safety.lane_offset(W, p) if self.yield_triggered and W is not None else 0.0
+        yielding = self.yield_triggered and W is not None and (
+            self.return_after is None or t < self.t_yield + self.return_after)
+        y_ref = -safety.lane_offset(W, p) if yielding else 0.0
         return (0.0 if self.brake_fired else p.v_B_nominal), y_ref

@@ -1,0 +1,4 @@
+# 예전 시뮬(sim/mujoco 브랜치 sim/requirements.txt)과 같은 버전. Python 3.12, arm64 Mac에서 확인.
+mujoco==3.12.0
+numpy==2.5.4
+PyYAML==6.0.3

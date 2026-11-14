@@ -112,3 +112,23 @@ def test_leader_logic():
     assert n.step(1.0 + n.brake_delay - 0.01, 0.9, 0.5, 1.0)[0] == P.v_B_nominal
     assert n.step(1.0 + n.brake_delay, 0.9, 0.5, 1.0) == (0.0, 0.0)
     assert n.step(99.0, 0.0, None, 1.0)[0] == 0.0 and n.brake_fired  # 정지 유지
+
+
+def test_leader_return_after_yield():
+    a = Leader(P, 'Y', 'r', return_after=2.0)
+    a.step(0.0, 0.5, 2.0, 1.0)
+    assert a.step(1.0, 0.9, 0.5, 1.0)[1] == pytest.approx(-0.265)
+    assert a.step(2.9, 0.9, 0.5, 1.0)[1] == pytest.approx(-0.265)
+    assert a.step(3.0, 0.9, 0.5, 1.0)[1] == 0.0
+
+
+def test_lateral_controller():
+    from my_algo.aur.lateral import Lateral
+    lat = Lateral(P)
+    assert lat.step(0.0, 0.0, 0.1) == 0.0
+    s = [lat.step(0.0, 0.265, 0.1) for _ in range(10)]
+    assert abs(lat.y_ref - 0.265) < 1e-9                          # 0.4 m/s 기울기로 0.7 s 안에 도달
+    assert s[-1] > 0 and max(abs(b - a) for a, b in zip([0.0] + s, s)) <= P.steer_rate_limit + 1e-12
+    lat2 = Lateral(P)
+    assert lat2.step(0.02, 0.0, 0.1) == 0.0                       # deadband (오차 0.04 m → 0.012 rad)
+    assert lat2.step(0.3, 0.0, 0.1) < 0                           # 왼쪽으로 치우쳤으면 오른쪽 조향

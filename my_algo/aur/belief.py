@@ -64,10 +64,10 @@ class Belief:
         self._t += dt
         self._s += z
         self._d_min = min(self._d_min, d)
-        # 양보를 시작해도 임계값을 넘기까지 τ = y_thr / v_lat가 걸린다.
+        # 양보를 시작해도 임계값을 넘기까지 τ = t_react + y_thr / v_lat가 걸린다.
         # 그래서 "지금 변위 없음"은 "τ 전까지 양보를 시작하지 않음"의 증거로만 쓴다.
         self._hist.append((self._t, d))
-        tau = p.y_yield_thr / p.v_lat
+        tau = p.t_react + p.y_yield_thr / p.v_lat
         while self._hist and self._hist[0][0] <= self._t - tau:
             self._d_lag = min(self._d_lag, self._hist.popleft()[1])
         if self._s <= -p.y_yield_thr and pi_yield(self._d_min, p) > 0.0:

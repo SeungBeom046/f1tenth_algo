@@ -65,7 +65,7 @@ def test_side_tracking_through_pass():
         true_front_rel = d + CAR_LEN + LF + LR
         if trk.valid:
             seen += 1
-            assert abs(trk.y_b + 0.265) < HW + 0.02     # 보이는 면의 중앙
+            assert abs(trk.y_b + 0.265) < 0.03
         if true_front_rel < -0.05:      # 선행차가 완전히 뒤로 갔을 때 앞면 위치가 맞아야 한다
             assert abs(trk.front_rel - true_front_rel) < 0.05
     assert seen > 30 and trk.front_rel < -P.m_stop
@@ -94,3 +94,20 @@ def test_corridor_sees_near_wall_in_passing_lane():
     # 추월 차선(δ = 0.265, 벽까지 0.235 m)에서도 양쪽 벽이 잡혀야 횡 제어가 된다
     cor = Corridor(P).update(scan(1.0, 0.265))
     assert cor.valid and abs(cor.ego_lateral - 0.265) < 0.01
+
+
+def test_corridor_heading_and_perpendicular_distance():
+    import math
+    from my_algo.aur.tracker import Pt
+    W, y_e = 1.0, 0.1
+    for psi in (0.0, 0.2, -0.3):
+        pts = []
+        for i in range(1440):       # 차가 ψ만큼 틀어진 직선 통로를 차량 좌표계에서 본다
+            a = -math.pi + i * 2 * math.pi / 1440
+            s = math.sin(a + psi)
+            if abs(s) > 1e-6:
+                r = ((W / 2 - y_e) if s > 0 else (-W / 2 - y_e)) / s
+                pts.append(Pt(i, a, r * math.cos(a), r * math.sin(a)))
+        cor = Corridor(P).update(pts)
+        assert cor.valid and abs(cor.heading - psi) < 0.01
+        assert abs(cor.ego_lateral - y_e) < 0.01 and abs(cor.W_est - W) < 0.01

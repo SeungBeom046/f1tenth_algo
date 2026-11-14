@@ -7,9 +7,10 @@ from collections import namedtuple
 
 Pt = namedtuple('Pt', 'i ang x y')      # scan bin 번호, 각도, 라이다 좌표계 x·y
 # d: 범퍼 → 상대 차 가장 가까운 면. y_b: 통로 중심 기준. idx: 벽 계산에서 뺄 bin.
-# 측면 추적(update_side)의 y_b는 보이는 면의 중앙이라 ego 쪽으로 최대 w/2 치우친다 (안전한 방향).
+# width: 클러스터 y 범위 (기록용).
 # front_rel: (측면 추적) 선행차 앞면 x − ego 뒤범퍼 x. 음수면 선행차가 뒤에 있다.
-Track = namedtuple('Track', 'valid d y_b v_b idx front_rel')
+Track = namedtuple('Track', 'valid d y_b v_b idx front_rel width')
+Track.__new__.__defaults__ = (None,)
 _Cluster = namedtuple('_Cluster', 'x0 x1 y0 y1 idx')
 
 
@@ -32,16 +33,15 @@ class VehicleTracker:
         self.p = p
         self.rear = view == 'rear'
         self._t = None
-        self._d = None          # α-β 필터 상태
-        self._dd = 0.0
+        self._d = None          # α-β 필터 상태: 거리와 상대 차 속도
         self._v_b = 0.0
         self._c = None          # 직전 클러스터 중심 (view 좌표계)
         self._front = None      # 직전 클러스터 x 최댓값 (view 좌표계)
 
-    def _clusters(self, points, ego_lat, W):
+    def _clusters(self, points, ego_lat, W, fov=True):
         p = self.p
         if self.rear:
-            lim = math.pi - math.radians(p.rear_fov_half_deg)
+            lim = math.pi - math.radians(p.rear_fov_half_deg) if fov else 0.0
             # 뒤쪽은 ±π에서 각도가 끊기므로 0~2π 순으로 다시 정렬한다.
             pts = sorted((q for q in points if abs(q.ang) >= lim),
                          key=lambda q: q.ang % (2.0 * math.pi))
@@ -79,35 +79,37 @@ class VehicleTracker:
         c = min(cands, key=lambda c: c.x0)
         d = c.x0
         dt = None if self._t is None else t - self._t
-        if dt is None or not 0.0 < dt <= p.track_timeout \
-                or abs(d - (self._d + self._dd * dt)) > p.track_jump_reset:
+        sgn = -1.0 if self.rear else 1.0
+        # 거리 변화율 = ±(v_B − v_E). v_E는 아는 값이므로 상태를 v_B로 둔다.
+        # (ḋ를 상태로 두면 ego가 가감속할 때 v_B = v_E + ḋ가 크게 튄다: 시뮬에서 급정지 추돌의 원인이었다)
+        pred = None if dt is None else self._d + sgn * (self._v_b - v_ego) * dt
+        if pred is None or not 0.0 < dt <= p.track_timeout or abs(d - pred) > p.track_jump_reset:
             # 새 물체: 상대속도 0(v_B = v_E)에서 시작한다. 수렴 전에는 AEB(relative)가 마지막 안전망.
-            self._d, self._dd = d, 0.0
+            self._d, self._v_b = d, max(0.0, v_ego)
         else:
-            pred = self._d + self._dd * dt
             self._d = pred + p.track_alpha * (d - pred)
-            self._dd += p.track_beta * (d - pred) / dt
+            self._v_b = max(0.0, self._v_b + sgn * p.track_beta * (d - pred) / dt)
         self._t = t
-        self._v_b = max(0.0, v_ego + (-self._dd if self.rear else self._dd))
         y_mid = (c.y0 + c.y1) / 2.0     # 점 평균이 아니라 범위 중앙: 옆면 점이 한쪽에 몰려도 치우치지 않는다
         self._c = ((c.x0 + c.x1) / 2.0, y_mid)
         self._front = c.x1
-        return Track(True, d, y_mid + ego_lat, self._v_b, c.idx, None)
+        return Track(True, d, y_mid + ego_lat, self._v_b, c.idx, None, c.y1 - c.y0)
 
     def update_side(self, points, t, v_ego, ego_lat, W):
-        """PASS/MERGE용: 직전 클러스터와 가장 가까운 클러스터를 이어서 추적한다 (선행차가 옆·뒤로 가도).
+        """PASS/MERGE용: 직전 클러스터와 가장 가까운 클러스터를 이어서 추적한다 (상대 차가 옆으로 가도).
 
         안 보이면 마지막 v_B로 위치를 추측 항법하고 valid=False로 돌려준다 (front_rel은 계속 나온다).
+        후방 뷰(선행차)에서는 옆에 온 후행차 점을 벽 계산에서 빼는 데 쓴다.
         """
         p = self.p
-        if self._c is None or self.rear:
+        if self._c is None:
             return Track(False, None, None, self._v_b, (), None)
-        shift = (self._v_b - v_ego) * max(0.0, t - self._t)
+        shift = (self._v_b - v_ego) * max(0.0, t - self._t) * (-1.0 if self.rear else 1.0)
         self._t = t
         cx, cy = self._c[0] + shift, self._c[1]
         self._c, self._front = (cx, cy), self._front + shift
         best = None
-        for c in ([] if W is None else self._clusters(points, ego_lat, W)):
+        for c in ([] if W is None else self._clusters(points, ego_lat, W, fov=False)):
             dist = math.hypot((c.x0 + c.x1) / 2.0 - cx, (c.y0 + c.y1) / 2.0 - cy)
             if dist <= p.side_gate and (best is None or dist < best[0]):
                 best = (dist, c)
@@ -117,4 +119,8 @@ class VehicleTracker:
         c = best[1]
         y_mid = (c.y0 + c.y1) / 2.0
         self._c, self._front = ((c.x0 + c.x1) / 2.0, y_mid), c.x1
-        return Track(True, c.x0, y_mid + ego_lat, self._v_b, c.idx, c.x1 + offset)
+        # 옆에서는 가까운 옆면만 보인다. 그 면에서 반 차폭 들어간 곳을 중심으로 본다.
+        y_c = c.y1 - p.w_car / 2.0 if y_mid < 0.0 else c.y0 + p.w_car / 2.0
+        if c.y1 - c.y0 >= p.w_car:
+            y_c = y_mid
+        return Track(True, c.x0, y_c + ego_lat, self._v_b, c.idx, c.x1 + offset, c.y1 - c.y0)

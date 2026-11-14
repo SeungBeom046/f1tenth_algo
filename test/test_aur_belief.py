@@ -2,7 +2,7 @@ from my_algo.aur.belief import Belief, loglik_ratio, pi_yield
 from my_algo.aur.params import AurParams
 
 P = AurParams(belief_model='original')
-S = AurParams(belief_model='survival')
+S = AurParams(belief_model='survival', t_react=0.0)
 
 
 def approach(p, hz, d_end, v_close=0.6, hold=0.5, y_at=None):

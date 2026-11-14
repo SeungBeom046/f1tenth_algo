@@ -25,6 +25,7 @@ class AurParams:
     belief_model: str = 'survival'  # original(기획안 식) | survival(기획안 변경)
     y_yield_thr: float = 0.08       # (survival) 양보로 보는 누적 횡변위 [m]. 4σ
     p_false_yield: float = 0.01     # (survival) NY인데 한 회차 안에 임계값을 넘을 확률
+    t_react: float = 1.3            # (survival) 선행차가 양보를 시작한 뒤 횡변위가 나타나기까지의 지연 [s]
     lambda_clip: float = 20.0
     T_max: float = 8.0              # PROBE 최대 시간 [s], 넘으면 FOLLOW
     # --- 차량·통로 ---
@@ -73,6 +74,14 @@ class AurParams:
     # 기존 값 −0.05(앞범퍼 기준)를 쓰면 벽 거리 < 0.25 m에서 섹터가 비어 벽을 놓친다.
     # 추월 차선에서는 가까운 벽이 w/2 + c = 0.235 m이므로 x 제한을 사실상 끈다.
     min_point_x: float = -1.0
+    # --- 횡 제어 (y_ref_rate 외에는 lidar_reactive_drive 기본값) ---
+    wall_follow_gain: float = 0.30
+    wall_error_filter_alpha: float = 0.25
+    steer_rate_limit: float = 0.08  # [rad/scan]
+    steering_deadband: float = 0.02  # 기존 0.055는 횡오차 0.09 m에 해당해 벽 여유 c = 0.10 m와 맞지 않는다
+    max_steering: float = 0.78
+    heading_gain: float = 0.7       # 헤딩 감쇠 [rad/rad]. 0이면 지시서 방식(횡위치 P만)
+    y_ref_rate: float = 0.4         # 차선 변경 시 y_ref 기울기 제한 [m/s]
     # --- 선행차 ---
     d_brake_trigger: float = 1.0    # NY 급정지 이벤트 무장 거리 [m]
     brake_delay_min: float = 0.5
