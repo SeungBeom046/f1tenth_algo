@@ -28,6 +28,7 @@ class EgoFSM:
         self.t_probe = None
         self.decided = None         # 'Y' | 'NY': b가 η 또는 1−η를 처음 넘은 쪽 (순차 검정은 첫 통과에서 끝난다)
         self.t_decided = None
+        self.follow_reason = None   # FOLLOW로 간 이유: belief_NY | T_max
         self.hold_count = 0
         self._held = False
         self.h = INF                # 기록용 (/exp/state)
@@ -77,9 +78,7 @@ class EgoFSM:
         if self.state in ('APPROACH', 'PROBE') and obs.valid:
             if self._prev is not None:
                 self.belief.update(obs.y_b - self._prev[1], obs.d, obs.t - self._prev[0])
-            self._prev = (obs.t, obs.y_b)
-        else:
-            self._prev = None
+            self._prev = (obs.t, obs.y_b)   # 추적이 잠깐 끊겨도 유지: 다음 z가 그 사이 변위를 담는다
 
         reason = self.method
         y_ref = 0.0
@@ -102,6 +101,7 @@ class EgoFSM:
                 self.state, reason = 'PASS', 'pass_start'
             elif give_up or waited >= p.T_max:
                 self.state, reason = 'FOLLOW', ('belief_NY' if give_up else 'T_max')
+                self.follow_reason = reason
 
         if self.state == 'PASS':
             y_ref = delta

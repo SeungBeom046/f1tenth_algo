@@ -18,6 +18,9 @@ class AurParams:
     v_lat: float = 0.5              # 양보 시 횡속도 (관측 모델) [m/s]
     sigma_z: float = 0.02           # 횡변위 관측 노이즈 [m]
     eta: float = 0.9                # 판단 임계 확률
+    belief_model: str = 'survival'  # original(기획안 식) | survival(기획안 변경)
+    y_yield_thr: float = 0.08       # (survival) 양보로 보는 누적 횡변위 [m]. 4σ
+    p_false_yield: float = 0.01     # (survival) NY인데 한 회차 안에 임계값을 넘을 확률
     lambda_clip: float = 20.0
     T_max: float = 8.0              # PROBE 최대 시간 [s], 넘으면 FOLLOW
     # --- 차량·통로 ---
