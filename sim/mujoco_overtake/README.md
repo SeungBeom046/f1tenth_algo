@@ -10,6 +10,9 @@ mjpython sim/mujoco_overtake/run.py --method d --leader Y --viewer --start-pause
 python sim/mujoco_overtake/batch.py belief      # belief 2종 × 방법 c·d × 200회 (약 6분)
 python sim/mujoco_overtake/batch.py yaw         # 선행차 양보 yaw 0/10/20/30°에서 tracker 추적 유지
 python sim/mujoco_overtake/batch.py matrix      # 방법 4 × 선행차 Y/NY
+python sim/mujoco_overtake/batch.py aeb         # 방법 c·d × NY × AEB 조건 (N_AEB)
+python sim/mujoco_overtake/batch.py treact      # t_react 0~1.6 s별 survival c·d 성공률 (약 15분)
+python sim/mujoco_overtake/batch.py yr          # 양보 후 복귀, 복귀 시간별
 python -m pytest sim/mujoco_overtake/test_sim.py -q
 ```
 
@@ -55,9 +58,10 @@ MuJoCo 기본 Reset/Run/Pause(Backspace, Space, 왼쪽 패널)는 이 시뮬에�
 
 ## 실차와 다른 점 (결과를 읽을 때)
 
-- AEB(`autonomous_drive`)가 없다. 충돌은 기하로 판정하고 N_AEB는 나오지 않는다.
-- 속도는 차량 모델의 참값을 쓴다 (실차는 `/sensors/core`).
+- AEB: 실차 `AEBSafetyModel`(legacy, launch 기본값)을 50 Hz로 최종 명령에 적용한다 (`scenario.yaml`의 `aeb`). 속도 입력은 `zero`(현재 실차, odom 없음) 또는 `true`. 기본은 켜짐·`zero`. **양보·추월 차선에서 벽 때문에 AEB가 서는 알려진 문제가 있어** `batch.py`는 기본으로 AEB를 끈다 (`--aeb`로 선택). N_AEB = AEB 상승 에지 수.
+- 충돌은 차체 사각형으로 판정한다. 결과의 `gap_min`은 x 방향 간격이라 나란할 때 음수가 된다.
+- 판단에 쓰는 속도는 차량 모델의 참값이다 (실차는 `/sensors/core`).
 - 차량은 운동학 자전거 모델이다 (미끄러짐 없음). 응답 값(`t_r`, `tau`, `a_b` 등)은 가정값이다.
 - 라이다는 수평 한 줄, 기본 무잡음이다 (`lidar.range_noise_std`).
 - `params.t_d`는 시뮬 차량 모델의 유효 지연(0.35 s)으로 덮어쓴다. 실차 값은 보정 실험으로 정한다.
-- 뷰어 창은 이 문서를 쓸 때 실제로 띄워 보지 못했다 (오버레이 그리기와 키 처리는 창 없이 테스트).
+- 뷰어 창은 아직 실제로 띄워 확인하지 않았다 (오버레이 그리기와 키 처리는 창 없이 테스트).
