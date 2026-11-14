@@ -28,7 +28,7 @@ class EgoFSM:
         self.t_probe = None
         self.decided = None         # 'Y' | 'NY': b가 η 또는 1−η를 처음 넘은 쪽 (순차 검정은 첫 통과에서 끝난다)
         self.t_decided = None
-        self.follow_reason = None   # FOLLOW로 간 이유: belief_NY | T_max
+        self.follow_reason = None   # FOLLOW로 간 이유: belief_NY | T_max | pass_abort
         self.hold_count = 0
         self._held = False
         self._moving = False        # hold 허용 여부 (히스테리시스)
@@ -38,6 +38,9 @@ class EgoFSM:
         self._last = None           # 마지막 유효 관측
         self._prev = None           # belief용 직전 (t, y_b)
         self._cleared = False       # PASS에서 선행차와 횡으로 완전히 어긋났는가
+        self._overlapped = False    # PASS에서 앞뒤로 겹쳤는가 (d ≤ 0). 그 뒤에는 중단하지 않는다
+        self._y_b_pass = None       # PASS 진입 때 선행차 횡위치 (복귀 판정 기준)
+        self.abort_count = 0
 
     def _d_ref(self, v_b):
         p = self.p
@@ -100,12 +103,24 @@ class EgoFSM:
                 go, give_up = self.decided == 'Y' and lat_ok, self.decided == 'NY'
             if go:
                 self.state, reason = 'PASS', 'pass_start'
+                self._y_b_pass = trk.y_b
             elif give_up or waited >= p.T_max:
                 self.state, reason = 'FOLLOW', ('belief_NY' if give_up else 'T_max')
                 self.follow_reason = reason
 
+        if self.state == 'PASS' and not self._overlapped and obs.valid:
+            if obs.d <= 0.0:
+                self._overlapped = True     # 겹친 뒤 감속하면 나란히 있는 시간만 길어진다: 차선 유지, v_pass
+            elif obs.y_b > self._y_b_pass + p.y_yield_thr \
+                    or not safety.lateral_pass_ok(W, obs.y_b, p.w_car, p.c_lat):
+                # 겹치기 전에 선행차가 돌아오거나 횡 여유가 사라짐: 추월 중단 → 중앙, 추종 속도, FOLLOW
+                self.state, self.follow_reason, reason = 'FOLLOW', 'pass_abort', 'pass_abort'
+                self.abort_count += 1
+                v = self._follow_speed(trk)
         if self.state == 'PASS':
             y_ref = delta
+            if self._overlapped:
+                self._cleared = True
             if not self._cleared and self._last is not None:
                 # 중심 간격 ≥ w + c 이면 옆으로 나란히 가도 c 이상 떨어진다. 그 전에는 추종 속도를 지킨다.
                 self._cleared = obs.ego_lat - self._last.y_b >= p.w_car + p.c_lat

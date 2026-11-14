@@ -7,7 +7,16 @@ from sim import Sim, load_cfg       # noqa: E402
 
 
 def run(method, behavior, **over):
-    return Sim(method, load_cfg(**dict({'leader.behavior': behavior, 'leader.d_y': 1.0}, **over))).run()
+    """판단 로직 점검용: AEB 끔 (AEB는 아래 별도 테스트)."""
+    base = {'leader.behavior': behavior, 'leader.d_y': 1.0, 'aeb.enabled': False}
+    return Sim(method, load_cfg(**dict(base, **over))).run()
+
+
+def test_real_aeb_stops_on_wall_in_yield_lane():
+    # 알려진 문제 (docs/PROGRESS.md): 실차 AEB 띠 ±0.30 m > 양보 차선 벽 여유 0.235 m.
+    # 고치면 이 테스트를 바꾼다.
+    r = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0, 'sim.max_time': 8.0})).run()
+    assert r['N_AEB_leader'] >= 1 and not r['success']
 
 
 def test_proposed_passes_yielding_leader():

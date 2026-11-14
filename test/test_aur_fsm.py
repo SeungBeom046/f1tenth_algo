@@ -134,3 +134,33 @@ def test_lateral_controller():
     lat2 = Lateral(P)
     assert lat2.step(0.02, 0.0, 0.1) == 0.0                       # deadband (오차 0.04 m → 0.012 rad)
     assert lat2.step(0.3, 0.0, 0.1) < 0                           # 왼쪽으로 치우쳤으면 오른쪽 조향
+
+
+def _to_pass(fsm):
+    """Y 판정까지 진행: d* 근처에서 선행차가 오른쪽으로 비킨다."""
+    t, y = 0.0, 0.0
+    fsm.step(Obs(t, 0.9, True, 0.6, 0.0, 0.9, 0.0, 1.0))
+    while fsm.state != 'PASS':
+        t += 0.1
+        y = max(-0.265, y - 0.04)
+        fsm.step(Obs(t, 0.9, True, 0.34, y, 0.9, 0.0, 1.0))
+        assert t < 10.0
+    return t, y
+
+
+def test_pass_abort_before_overlap():
+    fsm = EgoFSM(P, 'd')
+    t, y = _to_pass(fsm)
+    v, y_ref, state, _ = fsm.step(Obs(t + 0.1, 0.9, True, 0.30, y, 0.9, 0.1, 1.0))
+    assert state == 'PASS' and y_ref > 0
+    v, y_ref, state, reason = fsm.step(Obs(t + 0.2, 0.9, True, 0.30, y + P.y_yield_thr + 0.01, 0.9, 0.1, 1.0))
+    assert (state, reason, y_ref) == ('FOLLOW', 'pass_abort', 0.0) and fsm.follow_reason == 'pass_abort'
+    assert v <= safety.v_lim(0.30, 0.9, P) + 1e-9      # 추종 속도
+
+
+def test_no_abort_after_overlap():
+    fsm = EgoFSM(P, 'd')
+    t, y = _to_pass(fsm)
+    fsm.step(Obs(t + 0.1, 1.2, True, -0.05, y, 0.9, 0.2, 1.0, 0.8))    # 앞뒤로 겹침
+    v, y_ref, state, _ = fsm.step(Obs(t + 0.2, 1.3, True, -0.10, y + 0.15, 0.9, 0.25, 1.0, 0.7))
+    assert state == 'PASS' and y_ref > 0 and v == P.v_pass

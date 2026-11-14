@@ -31,6 +31,12 @@ vehicle:                    # 두 차 공통 (하드웨어 동일)
   a_max: 2.5                # TUNE: 최대 가속 | m/s^2 | 임시 (예전 시뮬 가정값)
   a_b: 3.0                  # TUNE: 최대 감속 (AurParams.a_brake와 같은 가정) | m/s^2 | 기획안
   steer_rate: 6.0           # TUNE: 조향각 변화율 한계 | rad/s | 임시 (예전 시뮬 가정값)
+aeb:                        # 실차 autonomous_drive의 AEBSafetyModel(legacy, launch 값과 같은 기본값)을 명령 경로에 넣는다
+  enabled: true             # TUNE: AEB 켜기 | - | 측정 (실차 구성)
+  speed_source: zero        # TUNE: AEB 속도 입력 zero(현재 실차: /vesc/odom 없음 → 0) / true(4단계 이후 /sensors/core) | - | 측정 (현재 실차 구성)
+  hz: 50.0                  # TUNE: autonomous_drive 제어 주기 | Hz | 측정
+  path_margin: 0.15         # TUNE: AEB 검사 띠 = 차 중심 ±(0.15 + 이 값). 추월 차선 벽 여유 0.235 m보다 크면 벽에서 AEB가 선다 | m | 측정 (launch 값)
+  bumper_emergency_distance: 0.25   # TUNE: AEB 고정 정지 거리 | m | 측정 (launch 값)
 lidar:                      # Livox Mid-360을 수평 한 줄로 근사 → pointcloud_to_laserscan과 같은 규칙으로 /scan
   hz: 10.0                  # TUNE: scan 주기 | Hz | 측정
   rays_per_frame: 1440      # TUNE: 광선 수 | 개 | 임시

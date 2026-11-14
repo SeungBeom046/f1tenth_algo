@@ -52,7 +52,7 @@ def run(p, method, intent, run_id='t', W=1.0, gap0=1.5, d_y=None, T=30.0, dt=0.1
         front_rel = (xl + CAR_LEN) - (xe - CAR_LEN)
         v_cmd, y_ref, state, _ = fsm.step(Obs(t, ve, ahead, d, yl, vl, ye, W, front_rel))
         vl_cmd, yl_ref = lead.step(t, vl, d if ahead else None, W)
-        log.append(dict(t=t, state=state, d=d, h=fsm.h, lam=fsm.belief.lam, sep=abs(ye - yl), tracked=ahead,
+        log.append(dict(t=t, state=state, d=d, h=fsm.h, lam=fsm.belief.lam, sep=abs(ye - yl), tracked=ahead, ve=ve, vl=vl,
                         overlap=-CAR_LEN < d < CAR_LEN))
         ve += max(-p.a_brake * dt, min(p.a_brake * dt, v_cmd - ve))
         vl += max(-p.a_brake * dt, min(p.a_brake * dt, vl_cmd - vl))

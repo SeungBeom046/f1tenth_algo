@@ -2,8 +2,10 @@
 
 scan마다(10 Hz): MuJoCo 레이캐스트 → pointcloud_to_laserscan 규칙의 scan → tracker / corridor / FSM / 횡 제어
 → ERPM·서보 명령 → 운동학 차량 모델(구동 지연 t_r, 1차 지연, 가감속 한계).
-AEB(autonomous_drive)는 이 시뮬에 없다: 충돌은 기하로 판정하고 N_AEB는 나오지 않는다.
+AEB: 실차 autonomous_drive와 같이 AEBSafetyModel(legacy)을 50 Hz로 최종 명령에 적용한다 (scenario.yaml의 aeb).
+N_AEB는 /aeb/active 상승 에지 수와 같은 방식으로 센다. 충돌은 기하로 판정한다.
 """
+from types import SimpleNamespace
 import math
 import os
 import sys
@@ -17,13 +19,14 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO)
 sys.path.insert(0, HERE)
 
+from my_algo.aeb import AEBSafetyModel                         # noqa: E402
 from my_algo.aur.corridor import Corridor                      # noqa: E402
 from my_algo.aur.ego_fsm import EgoFSM, Obs                    # noqa: E402
 from my_algo.aur.lateral import Lateral                        # noqa: E402
 from my_algo.aur.leader_logic import Leader                    # noqa: E402
 from my_algo.aur.params import load_params                     # noqa: E402
 from my_algo.aur.tracker import VehicleTracker, scan_to_points  # noqa: E402
-from my_algo.vehicle_utils import sanitize_rpm, steering_to_servo  # noqa: E402
+from my_algo.vehicle_utils import ReactiveDriveCommand, sanitize_rpm, steering_to_servo  # noqa: E402
 
 from lidar import Lidar, cloud_to_scan                         # noqa: E402
 from vehicle import Kinematic                                  # noqa: E402
@@ -85,10 +88,18 @@ class Car:
         self.v_cmd = 0.0
         self.y_ref = 0.0
         self.scripted = None        # (y, yaw): 선행차 yaw 고정 양보 중일 때의 자세
+        a = cfg['aeb']      # 나머지 기본값 = launch/lidar_drive.launch.py 값
+        self.aeb = AEBSafetyModel(path_margin=a['path_margin'], bumper_emergency_distance=a['bumper_emergency_distance'])
+        self.scan_ns = None         # AEB 입력 (LaserScan 필드)
+        self.cmd = (0.0, 0.0)       # planner가 낸 (rpm, 조향) = /reactive/lidar_command
+        self.aeb_active = False
+        self.n_aeb = 0
+        self.aeb_reason = ''
 
     def perceive(self, sim, side):
         cloud, self.points_world, _ = self.lidar.scan(sim.d, self.kin.pose())
         scan = cloud_to_scan(cloud, sim.cfg['scan'])
+        self.scan_ns = SimpleNamespace(**dict(scan, ranges=scan['ranges'].tolist()))
         self.points = scan_to_points(scan['ranges'].tolist(), scan['angle_min'], scan['angle_increment'],
                                      scan['range_min'], scan['range_max'])
         cor, p = self.corridor, sim.p
@@ -104,7 +115,21 @@ class Car:
     def drive(self, sim, v_cmd, y_ref):
         self.v_cmd, self.y_ref = v_cmd, y_ref
         steer = self.lateral.step(self.corridor.ego_lateral, y_ref, sim.frame_dt, self.corridor.heading)
-        self.kin.command(sim.t, sanitize_rpm(v_cmd * sim.p.erpm_gain), steering_to_servo(steer))
+        self.cmd = (v_cmd * sim.p.erpm_gain, steer)
+
+    def control(self, sim):
+        """autonomous_drive.control_timer_callback와 같은 순서: AEB → 0 RPM(조향 유지) 또는 sanitize_rpm."""
+        rpm, steer = self.cmd
+        a = sim.cfg['aeb']
+        emergency = False
+        if a['enabled'] and self.scan_ns is not None:
+            speed = self.kin.v if a['speed_source'] == 'true' else 0.0
+            emergency = self.aeb.check_emergency_braking(self.scan_ns, speed, ReactiveDriveCommand(steer, rpm))
+        if emergency and not self.aeb_active:
+            self.n_aeb += 1
+            self.aeb_reason = self.aeb.last_reason
+        self.aeb_active = emergency
+        self.kin.command(sim.t, 0.0 if emergency else sanitize_rpm(rpm), steering_to_servo(steer))
 
 
 class Sim:
@@ -195,7 +220,7 @@ class Sim:
             moving = abs(ly_ref - y) > 1e-3 or abs(step) >= 1.0
             lead.scripted = (y, math.copysign(math.radians(yaw_deg), step) if moving else 0.0)
             lead.v_cmd, lead.y_ref = lv, ly_ref
-            lead.kin.command(self.t, sanitize_rpm(lv * p.erpm_gain), steering_to_servo(0.0))
+            lead.cmd = (lv * p.erpm_gain, 0.0)
 
         self.log.append(dict(
             t=self.t, state=state, reason=reason, gap=self.true_gap(), d=trk.d, valid=trk.valid,
@@ -204,7 +229,8 @@ class Sim:
             yaw_l=lead.kin.yaw, y_ref=y_ref, h=self.fsm.h, b=self.fsm.belief.prob_yield(),
             lam=self.fsm.belief.lam, cor_valid=ego.corridor.valid,
             front_valid=ego.front.valid, front_width=ego.front.width,
-            yield_triggered=self.logic.yield_triggered, brake_fired=self.logic.brake_fired))
+            yield_triggered=self.logic.yield_triggered, brake_fired=self.logic.brake_fired,
+            aeb=ego.aeb_active, n_aeb=ego.n_aeb))
 
     def step(self):
         """시뮬 한 스텝 (dt). scan 주기마다 frame()을 먼저 부른다."""
@@ -212,6 +238,9 @@ class Sim:
         n = int(round(self.t / dt))
         if n % int(round(self.frame_dt / dt)) == 0:
             self.frame()
+        if n % max(1, int(round(1.0 / (self.cfg['aeb']['hz'] * dt)))) == 0:
+            self.ego.control(self)
+            self.leader.control(self)
         self.ego.kin.step(self.t, dt)
         lead = self.leader
         if lead.scripted is not None:
@@ -279,7 +308,9 @@ class Sim:
             T_pass=round(getattr(self, '_t_done', float('nan')) - fsm.t0, 2) if success else None,
             h_min=round(min((r['h'] for r in post if r['state'] in ('APPROACH', 'PROBE', 'FOLLOW')), default=float('nan')), 3),
             gap_min=round(min((r['gap'] for r in post if r['state'] in ('APPROACH', 'PROBE', 'FOLLOW')), default=float('nan')), 3),
-            hold_count=fsm.hold_count, track_need=len(need), track_lost=len(lost),
+            hold_count=fsm.hold_count, N_AEB=self.ego.n_aeb, N_AEB_leader=self.leader.n_aeb,
+            aeb_speed_source=self.cfg['aeb']['speed_source'] if self.cfg['aeb']['enabled'] else 'off',
+            n_abort=fsm.abort_count, track_need=len(need), track_lost=len(lost),
             track_lost_longest_s=round(longest * self.frame_dt, 2),
             width_max=round(max(widths), 3) if widths else None,
             leader_yaw_max_deg=round(math.degrees(max((abs(r['yaw_l']) for r in log), default=0.0)), 1),

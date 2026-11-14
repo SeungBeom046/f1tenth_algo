@@ -100,7 +100,12 @@
 | sim/mujoco_overtake/scenario.yaml | 31 | `a_max` | 2.5 | m/s^2 | 최대 가속 | 임시 (예전 시뮬 가정값) | - | - |
 | sim/mujoco_overtake/scenario.yaml | 32 | `a_b` | 3.0 | m/s^2 | 최대 감속 (AurParams.a_brake와 같은 가정) | 기획안 | - | - |
 | sim/mujoco_overtake/scenario.yaml | 33 | `steer_rate` | 6.0 | rad/s | 조향각 변화율 한계 | 임시 (예전 시뮬 가정값) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 35 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 36 | `rays_per_frame` | 1440 | 개 | 광선 수 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 38 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 43 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
+| sim/mujoco_overtake/scenario.yaml | 35 | `enabled` | true | - | AEB 켜기 | 측정 (실차 구성) | - | - |
+| sim/mujoco_overtake/scenario.yaml | 36 | `speed_source` | zero | - | AEB 속도 입력 zero(현재 실차: /vesc/odom 없음 → 0) / true(4단계 이후 /sensors/core) | 측정 (현재 실차 구성) | - | - |
+| sim/mujoco_overtake/scenario.yaml | 37 | `hz` | 50.0 | Hz | autonomous_drive 제어 주기 | 측정 | - | - |
+| sim/mujoco_overtake/scenario.yaml | 38 | `path_margin` | 0.15 | m | AEB 검사 띠 = 차 중심 ±(0.15 + 이 값). 추월 차선 벽 여유 0.235 m보다 크면 벽에서 AEB가 선다 | 측정 (launch 값) | - | - |
+| sim/mujoco_overtake/scenario.yaml | 39 | `bumper_emergency_distance` | 0.25 | m | AEB 고정 정지 거리 | 측정 (launch 값) | - | - |
+| sim/mujoco_overtake/scenario.yaml | 41 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
+| sim/mujoco_overtake/scenario.yaml | 42 | `rays_per_frame` | 1440 | 개 | 광선 수 | 임시 | - | - |
+| sim/mujoco_overtake/scenario.yaml | 44 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
+| sim/mujoco_overtake/scenario.yaml | 49 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
