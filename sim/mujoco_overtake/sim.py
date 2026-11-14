@@ -191,7 +191,9 @@ class Sim:
             y = lead.scripted[0] if lead.scripted else 0.0
             step = max(-1.0, min(1.0, (ly_ref - y) / (cfg['leader']['yield_lat_speed'] * self.frame_dt)))
             y += step * cfg['leader']['yield_lat_speed'] * self.frame_dt
-            lead.scripted = (y, math.radians(yaw_deg) * (1 if step > 0 else -1) if abs(step) > 1e-9 else 0.0)
+            # 목표에 닿으면(남은 거리 1 mm 미만) yaw 0. 예전에는 부동소수 잔차로 ±yaw가 프레임마다 뒤집혔다
+            moving = abs(ly_ref - y) > 1e-3 or abs(step) >= 1.0
+            lead.scripted = (y, math.copysign(math.radians(yaw_deg), step) if moving else 0.0)
             lead.v_cmd, lead.y_ref = lv, ly_ref
             lead.kin.command(self.t, sanitize_rpm(lv * p.erpm_gain), steering_to_servo(0.0))
 

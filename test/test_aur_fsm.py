@@ -4,9 +4,11 @@ from _aur_synth import run
 from my_algo.aur import safety
 from my_algo.aur.ego_fsm import EgoFSM, Obs
 from my_algo.aur.leader_logic import Leader
-from my_algo.aur.params import AurParams
+from dataclasses import replace
 
-P = AurParams()
+from my_algo.aur.params import EXPERIMENT_OVERRIDES, AurParams
+
+P = replace(AurParams(), **EXPERIMENT_OVERRIDES)     # 실험 설정 (exp_common.yaml과 같음)
 
 
 def states(log):

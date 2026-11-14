@@ -2,6 +2,8 @@
 # 조정할 값에는 모두 태그가 있다:  # TUNE: <설명> | 단위 | 현재값 근거(임시/측정/기획안)
 # 찾기: grep -rn "TUNE:" config my_algo sim scripts      표: docs/TUNING.md (scripts/gen_tuning_doc.py가 만든다)
 # 값을 바꾸면 my_algo/aur/params.py의 기본값도 같이 바꾼다 (테스트가 일치를 확인한다).
+# 예외: 기존 주행과 겹치는 값 중 실험에서만 바꾼 것 (params.EXPERIMENT_OVERRIDES): min_point_x, steering_deadband, heading_gain.
+#       이 값들의 코드 기본값은 기존 주행 값이고 여기서만 덮어쓴다.
 aur:
   # --- 안전 (식 6~11) ---
   t_d: 0.15                 # TUNE: 제동 지연 | s | 기획안 (보정 실험으로 대체)
@@ -70,7 +72,7 @@ aur:
   steer_rate_limit: 0.08    # TUNE: 조향 변화 한계 | rad/scan | 측정 (lidar_reactive_drive와 같은 값)
   steering_deadband: 0.02   # TUNE: 이보다 작은 조향은 0, 기존 주행은 0.055 (횡오차 0.09 m) | rad | 임시 (시뮬에서 정함)
   max_steering: 0.78        # TUNE: 최대 조향각 | rad | 측정 (lidar_reactive_drive와 같은 값)
-  heading_gain: 0.7         # TUNE: 헤딩 감쇠 게인 (0이면 횡위치 P만, 차선 변경 때 넘어감) | rad/rad | 임시 (시뮬에서 정함)
+  heading_gain: 0.7         # TUNE: 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | rad/rad | 임시 (시뮬에서 정함)
   y_ref_rate: 0.4           # TUNE: 차선 변경 시 y_ref 기울기 제한 | m/s | 기획안
   # --- 선행차 ---
   d_brake_trigger: 1.0      # TUNE: NY 급정지 이벤트 무장 거리 | m | 기획안

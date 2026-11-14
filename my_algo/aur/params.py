@@ -1,7 +1,8 @@
 """실험 파라미터. 기본값은 기획안 가정값이며 측정값이 아니다 (보정 실험 후 YAML로 덮어쓴다).
 
 조정은 config/exp_common.yaml에서 한다 (TUNE 태그와 docs/TUNING.md 참고).
-여기 기본값은 그 파일과 같아야 하며 test_aur_safety.py가 고정한다.
+기존 주행(lidar_reactive_drive)과 겹치는 값의 기본값은 기존 주행 값이다. 실험에서 바꾼 값은
+exp_common.yaml에서만 덮어쓴다 (EXPERIMENT_OVERRIDES). 나머지는 yaml과 같아야 하며 테스트가 확인한다.
 """
 from dataclasses import dataclass, fields
 from typing import Optional
@@ -66,21 +67,19 @@ class AurParams:
     track_jump_reset: float = 0.3   # 예측과 이만큼 다르면 다른 물체로 보고 필터 초기화 [m]
     track_timeout: float = 0.5
     side_gate: float = 0.6          # 측면 추적 연관 거리 [m]
-    # --- corridor (min_point_x 외에는 lidar_reactive_drive.PLANNER_CONSTANTS와 같은 값) ---
+    # --- corridor (lidar_reactive_drive.PLANNER_CONSTANTS와 같은 값) ---
     corridor_sector_min_deg: float = 45.0
     corridor_sector_max_deg: float = 115.0
     corridor_min_points: int = 8
     corridor_wall_percentile: float = 0.35
-    # 기존 값 −0.05(앞범퍼 기준)를 쓰면 벽 거리 < 0.25 m에서 섹터가 비어 벽을 놓친다.
-    # 추월 차선에서는 가까운 벽이 w/2 + c = 0.235 m이므로 x 제한을 사실상 끈다.
-    min_point_x: float = -1.0
+    min_point_x: float = -0.05      # 실험은 −1.0 (exp_common.yaml)
     # --- 횡 제어 (y_ref_rate 외에는 lidar_reactive_drive 기본값) ---
     wall_follow_gain: float = 0.30
     wall_error_filter_alpha: float = 0.25
     steer_rate_limit: float = 0.08  # [rad/scan]
-    steering_deadband: float = 0.02  # 기존 0.055는 횡오차 0.09 m에 해당해 벽 여유 c = 0.10 m와 맞지 않는다
+    steering_deadband: float = 0.055  # 실험은 0.02 (exp_common.yaml)
     max_steering: float = 0.78
-    heading_gain: float = 0.7       # 헤딩 감쇠 [rad/rad]. 0이면 지시서 방식(횡위치 P만)
+    heading_gain: float = 0.0       # 헤딩 감쇠 [rad/rad]. 0 = 기존 방식(횡위치 P만). 실험은 0.7 (exp_common.yaml)
     y_ref_rate: float = 0.4         # 차선 변경 시 y_ref 기울기 제한 [m/s]
     # --- 선행차 ---
     d_brake_trigger: float = 1.0    # NY 급정지 이벤트 무장 거리 [m]
@@ -92,6 +91,10 @@ class AurParams:
     def v_min(self):
         """0이 아닌 명령이 끌어올려지는 최소 속도 [m/s] (기본 0.867)."""
         return self.min_erpm / self.erpm_gain
+
+
+# exp_common.yaml이 기본값과 다르게 두는 값 (실험 전용). 이유는 yaml의 TUNE 태그와 docs/PROGRESS.md.
+EXPERIMENT_OVERRIDES = {'min_point_x': -1.0, 'steering_deadband': 0.02, 'heading_gain': 0.7}
 
 
 def load_params(*paths, **overrides):

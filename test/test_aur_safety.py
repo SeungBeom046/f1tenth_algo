@@ -50,7 +50,13 @@ def test_min_speed_rule():
 def test_exp_common_yaml_matches_defaults():
     pytest.importorskip('yaml')
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    assert load_params(os.path.join(repo, 'config', 'exp_common.yaml')) == AurParams()
+    from dataclasses import replace
+    from my_algo.aur.params import EXPERIMENT_OVERRIDES
+    exp = load_params(os.path.join(repo, 'config', 'exp_common.yaml'))
+    assert exp == replace(AurParams(), **EXPERIMENT_OVERRIDES)
+    # 실험 전용 값의 코드 기본값은 기존 주행(lidar_reactive_drive) 값이다
+    from my_algo.aur.params import AurParams as A
+    assert (A().min_point_x, A().steering_deadband, A().heading_gain) == (-0.05, 0.055, 0.0)
 
 
 def test_tuning_doc_is_current():

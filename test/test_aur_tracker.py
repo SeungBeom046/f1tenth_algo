@@ -2,10 +2,12 @@ import pytest
 
 from _aur_synth import CAR_LEN, box, scan
 from my_algo.aur.corridor import Corridor
-from my_algo.aur.params import AurParams
+from dataclasses import replace
+
+from my_algo.aur.params import EXPERIMENT_OVERRIDES, AurParams
 from my_algo.aur.tracker import VehicleTracker
 
-P = AurParams()
+P = replace(AurParams(), **EXPERIMENT_OVERRIDES)     # 실험 설정 (exp_common.yaml과 같음)
 LF, LR, HW = P.lidar_to_front, P.lidar_to_rear, P.w_car / 2
 
 
