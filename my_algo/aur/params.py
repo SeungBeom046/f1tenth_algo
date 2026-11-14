@@ -1,4 +1,8 @@
-"""실험 파라미터. 기본값은 기획안 가정값이며 측정값이 아니다 (보정 실험 후 YAML로 덮어쓴다)."""
+"""실험 파라미터. 기본값은 기획안 가정값이며 측정값이 아니다 (보정 실험 후 YAML로 덮어쓴다).
+
+조정은 config/exp_common.yaml에서 한다 (TUNE 태그와 docs/TUNING.md 참고).
+여기 기본값은 그 파일과 같아야 하며 test_aur_safety.py가 고정한다.
+"""
 from dataclasses import dataclass, fields
 from typing import Optional
 
@@ -34,6 +38,8 @@ class AurParams:
     erpm_gain: float = ERPM_GAIN    # 보정 결과로 덮어쓸 수 있다
     min_erpm: float = MIN_DRIVING_RPM
     t0_speed_threshold: float = 0.3  # 출발 시각 t0 판정 [m/s]
+    hold_on_speed: float = 0.35     # v_E가 이보다 크면 최소 속도 hold 허용 [m/s]
+    hold_off_speed: float = 0.25    # v_E가 이보다 작으면 hold 금지 [m/s]
     # --- 방법별 ---
     d_follow_a: float = 0.8
     T_wait_a: float = 3.0

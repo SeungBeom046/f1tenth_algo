@@ -1,0 +1,70 @@
+# 의도 불확실 선행차 추월 실험 공통 파라미터 (my_algo.aur.params.AurParams).
+# 조정할 값에는 모두 태그가 있다:  # TUNE: <설명> | 단위 | 현재값 근거(임시/측정/기획안)
+# 찾기: grep -rn "TUNE:" config my_algo sim scripts      표: docs/TUNING.md (scripts/gen_tuning_doc.py가 만든다)
+# 값을 바꾸면 my_algo/aur/params.py의 기본값도 같이 바꾼다 (테스트가 일치를 확인한다).
+aur:
+  # --- 안전 (식 6~11) ---
+  t_d: 0.15                 # TUNE: 제동 지연 | s | 기획안 (보정 실험으로 대체)
+  a_brake: 3.0              # TUNE: 최대 감속도 | m/s^2 | 기획안 (보정 실험으로 대체)
+  m_stop: 0.15              # TUNE: 정지 후 남길 여유 m | m | 기획안
+  eps_follow: 0.05          # TUNE: 추종 여유 ε | m | 기획안
+  # --- belief (식 1~5) ---
+  belief_model: survival    # TUNE: belief 모델 original(기획안 식) / survival(기획안 변경) | - | 기획안 변경
+  d_y_min: 0.6              # TUNE: π(d) 분포 하한, 선행차 양보 반응 거리 최소 | m | 기획안
+  d_y_max: 1.2              # TUNE: π(d) 분포 상한, 선행차 양보 반응 거리 최대 | m | 기획안
+  v_lat: 0.5                # TUNE: 양보 시 횡속도 (관측 모델, survival의 감지 지연 τ = y_yield_thr / v_lat) | m/s | 기획안
+  sigma_z: 0.02             # TUNE: 횡변위 관측 노이즈 σ (original 모델만 사용) | m | 기획안 (보정 실험으로 대체)
+  eta: 0.9                  # TUNE: 판단 임계 확률 η | - | 기획안
+  lambda_clip: 20.0         # TUNE: 로그 오즈 λ 클리핑 | - | 기획안
+  y_yield_thr: 0.08         # TUNE: (survival) 양보로 보는 누적 횡변위, 4σ | m | 임시
+  p_false_yield: 0.01       # TUNE: (survival) NY인데 한 회차 안에 임계값을 넘을 확률 | - | 임시
+  T_max: 8.0                # TUNE: PROBE 최대 시간, 넘으면 FOLLOW | s | 기획안
+  # --- 차량·통로 ---
+  w_car: 0.27               # TUNE: 차폭 w | m | 측정
+  c_lat: 0.10               # TUNE: 횡 여유 c | m | 기획안
+  W: null                   # TUNE: 통로 폭 W, null이면 scan 추정값 사용 | m | 임시 (실험 장소에서 측정)
+  lane_offset: null         # TUNE: 차선 횡 오프셋 δ, null이면 W/2 − w/2 − c | m | 기획안
+  # --- 속도 ---
+  v_B_nominal: 0.9          # TUNE: 선행차 목표 속도 | m/s | 기획안
+  v_pass: 1.5               # TUNE: 추월 속도 | m/s | 기획안
+  erpm_gain: 4614.0         # TUNE: m/s → ERPM 환산 | ERPM/(m/s) | 측정 (vehicle_utils.ERPM_GAIN, 테이프 구간으로 재검증)
+  min_erpm: 4000.0          # TUNE: 0이 아닌 명령의 최소 ERPM | ERPM | 측정 (vehicle_utils.MIN_DRIVING_RPM)
+  t0_speed_threshold: 0.3   # TUNE: 출발 시각 t0 판정 속도 | m/s | 기획안
+  hold_on_speed: 0.35       # TUNE: 최소 속도 hold 히스테리시스 켜짐 (v_E 초과) | m/s | 임시
+  hold_off_speed: 0.25      # TUNE: 최소 속도 hold 히스테리시스 꺼짐 (v_E 미만) | m/s | 임시
+  # --- 방법별 ---
+  d_follow_a: 0.8           # TUNE: 방법 a 고정 추종 거리 | m | 기획안
+  T_wait_a: 3.0             # TUNE: 방법 a 대기 시간 | s | 기획안
+  d_follow_b: 1.5           # TUNE: 방법 b 원거리 추종 거리 | m | 기획안
+  d_probe_c: 0.4            # TUNE: 방법 c 공격적 접근 거리 | m | 기획안
+  k_d: 1.5                  # TUNE: 거리 유지 P 게인 (방법 a·b·c) | 1/s | 임시
+  probe_tol: 0.05           # TUNE: PROBE 진입 허용 오차 (d ≤ d_ref + 이 값) | m | 기획안
+  merge_tol: 0.05           # TUNE: MERGE 완료 판정 횡오차 | m | 임시
+  track_hold: 0.5           # TUNE: 추적이 끊겨도 직전 값을 쓰는 시간 | s | 임시
+  # --- tracker ---
+  lidar_to_front: 0.30      # TUNE: 라이다 → 앞범퍼 (AEB lidar_to_bumper_dist와 같게) | m | 측정 (실측 0.28, 코드 0.30)
+  lidar_to_rear: 0.22       # TUNE: 라이다 → 뒤범퍼 | m | 측정
+  cluster_jump: 0.15        # TUNE: 연속 점 사이 거리가 이보다 크면 클러스터 분할 | m | 임시
+  cluster_min_points: 3     # TUNE: 클러스터 최소 점 수 | 개 | 임시
+  track_x_max: 3.0          # TUNE: 전방 차량 검출 최대 거리 | m | 임시
+  veh_width_min: 0.12       # TUNE: 차량 클러스터 폭 게이트 하한 | m | 임시
+  veh_width_max: 0.45       # TUNE: 차량 클러스터 폭 게이트 상한 | m | 임시
+  veh_depth_max: 0.60       # TUNE: 차량 클러스터 깊이(x 범위) 상한 | m | 임시
+  wall_margin: 0.05         # TUNE: 벽에서 이 거리 안의 점은 벽으로 버림 | m | 임시
+  rear_fov_half_deg: 60.0   # TUNE: 후방 차량 검출 반시야각 | deg | 임시
+  track_alpha: 0.5          # TUNE: d의 α-β 필터 α | - | 임시
+  track_beta: 0.2           # TUNE: d의 α-β 필터 β | - | 임시
+  track_jump_reset: 0.3     # TUNE: 예측과 이만큼 다르면 필터 초기화 | m | 임시
+  track_timeout: 0.5        # TUNE: 이 시간 넘게 안 보이면 필터 초기화 | s | 임시
+  side_gate: 0.6            # TUNE: 측면 추적 연관 거리 | m | 임시
+  # --- corridor ---
+  corridor_sector_min_deg: 45.0     # TUNE: 벽 거리 측면 섹터 시작각 | deg | 측정 (lidar_reactive_drive와 같은 값)
+  corridor_sector_max_deg: 115.0    # TUNE: 벽 거리 측면 섹터 끝각 | deg | 측정 (lidar_reactive_drive와 같은 값)
+  corridor_min_points: 8            # TUNE: 한쪽 벽으로 인정할 최소 점 수 | 개 | 측정 (lidar_reactive_drive와 같은 값)
+  corridor_wall_percentile: 0.35    # TUNE: 측면 거리 분위값 | - | 측정 (lidar_reactive_drive와 같은 값)
+  min_point_x: -1.0         # TUNE: 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | m | 임시
+  # --- 선행차 ---
+  d_brake_trigger: 1.0      # TUNE: NY 급정지 이벤트 무장 거리 | m | 기획안
+  brake_delay_min: 0.5      # TUNE: 급정지 지연 최소 | s | 기획안
+  brake_delay_max: 2.0      # TUNE: 급정지 지연 최대 | s | 기획안
+  start_gap_margin: 0.2     # TUNE: t0에서 d_rear < d_y_max + 이 값이면 경고 | m | 기획안

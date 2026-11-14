@@ -75,6 +75,17 @@ def test_hold_count_and_min_speed():
     assert safety.v_lim(0.3, 0.0, P) < P.v_min
 
 
+def test_hold_hysteresis():
+    # v_lim < v_min, h ≥ ε인 상황(선행차가 v_min보다 조금 느림)에서 v_E만 바꿔 본다
+    fsm = EgoFSM(P, 'd')
+    cmd = lambda t, v_e: fsm.step(Obs(t, v_e, True, 0.33, 0.0, 0.80, 0.0, 1.0))[0]
+    assert cmd(0.0, 0.30) == 0.0            # 0.35를 넘기 전에는 hold 안 함
+    assert cmd(0.1, 0.36) == P.v_min        # 켜짐
+    assert cmd(0.2, 0.30) == P.v_min        # 0.25~0.35 사이에서는 유지
+    assert cmd(0.3, 0.24) == 0.0            # 꺼짐
+    assert cmd(0.4, 0.30) == 0.0
+
+
 def test_method_validation():
     with pytest.raises(ValueError):
         EgoFSM(P, 'e')

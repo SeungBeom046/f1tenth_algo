@@ -31,6 +31,7 @@ class EgoFSM:
         self.follow_reason = None   # FOLLOW로 간 이유: belief_NY | T_max
         self.hold_count = 0
         self._held = False
+        self._moving = False        # hold 허용 여부 (히스테리시스)
         self.h = INF                # 기록용 (/exp/state)
         self.d_safe = None
         self.v_lim = None
@@ -119,7 +120,11 @@ class EgoFSM:
         if self.state == 'DONE':
             y_ref, v, reason = -delta, p.v_B_nominal, 'done'
 
-        v, held = min_speed_rule(v, self.h, obs.v_e, p)
+        if obs.v_e > p.hold_on_speed:
+            self._moving = True
+        elif obs.v_e < p.hold_off_speed:
+            self._moving = False
+        v, held = min_speed_rule(v, self.h, self._moving, p)
         self.hold_count += held and not self._held     # 분기에 들어간 횟수 (연속 scan은 한 번)
         self._held = held
         return v, y_ref, self.state, reason

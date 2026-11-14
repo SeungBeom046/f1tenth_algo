@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# 기획안 PDF와 작업 지시서는 커밋하지 않는다 (공개 저장소에 미발표 연구 계획을 올리지 않음)
+CLAUDE_TASK.md
+docs/*.pdf
+docs/CLAUDE_TASK*.md

@@ -39,12 +39,27 @@ def test_probe_and_lateral():
 
 def test_min_speed_rule():
     assert abs(P.v_min - 4000.0 / 4614.0) < 1e-12
-    assert speed.min_speed_rule(0.5, 0.10, 0.9, P) == (P.v_min, True)     # h ≥ ε: hold
-    assert speed.min_speed_rule(0.5, 0.01, 0.9, P) == (0.0, True)         # h < ε: 정지
-    assert speed.min_speed_rule(0.5, 0.10, 0.0, P) == (0.0, True)         # 정지 중에는 hold로 출발하지 않는다
-    assert speed.min_speed_rule(0.0, 9.0, 0.9, P) == (0.0, False)
-    assert speed.min_speed_rule(1.2, -1.0, 0.9, P) == (1.2, False)
+    assert speed.min_speed_rule(0.5, 0.10, True, P) == (P.v_min, True)     # h ≥ ε: hold
+    assert speed.min_speed_rule(0.5, 0.01, True, P) == (0.0, True)         # h < ε: 정지
+    assert speed.min_speed_rule(0.5, 0.10, False, P) == (0.0, True)        # 정지 중에는 hold로 출발하지 않는다
+    assert speed.min_speed_rule(0.0, 9.0, True, P) == (0.0, False)
+    assert speed.min_speed_rule(1.2, -1.0, True, P) == (1.2, False)
     assert abs(speed.from_erpm(speed.to_erpm(1.3, P), P) - 1.3) < 1e-12
+
+
+def test_exp_common_yaml_matches_defaults():
+    pytest.importorskip('yaml')
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    assert load_params(os.path.join(repo, 'config', 'exp_common.yaml')) == AurParams()
+
+
+def test_tuning_doc_is_current():
+    import subprocess
+    import sys
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    res = subprocess.run([sys.executable, os.path.join(repo, 'scripts', 'gen_tuning_doc.py'), '--check'],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+    assert res.returncode == 0, res.stdout
 
 
 def test_load_params_yaml():
