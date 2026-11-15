@@ -7,6 +7,7 @@
 import argparse
 import json
 
+from batch import AEB
 from sim import Sim, load_cfg
 
 
@@ -15,6 +16,7 @@ def parse(argv=None):
     ap.add_argument('--method', default='d', choices=list('abcd'))
     ap.add_argument('--leader', default=None, choices=['Y', 'NY', 'YR'], help='선행차 행동 (기본: scenario.yaml)')
     ap.add_argument('--belief', default=None, choices=['original', 'survival'])
+    ap.add_argument('--aeb', default=None, choices=list(AEB), help='AEB 조건 (batch.py와 같은 이름, 기본: scenario.yaml)')
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--W', type=float, default=None, help='통로 폭 [m]')
     ap.add_argument('--d-y', type=float, default=None, help='선행차 양보 반응 거리 [m]')
@@ -32,6 +34,8 @@ def make_sim(args, reuse=None):
     for kv in args.set:
         k, v = kv.split('=', 1)
         (over if '.' in k else params)[k] = yaml.safe_load(v)
+    if args.aeb:
+        over.update(AEB[args.aeb])
     for key, v in (('leader.behavior', args.leader), ('track.W', args.W), ('leader.d_y', args.d_y),
                    ('leader.yield_yaw_deg', args.yield_yaw)):
         if v is not None:

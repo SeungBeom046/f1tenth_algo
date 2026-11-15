@@ -1,20 +1,24 @@
 # exp/aur-overtake 진행 상황
 
 다음 세션은 `CLAUDE_TASK.md`(커밋하지 않음, 사용자가 직접 저장)와 이 파일만 읽고 시작한다.
+아래 결과 표는 표마다 적힌 커밋 기준이다. 리팩터링(682bfdc)은 동작을 바꾸지 않았다.
 
-## 끝낸 단계
-- 세션 1 (2026-11-14): 0단계(점검), 1단계(`my_algo/aur/` 순수 모듈 + 테스트).
-- 검토 반영 (2026-11-14): belief survival 모델, 폐루프 재실험, hold 히스테리시스, TUNE 태그·`config/exp_common.yaml`·`docs/TUNING.md`.
-- MuJoCo 추월 시뮬 `sim/mujoco_overtake/` (2026-11-14): 헤드리스 일괄 실행, 뷰어, 선행차 Y/NY/YR, yaw 강건성 테스트. 횡 제어 순수 모듈 `my_algo/aur/lateral.py`(지시서 2단계의 순수 부분)를 앞당겨 만들었다.
-- 커밋은 `git log --oneline` 참고. push는 아직 안 했다.
+## 현재 상태 (2026-11-15)
+- 끝낸 것: 지시서 0·1단계 (`my_algo/aur/` 순수 모듈), 2단계의 순수 부분 (`lateral.py`), 5단계 중 (a) 기하 AEB (`aeb.py` `model='geometric'`), 9단계를 대신하는 MuJoCo 시뮬 (`sim/mujoco_overtake/`), 정리·리팩터링·문서 (A0~A3).
+- 남은 지시서 단계: 3 `exp_planner` 노드, 4 속도 소스 `/sensors/core`, 5 (b) relative AEB와 `autonomous_drive`의 AEB model 파라미터, 6 비상정지 heartbeat, 7 실험 launch·`config/*.yaml` 설치, 8 기록·분석 스크립트, 10 실험 문서 `docs/EXP_AUR.md`.
+- 흐름 전체: `docs/PIPELINE.md`. 시뮬 사용법: `sim/mujoco_overtake/README.md`.
+- 동작 기준선: `sim/mujoco_overtake/baseline.py` (252회, 스텝 로그 해시). A2 리팩터링 전후 0회 다름. 기본 주행은 `scripts/verify_refactor_offline.py --baseline b054758` 14268개 일치.
 
-## 남은 일
-- 지시서 세션 2: 4단계(속도 소스), 5단계(AEB relative). 이후 지시서 표대로.
-- `setup.py`에 `config/*.yaml` 설치 추가는 7단계에서 한다 (지금은 소스 경로로만 읽는다).
-- 결정 필요 (2026-11-15): 기하 AEB가 ego 차선 변경 중 벽을 봐서 생기는 교착, 측면 추적 y_B 편향 때문의 PASS 오판 중단, 급정지 전 h_min < 0 (아래 "2층 AEB").
-- 5단계 (b) relative AEB는 아직 안 했다 (결정: (a) 먼저).
-- push 보류 (사용자가 저장소 공개 여부 결정).
-- 지시서 9단계(`sim/aur/`, F1TENTH gym)는 `sim/mujoco_overtake/`로 대체한다 (2026-11-14 결정). `sim/legacy` 복사는 하지 않는다.
+## 열린 문제 (다음 작업 B, 사용자 지시 2026-11-15)
+1. **ego 차선 변경 중 벽 교착** (기하 AEB): 차선 변경 중 ego가 10~15° 틀어지면 1.5 m/s의 TTC 한계(0.52 m) 안에 벽이 들어와 AEB가 서고, 벽을 향한 채 0.25 m 안에 벽이 남아 다시 출발하지 못한다. W가 넓을수록 심하다 (W 1.1·1.2에서 방법 d Y 20/20 교착). 수정 계획: AEB 검사 띠를 현재 조향 명령 경로를 따라 휘게 (tracker 무관 유지) + 차선 변경 중에는 추종 속도.
+2. **PASS 오판 중단**: 측면 추적 y_B 편향(약 0.1 m)이 풀리는 것을 선행차 복귀로 본다 (W 1.0, 기하 AEB, 방법 d, Y: 12/20). 수정 계획: 연속 확인을 시간 기준(예 0.3 s, TUNE)으로, 복귀 임계 상향(예 0.16 m, TUNE). **y_B 편향 0.1 m 자체는 열린 문제로 남긴다** (뒷면 중앙으로 0.17 → 0.1 m까지 줄였음, 원인 미확인).
+3. **급정지 전 h_min < 0** (방법 d −0.114 m): 접근 중 v_lim이 줄어드는데 구동 지연 동안 속도를 못 따라간다. 수정 계획: v_lim을 예측 거리 d − (v_E − v_B)(t_d + Δ)로 계산 (기획안 변경으로 기록).
+4. **원인 미확인 충돌**: 선행차 W 고정 시 방법 c 차량 충돌 (YR, AEB 없음 6/20, 기하 AEB 8/20), W ≥ 1.1 ego-벽 충돌 (YR, d, 복귀 2.0 s: 10/20). 회차 로그로 원인부터 확인.
+5. 그 밖: 실차 반응 지연 `t_react` 측정 (Y 성공률을 좌우), 시뮬 라이다 잡음 없음 (회차 간 분산 정보 없음), tracker 헤딩 가정.
+
+## 결정 이력 (요약)
+- 2026-11-14: belief survival 채택 (original은 플래그로 유지), PASS 중단 조건 구현, sim/legacy 복사 안 함, 9단계는 MuJoCo로 대체, 기획안 PDF·지시서 커밋 안 함.
+- 2026-11-15: AEB 2층 구조 ((a) 독립 기하 → (b) relative), relative 단독 금지, 선행차 실측 W 고정(선행차 전용), t_d → t_d + Δ와 안전 지표 변경, push는 A(정리) 검증 뒤.
 
 ## 기획안 변경
 
@@ -214,7 +218,7 @@ AEB 없음:
 - 제안 (미구현): (1) 횡 여유 판정(`lateral_pass_ok`, PASS 가속 조건)에 중심 대신 클러스터의 가장 왼쪽 점을 선행차 왼쪽 끝으로 쓴다 (작은 변경, 보수적). (2) L자/OBB 피팅으로 뒷면 중심과 yaw를 구하고 폭 게이트를 맞춘 사각형 크기로 판정한다.
 - **정정 (2026-11-14)**: 위 25°·30° 추돌의 원인은 y_B 편향이 아니었다. 회차 로그로 확인한 결과, 시뮬의 yaw 고정 양보 코드가 목표 차선에 도착한 뒤에도 부동소수 잔차로 ±yaw를 프레임마다 뒤집었다. 그 때문에 선행차 벽 추정이 무너져 δ가 줄었고, 선행차가 추월 중인 ego 쪽으로 −0.265 → −0.13 m 움직여 옆면끼리 닿았다. y_B 편향(추정이 실제보다 약 0.05 m 오른쪽)은 있었지만 가속 시점을 0.1 s 앞당긴 정도다. 시뮬 버그를 고친 뒤 0~40° 모두 DONE, 추돌 0이다 (끊김은 30° 이상에서 최장 0.3 s로 같음). 그래서 (1)은 구현하지 않았다.
 
-## 예전 시뮬레이션 코드 (조사만, 옮기지 않음)
+## 예전 시뮬레이션 코드 (2026-11-14 조사)
 이 브랜치(refactor/main-baseline 기반)에는 시뮬 코드가 없다. 전부 `sim/mujoco` 브랜치에 있고 그 브랜치는 수정 금지라 `git mv`하지 않았다. 새 환경과는 브랜치로 이미 분리되어 있다.
 - `sim/runner.py`(540줄): 관측 공백 실험(B0/B1/B2/P, S1~S4) 회차 실행, ROS 노드를 `rosstub`으로 돌림
 - `sim/world.py`, `sim/vehicle.py`, `sim/lidar.py`: MJCF 생성, 운동학 차량, Mid-360 근사 라이다
@@ -226,12 +230,13 @@ AEB 없음:
 - 원래 체크아웃 `my_algo`의 미커밋 변경(`.gitignore`, `config/imu.yaml`)은 시뮬 파일이 아니며 건드리지 않았다.
 
 ## 다음 세션이 알아야 할 결정사항
-1. 작업 위치는 worktree `f1tenth_gym_ros/my_algo_aur`. 원래 체크아웃 `my_algo`(sim/mujoco, 미커밋 변경 있음)는 건드리지 않는다. 테스트는 Python 3.8 환경으로 `python -m pytest test/ -q` (Mac 기본 python에는 pytest 없음). 시뮬은 Python 3.12 + mujoco 3.12.0 (`../my_algo/sim/.venv`를 읽기 전용으로 썼고 거기에는 pytest가 없다).
-2. 함수는 파라미터 객체 `p`(AurParams)를 마지막 인자로 받는다. 조정은 `config/exp_common.yaml`(TUNE 태그)에서 하고 `params.py` 기본값과 같아야 한다 (테스트). 값·태그를 바꾸면 `python3 scripts/gen_tuning_doc.py`로 `docs/TUNING.md`를 다시 만든다 (테스트가 최신 여부를 확인).
+1. 작업 위치는 worktree `f1tenth_gym_ros/my_algo_aur`. 원래 체크아웃 `my_algo`(sim/mujoco, 미커밋 변경 있음)는 건드리지 않는다. 테스트는 Python 3.8 환경으로 `python -m pytest -q` (Mac 기본 python에는 pytest 없음). 시뮬은 Python 3.12 + `sim/mujoco_overtake/requirements.txt`.
+   이 Mac의 `/usr/bin/git`은 Xcode 라이선스 미동의로 막혀 있다 (2026-11-15). Claude 세션은 scratchpad conda 환경의 git을 썼다. 회귀 테스트가 내부에서 `git`을 부르므로, git이 안 되면 `test_drive_regression`이 skip된다.
+2. 함수는 파라미터 객체 `p`(AurParams)를 마지막 인자로 받는다. 조정은 `config/exp_common.yaml`(TUNE 태그)에서 하고 `params.py` 기본값과 같아야 한다 (테스트, 예외는 `EXPERIMENT_OVERRIDES`). 값·태그를 바꾸면 `python3 scripts/gen_tuning_doc.py`로 `docs/TUNING.md`를 다시 만든다 (테스트가 최신 여부를 확인).
 3. 판단은 APPROACH·PROBE 모두에서 하고 처음 넘은 쪽으로 고정(`fsm.decided`). PROBE 진입은 `d ≤ d_ref + probe_tol`. T_wait_a·T_max는 PROBE 진입부터 센다.
 4. 최소 속도 hold는 히스테리시스(켜짐 v_E > 0.35, 꺼짐 < 0.25, 임시값)로 달리는 중에만 한다. `hold_count`는 분기 진입 횟수.
 5. PASS에서 선행차와 중심 간격이 w + c가 되기 전에는 방법별 추종 속도를 쓴다.
-6. tracker는 헤딩이 통로와 나란하다고 가정한다. 측면 추적의 y_B는 보이는 면 중앙이라 최대 w/2 치우친다.
-7. `exp_planner`가 매 scan에 부를 순서는 `sim/mujoco_overtake/sim.py`의 `Car.perceive` / `Sim.frame`과 같다: `tracker.update(points, t, v_E, corridor.ego_lateral, W)` → `corridor.update(points, track.idx)` → `fsm.step(Obs(...))` → `lateral.step(ego_lateral, y_ref, dt, corridor.heading)`. PASS·MERGE에서는 `update_side`. 선행차는 후방 추적이 끊기면 `update_side`로 옆에 온 후행차 점을 벽 계산에서 뺀다. 2단계의 "차량이 아닌 정지 물체 → STOP"은 아직 없다.
+6. tracker는 헤딩이 통로와 나란하다고 가정한다. 측면 추적의 y_B는 선행차가 앞에 있으면 뒷면 중앙, 옆에 있으면 가까운 옆면에서 w/2 안쪽.
+7. `exp_planner`가 매 scan에 부를 순서는 `sim/mujoco_overtake/sim.py`의 `Car.perceive` / `Sim._ego_frame` / `Sim._leader_frame`과 같다: `tracker.update(points, t, v_E, corridor.ego_lateral, W)` → `corridor.update(points, track.idx)` → `fsm.step(Obs(...))` → `lateral.step(ego_lateral, y_ref, dt, corridor.heading)`. PASS·MERGE에서는 `update_side`. 선행차는 후방 추적이 끊기면 `update_side`로 옆에 온 후행차 점을 벽 계산에서 뺀다. 2단계의 "차량이 아닌 정지 물체 → STOP"은 아직 없다.
 8. 기획안 PDF와 지시서는 커밋하지 않는다 (`.gitignore`: `CLAUDE_TASK.md`, `docs/*.pdf`, `docs/CLAUDE_TASK*.md`).
 9. exp/occlusion-speed 자산(`scripts/bag_player.py`, `analysis/bag_io.py`, `scripts/env_ego.sh`)은 쓰는 단계에서만 `git checkout origin/exp/occlusion-speed -- <path>`로 가져온다. 아직 안 가져왔다.

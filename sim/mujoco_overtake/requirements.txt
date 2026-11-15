@@ -2,3 +2,4 @@
 mujoco==3.12.0
 numpy==2.5.4
 PyYAML==6.0.3
+pytest==9.2.0           # sim/mujoco_overtake/test_sim.py
