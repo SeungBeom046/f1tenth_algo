@@ -1,0 +1,68 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid (1 m)
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 20
+      Reference Frame: base_link
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Names: true
+      Marker Scale: 0.3
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Livox 점군 (TBD 세션 1 토픽)
+      Enabled: true
+      Topic:
+        Value: /livox/lidar
+        Reliability Policy: Best Effort
+      Size (m): 0.02
+      Style: Points
+      Color Transformer: AxisColor
+      Axis: Z
+    - Class: rviz_default_plugins/LaserScan
+      Name: /scan (AEB·조향)
+      Enabled: false
+      Topic:
+        Value: /scan
+        Reliability Policy: Best Effort
+      Size (m): 0.03
+    - Class: rviz_default_plugins/Map
+      Name: 점유격자 /exp/grid
+      Enabled: true
+      Topic:
+        Value: /exp/grid
+      Color Scheme: map
+      Alpha: 0.6
+    - Class: rviz_default_plugins/GridCells
+      Name: 가림 경계 /exp/boundary
+      Enabled: true
+      Topic:
+        Value: /exp/boundary
+      Color: 255; 170; 0
+    - Class: rviz_default_plugins/MarkerArray
+      Name: phantom /exp/phantoms
+      Enabled: true
+      Topic:
+        Value: /exp/phantoms
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 48; 48; 48
+    Frame Rate: 30
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Current View
+      Scale: 80
+      X: 3
+      Y: 0
+Window Geometry:
+  Width: 1400
+  Height: 900

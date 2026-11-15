@@ -4,10 +4,10 @@
 아래 결과 표는 표마다 적힌 커밋 기준이다. 리팩터링(682bfdc)은 동작을 바꾸지 않았다.
 
 ## 현재 상태 (2026-11-15)
-- 끝낸 것: 지시서 0·1단계 (`my_algo/aur/` 순수 모듈), 2단계의 순수 부분 (`lateral.py`), 5단계 중 (a) 기하 AEB (`aeb.py` `model='geometric'`), 9단계를 대신하는 MuJoCo 시뮬 (`sim/mujoco_overtake/`), 정리·리팩터링·문서 (A0~A3).
+- 끝낸 것: 지시서 0·1단계 (`my_algo/aur/` 순수 모듈), 2단계의 순수 부분 (`lateral.py`), 5단계 중 (a) 기하 AEB (`aeb.py` `model='geometric'`), 9단계를 대신하는 MuJoCo 시뮬 (`sim/aur_overtake/`), 정리·리팩터링·문서 (A0~A3).
 - 남은 지시서 단계: 3 `exp_planner` 노드, 4 속도 소스 `/sensors/core`, 5 (b) relative AEB와 `autonomous_drive`의 AEB model 파라미터, 6 비상정지 heartbeat, 7 실험 launch·`config/*.yaml` 설치, 8 기록·분석 스크립트, 10 실험 문서 `docs/EXP_AUR.md`.
-- 흐름 전체: `docs/PIPELINE.md`. 시뮬 사용법: `sim/mujoco_overtake/README.md`.
-- 동작 기준선: `sim/mujoco_overtake/baseline.py` (252회, 스텝 로그 해시). A2 리팩터링 전후 0회 다름. 기본 주행은 `scripts/verify_refactor_offline.py --baseline b054758` 14268개 일치.
+- 흐름 전체: `docs/PIPELINE.md`. 시뮬 사용법: `sim/aur_overtake/README.md`.
+- 동작 기준선: `sim/aur_overtake/baseline.py` (252회, 스텝 로그 해시). A2 리팩터링 전후 0회 다름. 기본 주행은 `scripts/verify_refactor_offline.py --baseline b054758` 14268개 일치.
 
 ## 열린 문제 (다음 작업 B, 사용자 지시 2026-11-15)
 1. **ego 차선 변경 중 벽 교착** (기하 AEB): 차선 변경 중 ego가 10~15° 틀어지면 1.5 m/s의 TTC 한계(0.52 m) 안에 벽이 들어와 AEB가 서고, 벽을 향한 채 0.25 m 안에 벽이 남아 다시 출발하지 못한다. W가 넓을수록 심하다 (W 1.1·1.2에서 방법 d Y 20/20 교착). 수정 계획: AEB 검사 띠를 현재 조향 명령 경로를 따라 휘게 (tracker 무관 유지) + 차선 변경 중에는 추종 속도.
@@ -24,7 +24,7 @@
 
 ## B 진행 (2026-11-15)
 - **B1 (a8f4193)**: 기하 AEB 띠를 조향 원호로 휨 + 차선 변경 중 추종 속도. 교착 6~20/20 → 0. 대신 Y 실패가 전부 추월 오판 중단(pass_abort)으로 옮겨갔다 (W 1.0·1.2, 방법 d). NY는 변화 없음. `test_proposed_passes_yielding_leader`는 strict xfail로 표시.
-- **B2 (θ·T 조정) 구현 안 함**: `sim/mujoco_overtake/analysis/yb_bias.py` 측정. Y의 가짜 복귀 상승 최대 0.162 m, YR의 실제 복귀는 복귀 명령 후 1.5 s까지 반대로 움직이고 3 s에 +0.16 m. θ 0.16~0.20, T 0.3 s에서 오판 0·감지 74/74이지만 감지 → 겹침 여유 최소 0.0~0.1 s. 판단 기준을 "복귀했나" → "왼쪽으로 지날 횡 여유가 있나"로 바꾸기로 결정.
+- **B2 (θ·T 조정) 구현 안 함**: `sim/aur_overtake/analysis/yb_bias.py` 측정. Y의 가짜 복귀 상승 최대 0.162 m, YR의 실제 복귀는 복귀 명령 후 1.5 s까지 반대로 움직이고 3 s에 +0.16 m. θ 0.16~0.20, T 0.3 s에서 오판 0·감지 74/74이지만 감지 → 겹침 여유 최소 0.0~0.1 s. 판단 기준을 "복귀했나" → "왼쪽으로 지날 횡 여유가 있나"로 바꾸기로 결정.
 - **y_L (67b1f74)**: 선행차 왼쪽 모서리 추정과 `lateral_ref` 플래그 (기본 center). 측정 결과 y_B보다 편향이 크다:
 
 | 추정량 | 방법 | W | 추정 − 참값: 최소 / 5% / 95% / 최대 [m] | 가짜 상승 최대 / 95% [m] |
@@ -112,7 +112,7 @@ survival은 1을 망원급수 형태로, 2를 누적 변위 임계값과 t_react
 
 위 표는 t_react = 0일 때다. t_react = 1.3 s(현재 기본값)로는 survival c·d 모두 200/200 (이 테스트의 선행차는 지연 없이 0.4 m/s로 비키므로 기다리면 다 잡는다).
 
-MuJoCo 시뮬 (`python sim/mujoco_overtake/batch.py belief`, W = 1.0, 같은 d_y 표본, t_react = 1.3 s):
+MuJoCo 시뮬 (`python sim/aur_overtake/batch.py belief`, W = 1.0, 같은 d_y 표본, t_react = 1.3 s):
 
 | belief | 방법 | 성공 | belief 오판 | T_wait_a | T_max | 추적 끊김 | 충돌 | 기타 | d_y 0.6~0.7 | 0.7~0.8 | 0.8~0.9 | 0.9~1.0 | 1.0~1.1 | 1.1~1.2 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -166,7 +166,7 @@ c와 d가 같은 것은 이 테스트가 참값 관측·무잡음이라 접근 �
 | 1.2 | TTC 0.35 | d | Y | 0 | 20 | 0 | 0 | 1.00 | 0 | −0.123 | - |
 | 1.1·1.2 | 모든 조건 | c·d | NY | c 0~15 충돌, d 0 | 0 | | 0 | | 0 | | d 20/20 |
 
-전체 표: `python sim/mujoco_overtake/batch.py aeb` (W 1.0/1.1/1.2 × TTC 0.35/0.55/속도 모름 × c·d × Y/NY).
+전체 표: `python sim/aur_overtake/batch.py aeb` (W 1.0/1.1/1.2 × TTC 0.35/0.55/속도 모름 × c·d × Y/NY).
 
 - **선행차는 더 이상 벽에서 서지 않는다** (선행차 N_AEB 0, 모든 조건). 띠 ±0.16 < 벽 여유 0.235.
 - **ego가 차선 변경 중 벽을 본다.** 차선 변경 중 ego가 10~15° 틀어지면 1.5 m/s의 TTC 한계(0.52 m) 안에 벽이 들어와 AEB가 선다. 벽을 향한 채 서면 고정 거리 0.25 m 안에 벽이 남아 다시 출발하지 못한다 (교착). W가 넓을수록 차선 이동 폭(2δ)과 yaw가 커져 W 1.1·1.2에서는 방법 d의 Y가 거의 전부 교착이다. `y_ref_rate`를 0.2로 낮춰도 10회 중 4회 교착, 0.1이면 deadband 때문에 아예 차선을 안 바꾼다.
@@ -275,13 +275,13 @@ AEB 없음:
 - 원래 체크아웃 `my_algo`의 미커밋 변경(`.gitignore`, `config/imu.yaml`)은 시뮬 파일이 아니며 건드리지 않았다.
 
 ## 다음 세션이 알아야 할 결정사항
-1. 작업 위치는 worktree `f1tenth_gym_ros/my_algo_aur`. 원래 체크아웃 `my_algo`(sim/mujoco, 미커밋 변경 있음)는 건드리지 않는다. 테스트는 Python 3.8 환경으로 `python -m pytest -q` (Mac 기본 python에는 pytest 없음). 시뮬은 Python 3.12 + `sim/mujoco_overtake/requirements.txt`.
+1. 작업 위치는 worktree `f1tenth_gym_ros/my_algo_aur`. 원래 체크아웃 `my_algo`(sim/mujoco, 미커밋 변경 있음)는 건드리지 않는다. 테스트는 Python 3.8 환경으로 `python -m pytest -q` (Mac 기본 python에는 pytest 없음). 시뮬은 Python 3.12 + `sim/aur_overtake/requirements.txt`.
    이 Mac의 `/usr/bin/git`은 Xcode 라이선스 미동의로 막혀 있다 (2026-11-15). Claude 세션은 scratchpad conda 환경의 git을 썼다. 회귀 테스트가 내부에서 `git`을 부르므로, git이 안 되면 `test_drive_regression`이 skip된다.
 2. 함수는 파라미터 객체 `p`(AurParams)를 마지막 인자로 받는다. 조정은 `config/exp_common.yaml`(TUNE 태그)에서 하고 `params.py` 기본값과 같아야 한다 (테스트, 예외는 `EXPERIMENT_OVERRIDES`). 값·태그를 바꾸면 `python3 scripts/gen_tuning_doc.py`로 `docs/TUNING.md`를 다시 만든다 (테스트가 최신 여부를 확인).
 3. 판단은 APPROACH·PROBE 모두에서 하고 처음 넘은 쪽으로 고정(`fsm.decided`). PROBE 진입은 `d ≤ d_ref + probe_tol`. T_wait_a·T_max는 PROBE 진입부터 센다.
 4. 최소 속도 hold는 히스테리시스(켜짐 v_E > 0.35, 꺼짐 < 0.25, 임시값)로 달리는 중에만 한다. `hold_count`는 분기 진입 횟수.
 5. PASS에서 선행차와 중심 간격이 w + c가 되기 전에는 방법별 추종 속도를 쓴다.
 6. tracker는 헤딩이 통로와 나란하다고 가정한다. 측면 추적의 y_B는 선행차가 앞에 있으면 뒷면 중앙, 옆에 있으면 가까운 옆면에서 w/2 안쪽.
-7. `exp_planner`가 매 scan에 부를 순서는 `sim/mujoco_overtake/sim.py`의 `Car.perceive` / `Sim._ego_frame` / `Sim._leader_frame`과 같다: `tracker.update(points, t, v_E, corridor.ego_lateral, W)` → `corridor.update(points, track.idx)` → `fsm.step(Obs(...))` → `lateral.step(ego_lateral, y_ref, dt, corridor.heading)`. PASS·MERGE에서는 `update_side`. 선행차는 후방 추적이 끊기면 `update_side`로 옆에 온 후행차 점을 벽 계산에서 뺀다. 2단계의 "차량이 아닌 정지 물체 → STOP"은 아직 없다.
+7. `exp_planner`가 매 scan에 부를 순서는 `sim/aur_overtake/sim.py`의 `Car.perceive` / `Sim._ego_frame` / `Sim._leader_frame`과 같다: `tracker.update(points, t, v_E, corridor.ego_lateral, W)` → `corridor.update(points, track.idx)` → `fsm.step(Obs(...))` → `lateral.step(ego_lateral, y_ref, dt, corridor.heading)`. PASS·MERGE에서는 `update_side`. 선행차는 후방 추적이 끊기면 `update_side`로 옆에 온 후행차 점을 벽 계산에서 뺀다. 2단계의 "차량이 아닌 정지 물체 → STOP"은 아직 없다.
 8. 기획안 PDF와 지시서는 커밋하지 않는다 (`.gitignore`: `CLAUDE_TASK.md`, `docs/*.pdf`, `docs/CLAUDE_TASK*.md`).
 9. exp/occlusion-speed 자산(`scripts/bag_player.py`, `analysis/bag_io.py`, `scripts/env_ego.sh`)은 쓰는 단계에서만 `git checkout origin/exp/occlusion-speed -- <path>`로 가져온다. 아직 안 가져왔다.

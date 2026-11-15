@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from my_algo.aeb import AEBSafetyModel                 # noqa: E402
-from my_algo.vehicle_utils import ReactiveDriveCommand  # noqa: E402
+from my_algo.baseline.aeb import AEBSafetyModel                 # noqa: E402
+from my_algo.baseline.vehicle_utils import ReactiveDriveCommand  # noqa: E402
 
 
 def scan_with_point(x_bumper, y, lidar_to_bumper=0.30, n=1440):

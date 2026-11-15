@@ -35,7 +35,7 @@ def test_drive_outputs_match_pre_refactor_main():
 def test_min_speed_rule_unchanged():
     # 합성 입력은 최소 속도 클램프 구간을 거의 지나지 않아 회귀 비교로는 못 잡는다. 값을 직접 고정한다.
     sys.path.insert(0, REPO)
-    from my_algo import vehicle_utils as vu
+    from my_algo.baseline import vehicle_utils as vu
 
     assert (vu.MIN_DRIVING_RPM, vu.CRUISE_RPM, vu.MAX_RPM, vu.ERPM_GAIN) == (4000.0, 5740.0, 12000.0, 4614.0)
     assert vu.sanitize_rpm(0.0) == 0.0
@@ -48,7 +48,7 @@ def test_min_speed_rule_unchanged():
 
 def test_log_effective_parameters_prints_every_value():
     sys.path.insert(0, REPO)
-    from my_algo.vehicle_utils import log_effective_parameters
+    from my_algo.baseline.vehicle_utils import log_effective_parameters
 
     lines = []
     node = types.SimpleNamespace(

@@ -87,41 +87,41 @@
 | config/exp_common.yaml | 91 | `brake_delay_min` | 0.5 | s | 급정지 지연 최소 | 기획안 | 급정지 시점 난수 범위 | 0.5 |
 | config/exp_common.yaml | 92 | `brake_delay_max` | 2.0 | s | 급정지 지연 최대 | 기획안 | 급정지 시점 난수 범위 | 2.0 |
 | config/exp_common.yaml | 93 | `start_gap_margin` | 0.2 | m | t0에서 d_rear < d_y_max + 이 값이면 경고 | 기획안 | 출발 간격 경고 기준 | 0.2 |
-| sim/mujoco_overtake/scenario.yaml | 4 | `dt` | 0.01 | s | 시뮬 고정 스텝 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 5 | `max_time` | 25.0 | s | 회차 최대 시간 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 6 | `end_after_done` | 1.0 | s | DONE 또는 FOLLOW 후 정지 뒤 이만큼 더 돌고 끝 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 8 | `t_d` | 0.25 | s | 시뮬 차량의 명령 → 감속 지연 = 구동 지연 t_r 0.15 + 1차 지연 tau 0.10 (scan 주기 Δ는 scan_period로 따로 더해진다) | 임시 (시뮬 모델에서 계산) | 키우면 d_safe·d*가 커지고 v_lim이 작아진다. AEB(relative)와 같이 쓴다 | 0.10~0.30 |
-| sim/mujoco_overtake/scenario.yaml | 10 | `W` | 1.0 | m | 통로 폭 (추월 차선 벽 거리 = w/2 + c = 0.235 m) | 임시 (기획안 조건 0.8/1.0/1.3) | null이면 scan 추정. 고정하면 벽 제거와 δ가 흔들리지 않는다 | 0.84~1.3 (실측) |
-| sim/mujoco_overtake/scenario.yaml | 11 | `x_start` | -2.0 | m | 통로 뒤 끝 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 12 | `x_end` | 30.0 | m | 통로 앞 끝 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 13 | `wall_height` | 0.5 | m | 벽 높이 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 15 | `gap0` | 1.5 | m | 출발 시 ego 앞범퍼 → 선행차 뒷면 | 기획안 (초기 간격 1.5 m 이상) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 16 | `ego_delay` | 0.0 | s | ego 출발 지연 (출발 시각 편차) | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 17 | `leader_delay` | 0.0 | s | 선행차 출발 지연 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 19 | `behavior` | Y | - | 선행차 행동 Y(양보) / NY(비양보, 급정지) / YR(양보 후 복귀) | 기획안 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 20 | `d_y` | null | m | 양보 반응 거리, null이면 seed로 U[d_y_min, d_y_max] | 기획안 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 21 | `return_after` | 1.5 | s | (YR) 양보 시작 후 복귀까지. 후행차가 이미 옆에 온 뒤 복귀하는 경우는 실차 선행차가 하지 않는 시뮬 전용 시나리오 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 22 | `fix_W` | true | - | 선행차에 실측 W(= track.W)를 준다 (W_leader). 끄면 scan 추정 | 임시 (2026-11-15 승인) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 23 | `yield_yaw_deg` | null | deg | 양보 중 차체 yaw 고정값, null이면 선행차 횡 제어기가 정한다 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 24 | `yield_lat_speed` | 0.4 | m/s | (yield_yaw_deg 지정 시) 횡 이동 속도 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 26 | `length` | 0.50 | m | 차 길이 (뒤축→앞 0.41 + 뒤축→뒤 0.09) | 측정 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 27 | `rear_overhang` | 0.09 | m | 뒤축 → 뒤 끝 | 측정 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 28 | `height` | 0.25 | m | 차체 높이 (라이다 광선에 걸려야 한다) | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 29 | `wheelbase` | 0.33 | m | 휠베이스 | 측정 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 30 | `t_r` | 0.15 | s | 구동 지연 (AurParams.t_d와 같은 가정) | 기획안 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 31 | `tau` | 0.10 | s | 속도 1차 지연 시정수 | 임시 (예전 시뮬 가정값) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 32 | `a_max` | 2.5 | m/s^2 | 최대 가속 | 임시 (예전 시뮬 가정값) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 33 | `a_b` | 3.0 | m/s^2 | 최대 감속 (AurParams.a_brake와 같은 가정) | 기획안 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 34 | `steer_rate` | 6.0 | rad/s | 조향각 변화율 한계 | 임시 (예전 시뮬 가정값) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 36 | `enabled` | true | - | AEB 켜기 | 측정 (실차 구성) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 37 | `model` | geometric | - | legacy(기존 주행) / geometric(추월 실험 1층: 좁은 띠 + 속도 TTC, tracker 무관) | 임시 (2026-11-15 결정) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 38 | `speed_source` | measured | - | AEB 속도 입력 measured(4단계 /sensors/core) / unknown(속도 없음 → geometric은 고정 거리) / zero(legacy에 0) | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 39 | `curved_band` | true | - | geometric AEB 검사 띠를 조향 명령 원호를 따라 휜다 (false = 직선 띠) | 임시 (2026-11-15 B1) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 40 | `ttc_threshold` | 0.35 | s | TTC 임계 (한계 = 속도 × 이 값). d* = 0.425 m(v 0.9)보다 작아야 정상 추종에서 안 걸린다: < 0.47 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 41 | `hz` | 50.0 | Hz | autonomous_drive 제어 주기 | 측정 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 42 | `path_margin` | 0.01 | m | AEB 검사 띠 = 차 중심 ±(0.15 + 이 값) = ±0.16. 추월 차선 벽 여유 0.235 m보다 작아야 한다 (launch 값 0.15) | 임시 (2026-11-15 결정) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 43 | `bumper_emergency_distance` | 0.25 | m | AEB 고정 정지 거리 | 측정 (launch 값) | - | - |
-| sim/mujoco_overtake/scenario.yaml | 45 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 46 | `rays_per_frame` | 1440 | 개 | 광선 수 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 48 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
-| sim/mujoco_overtake/scenario.yaml | 53 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
+| sim/aur_overtake/scenario.yaml | 4 | `dt` | 0.01 | s | 시뮬 고정 스텝 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 5 | `max_time` | 25.0 | s | 회차 최대 시간 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 6 | `end_after_done` | 1.0 | s | DONE 또는 FOLLOW 후 정지 뒤 이만큼 더 돌고 끝 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 8 | `t_d` | 0.25 | s | 시뮬 차량의 명령 → 감속 지연 = 구동 지연 t_r 0.15 + 1차 지연 tau 0.10 (scan 주기 Δ는 scan_period로 따로 더해진다) | 임시 (시뮬 모델에서 계산) | 키우면 d_safe·d*가 커지고 v_lim이 작아진다. AEB(relative)와 같이 쓴다 | 0.10~0.30 |
+| sim/aur_overtake/scenario.yaml | 10 | `W` | 1.0 | m | 통로 폭 (추월 차선 벽 거리 = w/2 + c = 0.235 m) | 임시 (기획안 조건 0.8/1.0/1.3) | null이면 scan 추정. 고정하면 벽 제거와 δ가 흔들리지 않는다 | 0.84~1.3 (실측) |
+| sim/aur_overtake/scenario.yaml | 11 | `x_start` | -2.0 | m | 통로 뒤 끝 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 12 | `x_end` | 30.0 | m | 통로 앞 끝 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 13 | `wall_height` | 0.5 | m | 벽 높이 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 15 | `gap0` | 1.5 | m | 출발 시 ego 앞범퍼 → 선행차 뒷면 | 기획안 (초기 간격 1.5 m 이상) | - | - |
+| sim/aur_overtake/scenario.yaml | 16 | `ego_delay` | 0.0 | s | ego 출발 지연 (출발 시각 편차) | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 17 | `leader_delay` | 0.0 | s | 선행차 출발 지연 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 19 | `behavior` | Y | - | 선행차 행동 Y(양보) / NY(비양보, 급정지) / YR(양보 후 복귀) | 기획안 | - | - |
+| sim/aur_overtake/scenario.yaml | 20 | `d_y` | null | m | 양보 반응 거리, null이면 seed로 U[d_y_min, d_y_max] | 기획안 | - | - |
+| sim/aur_overtake/scenario.yaml | 21 | `return_after` | 1.5 | s | (YR) 양보 시작 후 복귀까지. 후행차가 이미 옆에 온 뒤 복귀하는 경우는 실차 선행차가 하지 않는 시뮬 전용 시나리오 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 22 | `fix_W` | true | - | 선행차에 실측 W(= track.W)를 준다 (W_leader). 끄면 scan 추정 | 임시 (2026-11-15 승인) | - | - |
+| sim/aur_overtake/scenario.yaml | 23 | `yield_yaw_deg` | null | deg | 양보 중 차체 yaw 고정값, null이면 선행차 횡 제어기가 정한다 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 24 | `yield_lat_speed` | 0.4 | m/s | (yield_yaw_deg 지정 시) 횡 이동 속도 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 26 | `length` | 0.50 | m | 차 길이 (뒤축→앞 0.41 + 뒤축→뒤 0.09) | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 27 | `rear_overhang` | 0.09 | m | 뒤축 → 뒤 끝 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 28 | `height` | 0.25 | m | 차체 높이 (라이다 광선에 걸려야 한다) | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 29 | `wheelbase` | 0.33 | m | 휠베이스 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 30 | `t_r` | 0.15 | s | 구동 지연 (AurParams.t_d와 같은 가정) | 기획안 | - | - |
+| sim/aur_overtake/scenario.yaml | 31 | `tau` | 0.10 | s | 속도 1차 지연 시정수 | 임시 (예전 시뮬 가정값) | - | - |
+| sim/aur_overtake/scenario.yaml | 32 | `a_max` | 2.5 | m/s^2 | 최대 가속 | 임시 (예전 시뮬 가정값) | - | - |
+| sim/aur_overtake/scenario.yaml | 33 | `a_b` | 3.0 | m/s^2 | 최대 감속 (AurParams.a_brake와 같은 가정) | 기획안 | - | - |
+| sim/aur_overtake/scenario.yaml | 34 | `steer_rate` | 6.0 | rad/s | 조향각 변화율 한계 | 임시 (예전 시뮬 가정값) | - | - |
+| sim/aur_overtake/scenario.yaml | 36 | `enabled` | true | - | AEB 켜기 | 측정 (실차 구성) | - | - |
+| sim/aur_overtake/scenario.yaml | 37 | `model` | geometric | - | legacy(기존 주행) / geometric(추월 실험 1층: 좁은 띠 + 속도 TTC, tracker 무관) | 임시 (2026-11-15 결정) | - | - |
+| sim/aur_overtake/scenario.yaml | 38 | `speed_source` | measured | - | AEB 속도 입력 measured(4단계 /sensors/core) / unknown(속도 없음 → geometric은 고정 거리) / zero(legacy에 0) | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 39 | `curved_band` | true | - | geometric AEB 검사 띠를 조향 명령 원호를 따라 휜다 (false = 직선 띠) | 임시 (2026-11-15 B1) | - | - |
+| sim/aur_overtake/scenario.yaml | 40 | `ttc_threshold` | 0.35 | s | TTC 임계 (한계 = 속도 × 이 값). d* = 0.425 m(v 0.9)보다 작아야 정상 추종에서 안 걸린다: < 0.47 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 41 | `hz` | 50.0 | Hz | autonomous_drive 제어 주기 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 42 | `path_margin` | 0.01 | m | AEB 검사 띠 = 차 중심 ±(0.15 + 이 값) = ±0.16. 추월 차선 벽 여유 0.235 m보다 작아야 한다 (launch 값 0.15) | 임시 (2026-11-15 결정) | - | - |
+| sim/aur_overtake/scenario.yaml | 43 | `bumper_emergency_distance` | 0.25 | m | AEB 고정 정지 거리 | 측정 (launch 값) | - | - |
+| sim/aur_overtake/scenario.yaml | 45 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 46 | `rays_per_frame` | 1440 | 개 | 광선 수 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 48 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 53 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |

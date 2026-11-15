@@ -65,15 +65,15 @@ autonomous_metrics_logger ─ logs/*.csv
 
 | 파일 | 역할 |
 |---|---|
-| `my_algo/lidar_reactive_drive.py` | scan → 주행 모드 선택 → 조향·RPM 계획 |
-| `my_algo/autonomous_drive.py` | planner 명령 선택, AEB 검사, VESC 명령 발행 |
-| `my_algo/aeb.py` | TTC·제동거리 기반 긴급 정지 판정 |
-| `my_algo/vehicle_utils.py` | RPM·서보 변환, 최소 속도 규칙, 공통 유틸 |
-| `my_algo/joy_controller.py` | 수동 주행·AUTO 토글·B 비상 정지 (현재 launch에서 꺼짐) |
-| `my_algo/camera_reactive_drive.py` | D455 YOLO·거리·차선·AEB overlay |
-| `my_algo/autonomous_metrics_logger.py` | AUTO 구간 trial 기록 |
+| `my_algo/baseline/lidar_reactive_drive.py` | scan → 주행 모드 선택 → 조향·RPM 계획 |
+| `my_algo/baseline/autonomous_drive.py` | planner 명령 선택, AEB 검사, VESC 명령 발행 |
+| `my_algo/baseline/aeb.py` | TTC·제동거리 기반 긴급 정지 판정 |
+| `my_algo/baseline/vehicle_utils.py` | RPM·서보 변환, 최소 속도 규칙, 공통 유틸 |
+| `my_algo/baseline/joy_controller.py` | 수동 주행·AUTO 토글·B 비상 정지 (현재 launch에서 꺼짐) |
+| `my_algo/baseline/camera_reactive_drive.py` | D455 YOLO·거리·차선·AEB overlay |
+| `my_algo/baseline/autonomous_metrics_logger.py` | AUTO 구간 trial 기록 |
 
-## 속도 상수 (`my_algo/vehicle_utils.py`)
+## 속도 상수 (`my_algo/baseline/vehicle_utils.py`)
 
 ```text
 ERPM_GAIN       = 4614    ERPM = m/s × 4614

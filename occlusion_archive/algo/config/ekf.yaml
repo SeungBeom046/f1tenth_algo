@@ -1,0 +1,29 @@
+# 선택 옵션 (tf.launch.py use_ekf:=true). 휠 odom + IMU yaw rate만 융합, 가속도는 쓰지 않는다.
+# 켜면 이 노드가 odom -> base_link TF를 발행하므로 vesc_to_odom의 publish_tf는 false여야 한다.
+ekf_odom:
+  ros__parameters:
+    frequency: 50.0
+    two_d_mode: true
+    publish_tf: true
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom
+
+    # 순서: x y z / roll pitch yaw / vx vy vz / vroll vpitch vyaw / ax ay az
+    odom0: /vesc/odom                 # launch 인자 odom_topic으로 덮어씀
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  true,  false,
+                   false, false, false,
+                   false, false, false]
+    odom0_differential: false
+
+    imu0: /imu                        # launch 인자 imu_topic으로 덮어씀
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    imu0_differential: false
+    imu0_remove_gravitational_acceleration: false

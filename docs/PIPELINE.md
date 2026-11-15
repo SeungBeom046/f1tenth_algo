@@ -22,7 +22,7 @@ flowchart LR
 
 - `exp_planner`는 기본 주행의 `lidar_reactive_drive`를 대체한다 (같은 토픽·JSON 형식). `autonomous_drive`와 AEB 경로는 그대로 쓴다.
 - 두 차는 서로 다른 `ROS_DOMAIN_ID`를 쓴다 (통신 없음).
-- 시뮬(`sim/mujoco_overtake/sim.py`)은 같은 순서를 한 프로세스에서 흉내 낸다: `Car.perceive` → `Sim._ego_frame` / `_leader_frame` (= exp_planner), `Car.control` (= autonomous_drive).
+- 시뮬(`sim/aur_overtake/sim.py`)은 같은 순서를 한 프로세스에서 흉내 낸다: `Car.perceive` → `Sim._ego_frame` / `_leader_frame` (= exp_planner), `Car.control` (= autonomous_drive).
 
 ## 2. 모듈 파이프라인 (scan 한 프레임)
 
@@ -53,7 +53,7 @@ flowchart TD
 | 4 판단 | `my_algo/aur/leader_logic.py` `Leader.step` | (선행차) 후방 d_rear → (속도, 횡 목표) |
 | 5 종 | `my_algo/aur/speed.py` `min_speed_rule` | 0 < v < v_min(0.867)이면 h ≥ ε이고 달리는 중일 때만 v_min, 아니면 0 |
 | 5 횡 | `my_algo/aur/lateral.py` `Lateral.step` | ego_lateral, y_ref, 헤딩 → 조향 (오차 2(y_ref − y), 저역 필터, P + 헤딩 감쇠, deadband, rate limit). y_ref는 0.4 m/s 기울기 제한 |
-| 6 AEB | `my_algo/aeb.py` `AEBSafetyModel.check_emergency_braking` | scan, 속도, 명령 → 긴급 정지 여부 |
+| 6 AEB | `my_algo/baseline/aeb.py` `AEBSafetyModel.check_emergency_braking` | scan, 속도, 명령 → 긴급 정지 여부 |
 | 공통 | `my_algo/aur/params.py` `AurParams`, `load_params` | `config/exp_common.yaml` (+ 시뮬 `scenario.yaml`의 `params`) |
 
 ## 3. 후행차 상태 기계 (`ego_fsm.py`)
@@ -123,7 +123,7 @@ t_d' = t_d + Δ (Δ = `scan_period`, 기획안 변경):
 
 안전 판정 지표: 급정지 전 h_min, 급정지 후 정지 간격 ≥ m.
 
-## 6. AEB 2층 구조 (`my_algo/aeb.py`)
+## 6. AEB 2층 구조 (`my_algo/baseline/aeb.py`)
 
 | 층 | 상태 | 대상 | 판정 |
 |---|---|---|---|

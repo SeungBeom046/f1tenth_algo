@@ -26,9 +26,9 @@ import subprocess
 import sys
 import tempfile
 
-PKG_FILES = ['my_algo/__init__.py', 'my_algo/vehicle_utils.py', 'my_algo/aeb.py',
-             'my_algo/lidar_reactive_drive.py', 'my_algo/autonomous_drive.py',
-             'launch/lidar_drive.launch.py']
+# 주행 모듈 위치: b054758·refactor/main-baseline은 my_algo/, exp/aur-overtake(2026-11-15~)는 my_algo/baseline/.
+# 리비전마다 있는 쪽을 골라 같은 이름의 모듈을 비교한다.
+DRIVE_MODULES = ['vehicle_utils', 'aeb', 'lidar_reactive_drive', 'autonomous_drive']
 
 STUBS = {
     'rclpy/__init__.py': '''
@@ -127,8 +127,9 @@ def make(cls, overrides):
     return cls()
 
 with open(os.devnull, 'w') as devnull, contextlib.redirect_stdout(devnull):
-    import my_algo.lidar_reactive_drive as L
-    import my_algo.autonomous_drive as A
+    import importlib
+    L = importlib.import_module(sys.argv[6] + '.lidar_reactive_drive')   # my_algo 또는 my_algo.baseline
+    A = importlib.import_module(sys.argv[6] + '.autonomous_drive')
     planner = make(L.LidarReactiveDriveNode, params['lidar_reactive_drive'])
     drive = make(A.AutonomousDriveNode, params['autonomous_drive'])
 
@@ -252,23 +253,44 @@ def materialize(root, files):
             f.write(content)
 
 
+def _read(repo, rev, rel):
+    """rev = None이면 작업 트리. 없으면 None."""
+    if rev is None:
+        path = os.path.join(repo, rel)
+        if not os.path.exists(path):
+            return None
+        with open(path, encoding='utf-8') as f:
+            return f.read()
+    try:
+        return subprocess.check_output(['git', '-C', repo, 'show', f'{rev}:{rel}'], text=True,
+                                       stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        return None
+
+
 def version_files(repo, rev):
+    """반환: (파일 dict, 주행 모듈 import 접두어)."""
+    if _read(repo, rev, 'my_algo/baseline/lidar_reactive_drive.py') is not None:
+        sub, prefix = 'my_algo/baseline/', 'my_algo.baseline'
+        rels = ['my_algo/__init__.py', 'my_algo/baseline/__init__.py']
+    else:
+        sub, prefix = 'my_algo/', 'my_algo'
+        rels = ['my_algo/__init__.py']
+    rels += [sub + m + '.py' for m in DRIVE_MODULES] + ['launch/lidar_drive.launch.py']
     out = {}
-    for rel in PKG_FILES:
-        if rev is None:
-            with open(os.path.join(repo, rel), encoding='utf-8') as f:
-                out[rel] = f.read()
-        else:
-            out[rel] = subprocess.check_output(['git', '-C', repo, 'show', f'{rev}:{rel}'],
-                                               text=True)
-    return out
+    for rel in rels:
+        text = _read(repo, rev, rel)
+        if text is None:
+            raise FileNotFoundError(f'{rev or "작업 트리"}: {rel}')
+        out[rel] = text
+    return out, prefix
 
 
-def run(stub_dir, pkg_dir, params_path, seed):
+def run(stub_dir, pkg_dir, params_path, seed, prefix):
     runner = os.path.join(stub_dir, 'runner.py')
     out_path = f'{params_path}.{seed}.out.json'
     res = subprocess.run([sys.executable, '-I', runner, stub_dir, pkg_dir, params_path, str(seed),
-                          out_path], capture_output=True, text=True)
+                          out_path, prefix], capture_output=True, text=True)
     if res.returncode != 0:
         raise RuntimeError(res.stderr)
     with open(out_path, encoding='utf-8') as f:
@@ -287,14 +309,15 @@ def main():
         materialize(stub_dir, dict(STUBS, **{'runner.py': RUNNER}))
         versions = {}
         for label, rev in (('baseline', args.baseline), ('current', None)):
-            files = version_files(repo, rev)
+            files, prefix = version_files(repo, rev)
             pkg = os.path.join(tmp, label)
             materialize(pkg, files)
             params = launch_params(files['launch/lidar_drive.launch.py'])
             ppath = os.path.join(tmp, f'{label}_params.json')
             with open(ppath, 'w') as f:
                 json.dump(params, f)
-            versions[label] = (pkg, ppath, params)
+            versions[label] = (pkg, ppath, params, prefix)
+            print(f'{label}: {rev or "작업 트리"}, 모듈 {prefix}.*')
 
         ok = True
         if versions['baseline'][2] != versions['current'][2]:
@@ -310,8 +333,8 @@ def main():
 
         total = 0
         for seed in range(args.seeds):
-            a = run(stub_dir, versions['baseline'][0], versions['baseline'][1], seed)
-            b = run(stub_dir, versions['current'][0], versions['current'][1], seed)
+            a = run(stub_dir, versions['baseline'][0], versions['baseline'][1], seed, versions['baseline'][3])
+            b = run(stub_dir, versions['current'][0], versions['current'][1], seed, versions['current'][3])
             total += len(a)
             topics = {}
             for t, _ in a:
