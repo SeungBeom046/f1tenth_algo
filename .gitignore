@@ -224,3 +224,6 @@ docs/CLAUDE_TASK*.md
 
 # 시뮬 결과 (다시 만들 수 있다)
 sim_logs/
+
+# macOS Finder 메타데이터
+.DS_Store
