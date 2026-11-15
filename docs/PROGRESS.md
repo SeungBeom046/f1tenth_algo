@@ -7,6 +7,7 @@
 - 끝낸 것: 지시서 0·1단계 (`my_algo/aur/` 순수 모듈), 2단계의 순수 부분 (`lateral.py`), 5단계 중 (a) 기하 AEB (`aeb.py` `model='geometric'`), 9단계를 대신하는 MuJoCo 시뮬 (`sim/aur_overtake/`), 정리·리팩터링·문서 (A0~A3).
 - 남은 지시서 단계: 3 `exp_planner` 노드, 4 속도 소스 `/sensors/core`, 5 (b) relative AEB와 `autonomous_drive`의 AEB model 파라미터, 6 비상정지 heartbeat, 7 실험 launch·`config/*.yaml` 설치, 8 기록·분석 스크립트, 10 실험 문서 `docs/EXP_AUR.md`.
 - 흐름 전체: `docs/PIPELINE.md`. 시뮬 사용법: `sim/aur_overtake/README.md`.
+- 폴더 구조 (2026-11-15, a452cc9): 기본 주행은 `my_algo/baseline/`, 추월 판단은 `my_algo/aur/`, 시뮬은 `sim/aur_overtake/`(예전 `sim/mujoco_overtake/`), 이전 연구는 `occlusion_archive/`(태그 `archive/occlusion-mujoco-20261110`에서 가져옴, 실행 대상 아님). ros2 실행 파일·launch 이름은 그대로. 이 파일의 예전 결과 표에 나오는 커밋 해시는 이동 전 경로 기준이다.
 - 동작 기준선: `sim/aur_overtake/baseline.py` (252회, 스텝 로그 해시). A2 리팩터링 전후 0회 다름. 기본 주행은 `scripts/verify_refactor_offline.py --baseline b054758` 14268개 일치.
 
 ## 열린 문제 (다음 작업 B, 사용자 지시 2026-11-15)

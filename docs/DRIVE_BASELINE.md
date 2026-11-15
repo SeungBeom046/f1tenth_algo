@@ -7,7 +7,7 @@
 - 차량: Jetson Orin Nano, ROS2 **Foxy**, Python 3.8
 - 주행 입력: Livox 점군 → `/scan`, VESC `/vesc/odom`. **IMU·TF는 쓰지 않는다.**
 - 카메라(RealSense D455)는 켜지지만 화면 표시만 한다. 제어 명령은 내지 않는다.
-- 이전 연구(관측 공백)는 이 브랜치에 없다. `archive/README.md` 참고.
+- 이전 연구(관측 공백)는 `occlusion_archive/README.md` (보관용, 실행 대상 아님).
 
 ## 실행
 
