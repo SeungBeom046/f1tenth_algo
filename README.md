@@ -43,6 +43,7 @@ archive/imu_tools/          쓰지 않는 IMU 단독 기록 도구 보관 (main 
 | [docs/TUNING.md](docs/TUNING.md) | 조정 파라미터 표 (`scripts/gen_tuning_doc.py`가 생성) |
 | [sim/aur_overtake/README.md](sim/aur_overtake/README.md) | 시뮬 환경 세팅, 뷰어, 일괄 실행, 옵션, 결과 읽는 법, 키 |
 | [my_algo/aur/README.md](my_algo/aur/README.md), [my_algo/baseline/README.md](my_algo/baseline/README.md) | 패키지 파일별 역할 |
+| [docs/JETSON.md](docs/JETSON.md) | Jetson에서 이 브랜치 받기·빌드·기본 주행 실행 |
 | [docs/DRIVE_BASELINE.md](docs/DRIVE_BASELINE.md) | 기본 주행 상세 (정지 수단, 파라미터, 알고리즘) |
 | [docs/OPEN_ITEMS.md](docs/OPEN_ITEMS.md), [docs/CLEANUP_REPORT.md](docs/CLEANUP_REPORT.md) | 기본 주행 리팩터링(refactor/main-baseline) 당시 기록 (경로는 그때 기준) |
 
