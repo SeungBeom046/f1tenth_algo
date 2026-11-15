@@ -7,13 +7,13 @@ package_name = 'my_algo'
 setup(
     name=package_name,
     version='0.0.0',
-    packages=[package_name],
+    packages=[package_name, package_name + '.aur'],     # my_algo.aur: 추월 실험 판단 로직 (rclpy 없음)
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch',
-            [f for f in glob('launch/*.launch.py') if not f.endswith('imu_motion.launch.py')]),
+            glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
