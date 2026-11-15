@@ -2,6 +2,8 @@
 
 scan_to_points는 [1 인지]의 입력 변환이다 (corridor도 이 점을 쓴다).
 update: 정면 규칙 (가장 가까운 차량 크기 클러스터) + α-β 필터로 v_B.
+heading (heading_comp = on일 때): corridor가 추정한 통로 기준 차 헤딩 ψ. 점을 ψ만큼 돌려 통로 정렬 좌표에서
+  클러스터링한다. 끄면 "차가 통로와 나란하다"고 가정해, 차선 변경 중 ego가 틀어진 만큼 선행차 y가 치우친다.
 update_side: PASS·MERGE에서 직전 위치 근처 클러스터를 이어 추적 (옆·뒤로 간 선행차).
 
 가정(미확인): 차 헤딩이 통로 방향과 거의 나란해서 |y + ego_lateral| ≥ W/2 근처 점이 벽이다.
@@ -96,11 +98,18 @@ class VehicleTracker:
         b = sum((x - mx) * (y - my) for x, y in side) / sxx
         return max(y_max, my + b * (x0 - mx), my + b * (x0 + p.leader_length - mx))
 
-    def update(self, points, t, v_ego, ego_lat, W):
+    def _aligned(self, points, heading):
+        """heading_comp = on이면 점을 통로 정렬 좌표로 돌린다 (라이다 원점 기준, idx·각도는 그대로)."""
+        if not self.p.heading_comp or not heading:
+            return points
+        c, s = math.cos(heading), math.sin(heading)
+        return [Pt(q.i, q.ang, q.x * c - q.y * s, q.x * s + q.y * c) for q in points]
+
+    def update(self, points, t, v_ego, ego_lat, W, heading=0.0):
         """정면 규칙으로 가장 가까운 차량 클러스터를 찾는다."""
         p = self.p
         cands = [] if W is None else [
-            c for c in self._clusters(points, ego_lat, W)
+            c for c in self._clusters(self._aligned(points, heading), ego_lat, W)
             if 0.0 < c.x0 < p.track_x_max
             and p.veh_width_min <= c.y1 - c.y0 <= p.veh_width_max
             and c.x1 - c.x0 <= p.veh_depth_max]
@@ -125,7 +134,7 @@ class VehicleTracker:
         self._front = c.x1
         return Track(True, d, y_mid + ego_lat, self._v_b, c.idx, None, c.y1 - c.y0, c.y_left + ego_lat)
 
-    def update_side(self, points, t, v_ego, ego_lat, W):
+    def update_side(self, points, t, v_ego, ego_lat, W, heading=0.0):
         """PASS/MERGE용: 직전 클러스터와 가장 가까운 클러스터를 이어서 추적한다 (상대 차가 옆으로 가도).
 
         안 보이면 마지막 v_B로 위치를 추측 항법하고 valid=False로 돌려준다 (front_rel은 계속 나온다).
@@ -139,7 +148,7 @@ class VehicleTracker:
         cx, cy = self._c[0] + shift, self._c[1]
         self._c, self._front = (cx, cy), self._front + shift
         best = None
-        for c in ([] if W is None else self._clusters(points, ego_lat, W, fov=False)):
+        for c in ([] if W is None else self._clusters(self._aligned(points, heading), ego_lat, W, fov=False)):
             dist = math.hypot((c.x0 + c.x1) / 2.0 - cx, (c.y0 + c.y1) / 2.0 - cy)
             if dist <= p.side_gate and (best is None or dist < best[0]):
                 best = (dist, c)

@@ -150,3 +150,20 @@ def test_lateral_ref_flag():
     o = Obs(0.0, 0.9, True, 0.5, -0.20, 0.9, 0.0, 1.0, None, 0.05)    # 중심은 비켰지만 왼쪽 모서리가 0.05 (여유 0.45 < 0.47)
     assert EgoFSM(P, 'd')._lateral_ok(1.0, o)                           # center: −0.20 → 여유 있음
     assert not EgoFSM(replace(P, lateral_ref='left_edge'), 'd')._lateral_ok(1.0, o)
+
+
+def test_heading_compensation():
+    import math
+    from _aur_synth import scan as _scan
+    from my_algo.aur.tracker import Pt
+    W, ego_y, psi = 1.0, 0.1, math.radians(10.0)
+    pts0 = _scan(W, ego_y, [lead_box(0.8, -0.265 - ego_y)])
+    c, s = math.cos(-psi), math.sin(-psi)       # ego가 ψ만큼 왼쪽으로 틀면 세상은 −ψ만큼 돌아 보인다
+    pts = sorted((Pt(q.i, math.atan2(q.x * s + q.y * c, q.x * c - q.y * s), q.x * c - q.y * s, q.x * s + q.y * c)
+                  for q in pts0), key=lambda q: q.ang)
+    cor = Corridor(P).update(pts)
+    assert abs(cor.heading - psi) < 0.01
+    off = VehicleTracker(P).update(pts, 0.0, 0.9, cor.ego_lateral, W, cor.heading)
+    on = VehicleTracker(replace(P, heading_comp=True)).update(pts, 0.0, 0.9, cor.ego_lateral, W, cor.heading)
+    assert off.y_b < -0.265 - 0.1                 # 보정 없으면 오른쪽으로 0.1 m 넘게 치우친다
+    assert abs(on.y_b + 0.265) < 0.03 and abs(on.d - 0.8) < 0.05

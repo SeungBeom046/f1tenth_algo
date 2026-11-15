@@ -122,7 +122,7 @@ class Car:
         if cor.W_est is None:
             cor.update(self.points, W_fixed=self.W_fixed)
         W = self.W_fixed or (p.W if p.W is not None else cor.W_est)
-        args = (self.points, sim.t, self.kin.v, cor.ego_lateral, W)
+        args = (self.points, sim.t, self.kin.v, cor.ego_lateral, W, cor.heading)
         self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
         self.front_track = self.shadow.update(*args)
         cor.update(self.points, self.track.idx, W_fixed=self.W_fixed)
@@ -232,7 +232,8 @@ class Sim:
         Wl = lead.perceive(self, side=False)
         d_rear = lead.track.d if lead.track.valid else None
         if not lead.track.valid:    # 후행차가 옆으로 오면 이어서 추적해 그 점을 벽 계산에서 뺀다
-            side = lead.tracker.update_side(lead.points, self.t, lead.kin.v, lead.corridor.ego_lateral, Wl)
+            side = lead.tracker.update_side(lead.points, self.t, lead.kin.v, lead.corridor.ego_lateral, Wl,
+                                            lead.corridor.heading)
             lead.corridor.update(lead.points, side.idx, W_fixed=lead.W_fixed)
         lv, ly_ref = self.logic.step(self.t, lead.kin.v, d_rear, Wl)
         if self.t < cfg['start']['leader_delay']:

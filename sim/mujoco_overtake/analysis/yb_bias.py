@@ -36,8 +36,8 @@ def disable_abort():
     ego_fsm.EgoFSM._check_pass_abort = no_abort
 
 
-def run_one(method, over, seed):
-    sim = Sim(method, load_cfg(**over), seed=seed)
+def run_one(method, over, seed, params):
+    sim = Sim(method, load_cfg(**over), seed=seed, **params)
     extra = []
     orig = sim._log_frame
 
@@ -45,11 +45,11 @@ def run_one(method, over, seed):
         orig(*a)
         trk = sim.ego.track
         lead = corners(*sim.leader.kin.pose(), sim.cfg)
-        extra.append((getattr(trk, 'y_l', None), max(y for _, y in lead)))
+        extra.append((getattr(trk, 'y_l', None), max(y for _, y in lead), sim.ego.corridor.heading, sim.ego.kin.yaw))
     sim._log_frame = log_frame
     r = sim.run()
-    series = [(x['t'], x['state'], x['gap'], x['valid'], x['y_b'], x['y_b_true'], yl, ylt)
-              for x, (yl, ylt) in zip(sim.log, extra)]
+    series = [(x['t'], x['state'], x['gap'], x['valid'], x['y_b'], x['y_b_true'], yl, ylt, h, ht)
+              for x, (yl, ylt, h, ht) in zip(sim.log, extra)]
     t_pass = next((x['t'] for x in sim.log if x['state'] == 'PASS'), None)
     return dict(final=r['final_state'], coll=r['collision'], t_pass=t_pass, t_yield=sim.logic.t_yield, series=series)
 
@@ -57,6 +57,8 @@ def run_one(method, over, seed):
 def collect(args):
     if args.no_abort:
         disable_abort()
+    import yaml
+    params = {kv.split('=', 1)[0]: yaml.safe_load(kv.split('=', 1)[1]) for kv in args.param}
     rows = []
     for beh in ('Y', 'YR'):
         for m in 'cd':
@@ -67,7 +69,8 @@ def collect(args):
                             over = {'leader.behavior': beh, 'track.W': W, 'aeb.enabled': aeb}
                             if ra is not None:
                                 over['leader.return_after'] = ra
-                            rows.append(dict(beh=beh, method=m, W=W, aeb=aeb, ra=ra, seed=k, **run_one(m, over, k)))
+                            rows.append(dict(beh=beh, method=m, W=W, aeb=aeb, ra=ra, seed=k,
+                                             **run_one(m, over, k, params)))
     with open(args.out, 'w') as f:
         json.dump(rows, f)
     print('%d회 저장: %s' % (len(rows), args.out))
@@ -82,7 +85,7 @@ def pct(xs, q):
 def pass_part(r):
     """PASS 진입부터 앞뒤로 겹치기 전(참 간격 > 0)까지. (t, valid, y_b, y_b_true, y_l, y_l_true)"""
     out = []
-    for t, state, gap, valid, yb, ybt, yl, ylt in r['series']:
+    for t, state, gap, valid, yb, ybt, yl, ylt, *_ in r['series']:
         if r['t_pass'] is not None and t >= r['t_pass'] and state == 'PASS':
             if gap <= 0:
                 break
@@ -94,7 +97,7 @@ def rise_series(part, which):
     """(t, 추정 − 지금까지 추정 최솟값, 추정 − 참값). which = 'b' | 'l'."""
     i = 2 if which == 'b' else 4
     m, out = None, []
-    for row in part:
+    for row in part:   # (t, valid, y_b, y_b_true, y_l, y_l_true)
         est, true = row[i], row[i + 1]
         if row[1] and est is not None:
             m = est if m is None else min(m, est)
@@ -111,9 +114,30 @@ def first_fire(s, th, need):
     return None
 
 
+def heading_report(rows):
+    """PASS 구간 corridor 헤딩 오차 ψ_est − ψ_true [deg], 선행차가 옆에 있을 때(참 간격 −1.0 ~ +0.3 m)와 없을 때."""
+    import math
+    beside, clear = [], []
+    for r in rows:
+        if r['t_pass'] is None:
+            continue
+        for t, state, gap, valid, yb, ybt, yl, ylt, h, ht in r['series']:
+            if state == 'PASS':
+                (beside if -1.0 <= gap <= 0.3 else clear).append(math.degrees(h - ht))
+    print('## corridor 헤딩 오차 ψ_est − ψ_true [deg], PASS 구간 (모든 회차)')
+    print('| 구간 | scan 수 | 최소 | 5% | 중앙값 | 95% | 최대 | |오차| 95% |')
+    print('|---|---|---|---|---|---|---|---|')
+    for name, xs in (('선행차 옆 (참 간격 −1.0 ~ +0.3 m)', beside), ('그 밖', clear)):
+        if xs:
+            print('| %s | %d | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f |' % (
+                name, len(xs), min(xs), pct(xs, .05), st.median(xs), pct(xs, .95), max(xs), pct([abs(x) for x in xs], .95)))
+    print()
+
+
 def report(args):
     rows = json.load(open(args.runs))
     have_l = any(row[6] is not None for r in rows for row in r['series'])
+    heading_report(rows)
     kinds = ('b', 'l') if have_l else ('b',)
     name = {'b': 'y_B 중심', 'l': 'y_L 왼쪽 모서리'}
     ys = [r for r in rows if r['beh'] == 'Y' and r['t_pass'] is not None]
@@ -204,6 +228,7 @@ def main():
     c.add_argument('--no-abort', action='store_true')
     c.add_argument('--n-y', type=int, default=20)
     c.add_argument('--n-yr', type=int, default=10)
+    c.add_argument('--param', nargs='*', default=[], metavar='K=V', help="AurParams 덮어쓰기 (예: heading_comp=true)")
     r = sub.add_parser('report')
     r.add_argument('runs')
     args = ap.parse_args()
