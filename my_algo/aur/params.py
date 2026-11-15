@@ -71,6 +71,10 @@ class AurParams:
     track_timeout: float = 0.5
     side_gate: float = 0.6          # 측면 추적 연관 거리 [m]
     rear_face_depth: float = 0.05   # 측면 추적에서 뒷면으로 보는 깊이 (x0부터) [m]
+    leader_width: float = 0.27      # 선행차 전폭 [m] (왼쪽 모서리 추정: 왼쪽 옆면 점 선택)
+    leader_length: float = 0.50     # 선행차 길이 [m] (왼쪽 모서리 추정: 옆면 직선 연장 구간)
+    side_fit_min_points: int = 3    # 옆면 직선 피팅 최소 점 수
+    lateral_ref: str = 'center'     # 횡 여유 판정 기준: center(y_B 중심, 기존) | left_edge(y_L 왼쪽 모서리)
     # --- corridor (lidar_reactive_drive.PLANNER_CONSTANTS와 같은 값) ---
     corridor_sector_min_deg: float = 45.0
     corridor_sector_max_deg: float = 115.0

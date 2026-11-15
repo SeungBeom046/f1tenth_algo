@@ -221,7 +221,7 @@ class Sim:
         W = ego.perceive(self, side=self.fsm.state in ('PASS', 'MERGE'))
         trk = ego.track
         v_cmd, y_ref, state, reason = self.fsm.step(Obs(
-            self.t, ego.kin.v, trk.valid, trk.d, trk.y_b, trk.v_b, ego.corridor.ego_lateral, W, trk.front_rel))
+            self.t, ego.kin.v, trk.valid, trk.d, trk.y_b, trk.v_b, ego.corridor.ego_lateral, W, trk.front_rel, trk.y_l))
         if self.t < self.cfg['start']['ego_delay']:
             v_cmd = 0.0
         ego.drive(self, v_cmd, y_ref)

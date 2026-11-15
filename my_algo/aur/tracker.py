@@ -13,10 +13,12 @@ Pt = namedtuple('Pt', 'i ang x y')      # scan bin 번호, 각도, 라이다 좌
 # d: 범퍼 → 상대 차 가장 가까운 면. y_b: 통로 중심 기준. idx: 벽 계산에서 뺄 bin.
 # width: 클러스터 y 범위 (기록용).
 # front_rel: (측면 추적) 선행차 앞면 x − ego 뒤범퍼 x. 음수면 선행차가 뒤에 있다.
-Track = namedtuple('Track', 'valid d y_b v_b idx front_rel width')
-Track.__new__.__defaults__ = (None,)
+# y_l: 선행차 왼쪽 모서리(차체에서 가장 왼쪽) 횡위치, 통로 중심 기준 (_left_edge). ego가 추월할 쪽의 경계.
+Track = namedtuple('Track', 'valid d y_b v_b idx front_rel width y_l')
+Track.__new__.__defaults__ = (None, None)
 # rear_y: 가장 가까운 면(x0에서 rear_face_depth 안) 점들의 y 범위 중앙 = 상대 차 뒷면(후방 뷰는 앞면) 중심
-_Cluster = namedtuple('_Cluster', 'x0 x1 y0 y1 idx rear_y')
+# y_left: 왼쪽 모서리 (view 좌표계, _left_edge)
+_Cluster = namedtuple('_Cluster', 'x0 x1 y0 y1 idx rear_y y_left')
 
 
 def scan_to_points(ranges, angle_min, angle_increment, range_min, range_max):
@@ -70,8 +72,29 @@ class VehicleTracker:
                 ys = [q.y for q in g]
                 x0 = min(xs)
                 face = [y for x, y in zip(xs, ys) if x <= x0 + p.rear_face_depth]
-                out.append(_Cluster(x0, max(xs), min(ys), max(ys), [q.i for q in g], (min(face) + max(face)) / 2.0))
+                out.append(_Cluster(x0, max(xs), min(ys), max(ys), [q.i for q in g], (min(face) + max(face)) / 2.0,
+                                    self._left_edge(xs, ys, x0)))
         return out
+
+    def _left_edge(self, xs, ys, x0):
+        """선행차 왼쪽 모서리 횡위치 (view 좌표계).
+
+        왼쪽 옆면 점(가장 왼쪽 점에서 전폭/2 안, 뒷면 제외)에 직선을 맞추고, 차체 길이 구간 [x0, x0 + L]에서
+        그 직선의 최댓값을 모서리로 본다 (틀어진 선행차는 앞 모서리가 안 보여도 직선으로 연장된다).
+        점이 모자라면 가장 왼쪽 점. 관측된 점보다 안쪽일 수는 없으므로 가장 왼쪽 점이 하한이다.
+        """
+        p = self.p
+        y_max = max(ys)
+        side = [(x, y) for x, y in zip(xs, ys) if y >= y_max - p.leader_width / 2.0 and x > x0 + p.rear_face_depth]
+        if len(side) < p.side_fit_min_points:
+            return y_max
+        mx = sum(x for x, _ in side) / len(side)
+        my = sum(y for _, y in side) / len(side)
+        sxx = sum((x - mx) ** 2 for x, _ in side)
+        if sxx < 0.05 ** 2:
+            return y_max
+        b = sum((x - mx) * (y - my) for x, y in side) / sxx
+        return max(y_max, my + b * (x0 - mx), my + b * (x0 + p.leader_length - mx))
 
     def update(self, points, t, v_ego, ego_lat, W):
         """정면 규칙으로 가장 가까운 차량 클러스터를 찾는다."""
@@ -100,7 +123,7 @@ class VehicleTracker:
         y_mid = (c.y0 + c.y1) / 2.0     # 점 평균이 아니라 범위 중앙: 옆면 점이 한쪽에 몰려도 치우치지 않는다
         self._c = ((c.x0 + c.x1) / 2.0, y_mid)
         self._front = c.x1
-        return Track(True, d, y_mid + ego_lat, self._v_b, c.idx, None, c.y1 - c.y0)
+        return Track(True, d, y_mid + ego_lat, self._v_b, c.idx, None, c.y1 - c.y0, c.y_left + ego_lat)
 
     def update_side(self, points, t, v_ego, ego_lat, W):
         """PASS/MERGE용: 직전 클러스터와 가장 가까운 클러스터를 이어서 추적한다 (상대 차가 옆으로 가도).
@@ -134,4 +157,4 @@ class VehicleTracker:
             y_c = c.y1 - p.w_car / 2.0 if y_mid < 0.0 else c.y0 + p.w_car / 2.0
             if c.y1 - c.y0 >= p.w_car:
                 y_c = y_mid
-        return Track(True, c.x0, y_c + ego_lat, self._v_b, c.idx, c.x1 + offset, c.y1 - c.y0)
+        return Track(True, c.x0, y_c + ego_lat, self._v_b, c.idx, c.x1 + offset, c.y1 - c.y0, c.y_left + ego_lat)

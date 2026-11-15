@@ -50,6 +50,11 @@ def lateral_pass_ok(W, y_B, w, c):
     return W / 2.0 - y_B - w / 2.0 >= w + 2.0 * c
 
 
+def lateral_pass_ok_edge(W, y_l, w, c):
+    """선행차 왼쪽 모서리 y_L 기준: 왼쪽 벽까지 ego 폭 + 양쪽 여유가 남는가 (y_L = y_B + w/2이면 lateral_pass_ok와 같다)."""
+    return W / 2.0 - y_l >= w + 2.0 * c
+
+
 def lane_offset(W, p):
     """차선 횡 오프셋 δ = W/2 − w/2 − c (파라미터로 고정했으면 그 값)."""
     if p.lane_offset is not None:

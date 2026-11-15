@@ -23,8 +23,9 @@ from my_algo.aur.speed import min_speed_rule
 # 한 scan의 관측 (tracker·corridor 출력).
 # valid: 이번 scan에서 선행차가 보였는가. W: 통로 폭 추정 (p.W가 있으면 무시).
 # front_rel: 선행차 앞면 x − ego 뒤범퍼 x (PASS/MERGE에서만, 모르면 None).
-Obs = namedtuple('Obs', 't v_e valid d y_b v_b ego_lat W front_rel')
-Obs.__new__.__defaults__ = (None,)
+# y_l: 선행차 왼쪽 모서리 (tracker.Track.y_l, 모르면 None). lateral_ref = left_edge일 때만 쓴다.
+Obs = namedtuple('Obs', 't v_e valid d y_b v_b ego_lat W front_rel y_l')
+Obs.__new__.__defaults__ = (None, None)
 
 INF = float('inf')
 
@@ -147,8 +148,7 @@ class EgoFSM:
         if self.decided is None and (b >= p.eta or b <= 1.0 - p.eta):
             self.decided, self.t_decided = ('Y' if b >= p.eta else 'NY'), obs.t
         waited = obs.t - self.t_probe if self.state == 'PROBE' else -1.0
-        lat_ok = trk is not None and W is not None \
-            and safety.lateral_pass_ok(W, trk.y_b, p.w_car, p.c_lat)
+        lat_ok = trk is not None and W is not None and self._lateral_ok(W, trk)
         if self.method == 'a':      # belief는 기록만 하고 판단에 쓰지 않는다
             go, give_up = waited >= p.T_wait_a and lat_ok, False
         else:
@@ -170,11 +170,18 @@ class EgoFSM:
             self._overlapped = True     # 겹친 뒤 감속하면 나란히 있는 시간만 길어진다: 차선 유지, v_pass
             return False
         if obs.y_b > self._y_b_most_yielded + p.y_yield_thr \
-                or not safety.lateral_pass_ok(W, obs.y_b, p.w_car, p.c_lat):
+                or not self._lateral_ok(W, obs):
             self.state, self.follow_reason = 'FOLLOW', 'pass_abort'
             self.abort_count += 1
             return True
         return False
+
+    def _lateral_ok(self, W, o):
+        """선행차 왼쪽에 ego 폭 + 양쪽 여유가 남는가. lateral_ref = left_edge이고 y_L이 있으면 왼쪽 모서리 기준."""
+        p = self.p
+        if p.lateral_ref == 'left_edge' and o.y_l is not None:
+            return safety.lateral_pass_ok_edge(W, o.y_l, p.w_car, p.c_lat)
+        return safety.lateral_pass_ok(W, o.y_b, p.w_car, p.c_lat)
 
     def _pass_speed(self, obs, delta, v, reason):
         """PASS 속도: 선행차와 횡으로 완전히 어긋나고 추월 차선(+δ)에 도착하기 전에는 추종 속도, 그 뒤 v_pass.

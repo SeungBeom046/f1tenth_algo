@@ -122,3 +122,31 @@ def test_corridor_w_fixed_ignores_left_side():
     assert abs(Corridor(P).update(pts).ego_lateral - y) > 0.05   # W 고정 없으면 틀어진다
     cor = Corridor(P).update(pts, W_fixed=W)
     assert cor.valid and abs(cor.ego_lateral - y) < 0.01 and cor.W_est == W
+
+
+def _yawed_lead(d, y_c, yaw, ego_y):
+    """뒷면 중심 (d, y_c)(앞범퍼 기준, 통로 좌표)에서 yaw만큼 돈 선행차 선분과 참 왼쪽 모서리 y."""
+    import math
+    c, s = math.cos(yaw), math.sin(yaw)
+    loc = [(0.0, -HW), (CAR_LEN, -HW), (CAR_LEN, HW), (0.0, HW)]
+    pts = [(LF + d + c * x - s * y, y_c - ego_y + s * x + c * y) for x, y in loc]
+    return [(pts[i], pts[(i + 1) % 4]) for i in range(4)], max(y for _, y in pts) + ego_y
+
+
+@pytest.mark.parametrize('yaw_deg', [0.0, -10.0, -20.0, 10.0])
+def test_left_edge_estimate(yaw_deg):
+    import math
+    ego_y = 0.15
+    segs, y_l_true = _yawed_lead(0.6, -0.20, math.radians(yaw_deg), ego_y)
+    pts = scan(1.0, ego_y, [segs])
+    trk = VehicleTracker(P).update(pts, 0.0, 0.9, ego_y, 1.0)
+    assert trk.valid and abs(trk.y_l - y_l_true) < 0.03
+
+
+def test_lateral_ref_flag():
+    from my_algo.aur import safety
+    from my_algo.aur.ego_fsm import EgoFSM, Obs
+    assert safety.lateral_pass_ok_edge(1.0, -0.265 + HW, 0.27, 0.10) == safety.lateral_pass_ok(1.0, -0.265, 0.27, 0.10)
+    o = Obs(0.0, 0.9, True, 0.5, -0.20, 0.9, 0.0, 1.0, None, 0.05)    # 중심은 비켰지만 왼쪽 모서리가 0.05 (여유 0.45 < 0.47)
+    assert EgoFSM(P, 'd')._lateral_ok(1.0, o)                           # center: −0.20 → 여유 있음
+    assert not EgoFSM(replace(P, lateral_ref='left_edge'), 'd')._lateral_ok(1.0, o)
