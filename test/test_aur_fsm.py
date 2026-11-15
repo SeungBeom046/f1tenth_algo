@@ -149,7 +149,8 @@ def _to_pass(fsm):
 
 
 def test_pass_abort_before_overlap():
-    fsm = EgoFSM(P, 'd')
+    from dataclasses import replace
+    fsm = EgoFSM(replace(P, abort_mode='follow'), 'd')     # follow: 중단 즉시 FOLLOW (retreat는 test_abort_retreat)
     t, y = _to_pass(fsm)
     v, y_ref, state, _ = fsm.step(Obs(t + 0.1, 0.9, True, 0.30, y, 0.9, 0.1, 1.0))
     assert state == 'PASS' and y_ref > 0
