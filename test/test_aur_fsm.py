@@ -175,3 +175,17 @@ def test_pass_abort_reference_is_most_yielded_position():
         assert fsm.step(Obs(t, 0.9, True, 0.30, y, 0.9, 0.1, 1.0))[2] == 'PASS'
     t += 0.1
     assert fsm.step(Obs(t, 0.9, True, 0.30, -0.26 + P.y_yield_thr + 0.01, 0.9, 0.1, 1.0))[2] == 'FOLLOW'
+
+
+def test_abort_retreat():
+    from dataclasses import replace
+    p = replace(P, abort_mode='retreat')
+    fsm = EgoFSM(p, 'd')
+    t, y = _to_pass(fsm)
+    v, y_ref, state, reason = fsm.step(Obs(t + 0.1, 0.9, True, 0.10, y + p.y_yield_thr + 0.01, 0.9, 0.2, 1.0))
+    assert (state, reason) == ('RETREAT', 'retreat') and y_ref > 0 and fsm.follow_reason == 'pass_abort'
+    assert v <= p.v_min                                # 0.8 × v_B = 0.72 < v_min → v_min 또는 0
+    v, y_ref, state, _ = fsm.step(Obs(t + 0.2, 0.8, True, 0.12, y, 0.9, 0.25, 1.0))
+    assert state == 'RETREAT' and y_ref > 0
+    v, y_ref, state, reason = fsm.step(Obs(t + 0.3, 0.8, True, p.retreat_clear_gap + 0.01, y, 0.9, 0.25, 1.0))
+    assert (state, y_ref, reason) == ('FOLLOW', 0.0, 'retreat_done')

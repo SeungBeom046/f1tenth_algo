@@ -6,7 +6,8 @@
     WAIT ─(v_E > t0_speed_threshold: t₀, λ = 0)→ APPROACH ─(d ≤ d_ref + probe_tol)→ PROBE
     APPROACH·PROBE ─(go)→ PASS ─(선행차 앞면이 ego 뒤범퍼보다 m 뒤)→ MERGE ─(|y + δ| < merge_tol)→ DONE
     APPROACH·PROBE ─(belief NY 확정 | PROBE 후 T_max)→ FOLLOW
-    PASS ─(겹치기 전 선행차 복귀 | 횡 여유 부족)→ FOLLOW (pass_abort)
+    PASS ─(겹치기 전 선행차 복귀 | 횡 여유 부족)→ FOLLOW (pass_abort), abort_mode = retreat면 → RETREAT
+    RETREAT ─(선행차 뒷면이 앞범퍼보다 retreat_clear_gap 이상 앞)→ FOLLOW
 
 방법 (종방향 명령과 go 조건):
     a 고정 규칙:   d_follow_a 유지, PROBE 후 T_wait_a가 지나고 횡 여유가 있으면 go. belief는 기록만.
@@ -94,6 +95,8 @@ class EgoFSM:
             if self._check_pass_abort(obs, W):
                 reason = 'pass_abort'
                 v = self._follow_speed(trk)
+        if self.state == 'RETREAT':
+            y_ref, v, reason = self._retreat(obs, trk, delta, v, reason)
         if self.state == 'PASS':
             y_ref = delta
             v, reason = self._pass_speed(obs, delta, v, reason)
@@ -171,10 +174,22 @@ class EgoFSM:
             return False
         if obs.y_b > self._y_b_most_yielded + p.y_yield_thr \
                 or not self._lateral_ok(W, obs):
-            self.state, self.follow_reason = 'FOLLOW', 'pass_abort'
+            self.state = 'RETREAT' if p.abort_mode == 'retreat' else 'FOLLOW'
+            self.follow_reason = 'pass_abort'
             self.abort_count += 1
             return True
         return False
+
+    def _retreat(self, obs, trk, delta, v, reason):
+        """추월 중단 뒤 선행차가 옆·바로 앞에 있는 동안: 추월 차선(+δ) 유지, v_B보다 느리게.
+        중단 직후 바로 중앙(y_ref 0)으로 가면 옆의 선행차 쪽으로 붙고, 정면 추적으로 바꾸면 옆의 선행차를 벽으로 본다.
+        선행차 뒷면이 앞범퍼보다 retreat_clear_gap 이상 앞서면 FOLLOW (y_ref 0, 추종 속도). 반환: (y_ref, v, reason)."""
+        p = self.p
+        if trk is not None and trk.d >= p.retreat_clear_gap:
+            self.state = 'FOLLOW'
+            return 0.0, self._follow_speed(trk), 'retreat_done'
+        v_b = trk.v_b if trk is not None else p.v_B_nominal
+        return delta, p.retreat_speed_ratio * v_b, 'retreat'
 
     def _lateral_ok(self, W, o):
         """선행차 왼쪽에 ego 폭 + 양쪽 여유가 남는가. lateral_ref = left_edge이고 y_L이 있으면 왼쪽 모서리 기준."""

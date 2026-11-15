@@ -67,6 +67,9 @@ aur:
   leader_length: 0.50       # TUNE: 선행차 길이, 왼쪽 옆면 직선을 연장하는 구간 | m | 측정 (뒤축→앞 0.41 + 뒤축→뒤 0.09)
   side_fit_min_points: 3    # TUNE: 왼쪽 옆면 직선 피팅 최소 점 수, 모자라면 가장 왼쪽 점 | 개 | 임시
   heading_comp: false       # TUNE: tracker 입력 점을 corridor 헤딩 추정으로 회전 보정 | - | 임시 (2026-11-15, 측정 중)
+  abort_mode: follow        # TUNE: 추월 중단 뒤 follow(바로 FOLLOW) / retreat(차선 유지하며 물러난 뒤 FOLLOW) | - | 임시 (2026-11-15)
+  retreat_speed_ratio: 0.8  # TUNE: RETREAT 속도 = 이 값 × v_B (v_min 0.867보다 작으면 최소 속도 규칙에 따라 v_min 또는 0) | - | 임시
+  retreat_clear_gap: 0.15   # TUNE: RETREAT 탈출 조건, 선행차 뒷면이 앞범퍼보다 이만큼 앞 (m 여유) | m | 임시 (m과 같은 값)
   lateral_ref: center       # TUNE: 횡 여유 판정 기준 center(y_B 중심) / left_edge(y_L 왼쪽 모서리) | - | 임시 (2026-11-15, 측정 중)
   side_gate: 0.6            # TUNE: 측면 추적 연관 거리 | m | 임시
   # --- corridor ---
