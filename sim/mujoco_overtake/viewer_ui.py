@@ -142,7 +142,7 @@ class ViewerUI:
                     self._geom(scn, mujoco.mjtGeom.mjGEOM_SPHERE, [0.012, 0, 0], q, RGBA_POINT)
             trk = ego.track
             if self.show['track'] and trk is not None and trk.valid:
-                x = ego.kin.x + sim.front + trk.d
+                x = ego.kin.x + sim.front_overhang + trk.d
                 self._geom(scn, mujoco.mjtGeom.mjGEOM_BOX, [0.01, 0.135, 0.15], [x, trk.y_b, 0.15], RGBA_TRACK)
             if self.show['lanes']:
                 delta = safety.lane_offset(sim.cfg['track']['W'], sim.p)
@@ -151,7 +151,7 @@ class ViewerUI:
                 for y in (delta, -delta):
                     self._geom(scn, mujoco.mjtGeom.mjGEOM_BOX, [half, 0.004, 0.001], [xm, y, 0.002], RGBA_LANE)
                 self._geom(scn, mujoco.mjtGeom.mjGEOM_SPHERE, [0.03, 0, 0],
-                           [ego.kin.x + sim.front + 0.3, ego.lateral.y_ref, 0.03], RGBA_YREF)
+                           [ego.kin.x + sim.front_overhang + 0.3, ego.lateral.y_ref, 0.03], RGBA_YREF)
         if self.show['text']:
             h.set_texts(self.texts())
         else:

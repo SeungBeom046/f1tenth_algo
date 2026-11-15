@@ -1,4 +1,4 @@
-"""m/s ↔ ERPM 변환과 최소 속도 규칙."""
+"""[5 제어] 종: m/s ↔ ERPM 변환과 최소 속도 규칙 (vehicle_utils.sanitize_rpm이 0 < v < v_min을 v_min으로 올리는 것에 대한 처리)."""
 
 
 def to_erpm(v, p):

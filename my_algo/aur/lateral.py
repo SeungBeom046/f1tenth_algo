@@ -1,4 +1,4 @@
-"""횡 오프셋 벽 따라가기 (지시서 2단계의 순수 부분).
+"""[5 제어] 횡: 횡 오프셋 벽 따라가기 (지시서 2단계의 순수 부분).
 
 lidar_reactive_drive.plan_wall_follow와 같은 방식: 오차 → 저역 필터 → P 게인 → deadband → rate limit.
 오차 = (left − right) + 2·y_ref = 2·(y_ref − ego_lateral). ego가 y_ref에 있으면 0.

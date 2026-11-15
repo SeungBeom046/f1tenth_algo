@@ -1,9 +1,13 @@
 """추월 시나리오 시뮬 (Mac, ROS 없음). 판단 로직은 my_algo.aur을 그대로 쓴다.
 
-scan마다(10 Hz): MuJoCo 레이캐스트 → pointcloud_to_laserscan 규칙의 scan → tracker / corridor / FSM / 횡 제어
-→ ERPM·서보 명령 → 운동학 차량 모델(구동 지연 t_r, 1차 지연, 가감속 한계).
-AEB: 실차 autonomous_drive와 같이 AEBSafetyModel(legacy)을 50 Hz로 최종 명령에 적용한다 (scenario.yaml의 aeb).
-N_AEB는 /aeb/active 상승 에지 수와 같은 방식으로 센다. 충돌은 기하로 판정한다.
+실차 노드 구성과 같은 순서로 돈다 (docs/PIPELINE.md):
+    scan마다(10 Hz, Sim.frame):
+        Car.perceive   MuJoCo 레이캐스트 → pointcloud_to_laserscan 규칙의 scan → corridor + tracker   (실차: exp_planner)
+        _ego_frame     EgoFSM.step → Car.drive(횡 제어 Lateral)                                       (실차: exp_planner)
+        _leader_frame  Leader.step → Car.drive                                                           (실차: exp_planner, role=leader)
+    50 Hz (Car.control): AEBSafetyModel → sanitize_rpm → ERPM·서보 명령                                 (실차: autonomous_drive)
+    dt마다: 운동학 차량 모델(구동 지연 t_r, 1차 지연, 가감속 한계), 충돌 판정(차체 사각형)
+N_AEB는 /aeb/active 상승 에지 수와 같은 방식으로 센다. AEB 모델·폭·TTC는 scenario.yaml의 aeb.
 """
 from types import SimpleNamespace
 import math
@@ -54,6 +58,7 @@ def rmin(values):
 
 
 def corners(x, y, yaw, cfg):
+    """차체 사각형 네 모서리 (월드). (x, y) = 뒤축 중심."""
     v = cfg['vehicle']
     c, s = math.cos(yaw), math.sin(yaw)
     hw = cfg['w_car'] / 2.0
@@ -75,6 +80,8 @@ def rects_overlap(a, b):
 
 
 class Car:
+    """차 한 대: 운동학 모델 + 라이다 + 인지(tracker·corridor) + 횡 제어 + AEB. view = 'front'(ego) | 'rear'(선행차)."""
+
     def __init__(self, sim, name, x_rear_axle, view):
         cfg, p, v = sim.cfg, sim.p, sim.cfg['vehicle']
         self.name = name
@@ -85,7 +92,7 @@ class Car:
         self.lidar = Lidar(sim.m, cfg['lidar'], mount, self.body, seed=sim.seed + (1 if name == 'leader' else 0))
         self.tracker = VehicleTracker(p, view=view)
         self.shadow = VehicleTracker(p, view=view)   # 기록용: FSM 상태와 무관하게 매 scan 정면 규칙만 돌린다
-        self.front = None
+        self.front_track = None     # shadow 결과 (추적 유지율·클러스터 폭 기록)
         self.corridor = Corridor(p)
         self.lateral = Lateral(p)
         self.track = None
@@ -102,9 +109,9 @@ class Car:
         self.cmd = (0.0, 0.0)       # planner가 낸 (rpm, 조향) = /reactive/lidar_command
         self.aeb_active = False
         self.n_aeb = 0
-        self.aeb_reason = ''
 
     def perceive(self, sim, side):
+        """scan 한 프레임: 레이캐스트 → scan → corridor(벽) + tracker(상대 차). side = 측면 추적(PASS·MERGE). 반환: W."""
         cloud, self.points_world, _ = self.lidar.scan(sim.d, self.kin.pose())
         scan = cloud_to_scan(cloud, sim.cfg['scan'])
         self.scan_ns = SimpleNamespace(**dict(scan, ranges=scan['ranges'].tolist()))
@@ -116,11 +123,12 @@ class Car:
         W = self.W_fixed or (p.W if p.W is not None else cor.W_est)
         args = (self.points, sim.t, self.kin.v, cor.ego_lateral, W)
         self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
-        self.front = self.shadow.update(*args)
+        self.front_track = self.shadow.update(*args)
         cor.update(self.points, self.track.idx, W_fixed=self.W_fixed)
         return W
 
     def drive(self, sim, v_cmd, y_ref):
+        """종방향 명령 v_cmd와 횡 목표 y_ref → (rpm, 조향) = /reactive/lidar_command."""
         self.v_cmd, self.y_ref = v_cmd, y_ref
         steer = self.lateral.step(self.corridor.ego_lateral, y_ref, sim.frame_dt, self.corridor.heading)
         self.cmd = (v_cmd * sim.p.erpm_gain, steer)
@@ -135,12 +143,13 @@ class Car:
             emergency = self.aeb.check_emergency_braking(self.scan_ns, speed, ReactiveDriveCommand(steer, rpm))
         if emergency and not self.aeb_active:
             self.n_aeb += 1
-            self.aeb_reason = self.aeb.last_reason
         self.aeb_active = emergency
         self.kin.command(sim.t, 0.0 if emergency else sanitize_rpm(rpm), steering_to_servo(steer))
 
 
 class Sim:
+    """한 회차. run()이 끝나면 result()가 회차 지표 dict를 낸다 (batch.py·baseline.py가 CSV로 저장)."""
+
     def __init__(self, method='d', cfg=None, seed=0, run_id=None, reuse=None, **param_overrides):
         """reuse = (MjModel, MjData): 뷰어 재시작 때 창이 붙어 있는 모델·데이터를 다시 쓴다 (같은 설정이어야 함)."""
         self.cfg = cfg or load_cfg()
@@ -156,8 +165,8 @@ class Sim:
             self.m, self.d = reuse
             mujoco.mj_resetData(self.m, self.d)
         v, lead = self.cfg['vehicle'], self.cfg['leader']
-        self.front = v['length'] - v['rear_overhang']
-        self.ego = Car(self, 'ego', -self.front, 'front')
+        self.front_overhang = v['length'] - v['rear_overhang']     # 뒤축 → 앞 끝
+        self.ego = Car(self, 'ego', -self.front_overhang, 'front')
         self.leader = Car(self, 'leader', self.cfg['start']['gap0'] + v['rear_overhang'], 'rear')
         self.fsm = EgoFSM(self.p, method)
         behavior = lead['behavior']
@@ -176,7 +185,7 @@ class Sim:
     # ------------------------------------------------------------ 참값
     def true_gap(self):
         """ego 앞범퍼 → 선행차 뒷면 (x 방향)."""
-        return (self.leader.kin.x - self.cfg['vehicle']['rear_overhang']) - (self.ego.kin.x + self.front)
+        return (self.leader.kin.x - self.cfg['vehicle']['rear_overhang']) - (self.ego.kin.x + self.front_overhang)
 
     def place_bodies(self):
         for car in (self.ego, self.leader):
@@ -201,15 +210,24 @@ class Sim:
 
     # ------------------------------------------------------------ scan마다
     def frame(self):
-        cfg, p, ego, lead = self.cfg, self.p, self.ego, self.leader
+        """scan 한 프레임: ego 판단 → 선행차 판단 → 기록 (순서를 바꾸면 결과가 달라진다)."""
+        v_cmd, y_ref, state, reason = self._ego_frame()
+        self._leader_frame()
+        self._log_frame(v_cmd, y_ref, state, reason)
+
+    def _ego_frame(self):
+        ego = self.ego
         W = ego.perceive(self, side=self.fsm.state in ('PASS', 'MERGE'))
         trk = ego.track
         v_cmd, y_ref, state, reason = self.fsm.step(Obs(
             self.t, ego.kin.v, trk.valid, trk.d, trk.y_b, trk.v_b, ego.corridor.ego_lateral, W, trk.front_rel))
-        if self.t < cfg['start']['ego_delay']:
+        if self.t < self.cfg['start']['ego_delay']:
             v_cmd = 0.0
         ego.drive(self, v_cmd, y_ref)
+        return v_cmd, y_ref, state, reason
 
+    def _leader_frame(self):
+        cfg, lead = self.cfg, self.leader
         Wl = lead.perceive(self, side=False)
         d_rear = lead.track.d if lead.track.valid else None
         if not lead.track.valid:    # 후행차가 옆으로 오면 이어서 추적해 그 점을 벽 계산에서 뺀다
@@ -218,31 +236,38 @@ class Sim:
         lv, ly_ref = self.logic.step(self.t, lead.kin.v, d_rear, Wl)
         if self.t < cfg['start']['leader_delay']:
             lv = 0.0
-        yaw_deg = cfg['leader']['yield_yaw_deg']
-        if yaw_deg is None:
+        if cfg['leader']['yield_yaw_deg'] is None:
             lead.drive(self, lv, ly_ref)
-        else:                       # yaw 고정 양보: 횡위치를 일정 속도로 옮기고 그동안 차체를 yaw만큼 돌려 둔다
-            y = lead.scripted[0] if lead.scripted else 0.0
-            step = max(-1.0, min(1.0, (ly_ref - y) / (cfg['leader']['yield_lat_speed'] * self.frame_dt)))
-            y += step * cfg['leader']['yield_lat_speed'] * self.frame_dt
-            # 목표에 닿으면(남은 거리 1 mm 미만) yaw 0. 예전에는 부동소수 잔차로 ±yaw가 프레임마다 뒤집혔다
-            moving = abs(ly_ref - y) > 1e-3 or abs(step) >= 1.0
-            lead.scripted = (y, math.copysign(math.radians(yaw_deg), step) if moving else 0.0)
-            lead.v_cmd, lead.y_ref = lv, ly_ref
-            lead.cmd = (lv * p.erpm_gain, 0.0)
+        else:
+            self._scripted_yield(lv, ly_ref)
 
+    def _scripted_yield(self, lv, ly_ref):
+        """yaw 고정 양보 (tracker 강건성 테스트용): 횡위치를 일정 속도로 옮기고 그동안 차체를 yaw만큼 돌려 둔다."""
+        cfg, lead = self.cfg, self.leader
+        yaw_deg = cfg['leader']['yield_yaw_deg']
+        y = lead.scripted[0] if lead.scripted else 0.0
+        step = max(-1.0, min(1.0, (ly_ref - y) / (cfg['leader']['yield_lat_speed'] * self.frame_dt)))
+        y += step * cfg['leader']['yield_lat_speed'] * self.frame_dt
+        # 목표에 닿으면(남은 거리 1 mm 미만) yaw 0. 예전에는 부동소수 잔차로 ±yaw가 프레임마다 뒤집혔다
+        moving = abs(ly_ref - y) > 1e-3 or abs(step) >= 1.0
+        lead.scripted = (y, math.copysign(math.radians(yaw_deg), step) if moving else 0.0)
+        lead.v_cmd, lead.y_ref = lv, ly_ref
+        lead.cmd = (lv * self.p.erpm_gain, 0.0)
+
+    def _log_frame(self, v_cmd, y_ref, state, reason):
+        ego, lead, trk = self.ego, self.leader, self.ego.track
         self.log.append(dict(
             t=self.t, state=state, reason=reason, gap=self.true_gap(), d=trk.d, valid=trk.valid,
             width=trk.width, y_b=trk.y_b, y_b_true=lead.kin.y, v_b=trk.v_b, v_b_true=lead.kin.v,
             v_e=ego.kin.v, v_cmd=v_cmd, y_e=ego.kin.y, y_e_est=ego.corridor.ego_lateral, yaw_e=ego.kin.yaw,
             yaw_l=lead.kin.yaw, y_ref=y_ref, h=self.fsm.h, b=self.fsm.belief.prob_yield(),
             lam=self.fsm.belief.lam, cor_valid=ego.corridor.valid,
-            front_valid=ego.front.valid, front_width=ego.front.width,
+            front_valid=ego.front_track.valid, front_width=ego.front_track.width,
             yield_triggered=self.logic.yield_triggered, brake_fired=self.logic.brake_fired,
             aeb=ego.aeb_active, n_aeb=ego.n_aeb))
 
     def step(self):
-        """시뮬 한 스텝 (dt). scan 주기마다 frame()을 먼저 부른다."""
+        """시뮬 한 스텝 (dt): scan 주기면 frame(), AEB 주기면 control(), 그다음 차량 모델 적분과 충돌 판정."""
         dt = self.cfg['sim']['dt']
         n = int(round(self.t / dt))
         if n % int(round(self.frame_dt / dt)) == 0:
