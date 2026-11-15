@@ -2,7 +2,7 @@
 """동작 기준선: 고정 시드 회차 묶음을 돌려 결과와 스텝 로그 해시를 CSV로 저장하고, 두 CSV를 비교한다.
 
     python sim/mujoco_overtake/baseline.py save <out.csv>          # 약 3분
-    python sim/mujoco_overtake/baseline.py compare <a.csv> <b.csv>  # 다르면 종료 코드 1
+    python sim/mujoco_overtake/baseline.py compare <a.csv> <b.csv>  # 다르면 종료 코드 1, 바뀐 회차를 표로
 
 리팩터링 전후로 save → compare 해서 동작이 바뀌지 않았는지 확인한다 (log_hash = 모든 scan의 로그 전체).
 묶음: belief(original·survival × c·d × Y·NY × 20), yaw(0/10/20/30° × d_y 0.8/1.0/1.2),
@@ -57,15 +57,21 @@ def compare(a, b):
         print('회차 수가 다르다: %d vs %d' % (len(ra), len(rb)))
         return 1
     diff = 0
+    cols = ('final_state', 'cause', 'N_AEB', 'deadlock', 'n_abort', 'h_min', 'stop_gap_ok', 'T_pass')
+    print('| # | 묶음 | 방법 | 조건 | ' + ' | '.join(cols) + ' | 그 밖에 바뀐 열 |')
+    print('|---' * (5 + len(cols)) + '|')
     for i, (x, y) in enumerate(zip(ra, rb)):
         keys = sorted(set(x) | set(y))
         d = [k for k in keys if x.get(k) != y.get(k)]
         if d:
             diff += 1
-            if diff <= 10:
-                print('#%d %s %s %s: %s' % (i, x['group'], x['method'], x['over'],
-                                            ', '.join('%s %s→%s' % (k, x.get(k), y.get(k)) for k in d)))
-    print('%d회 중 %d회 다름' % (len(ra), diff))
+            cond = ' '.join('%s=%s' % (k.split('.')[-1], v) for k, v in json.loads(x['over']).items()
+                            if k != 'aeb.enabled' or v is False) + (' ' + x['params'] if x['params'] != '{}' else '')
+            cell = lambda k: (x.get(k, '') if x.get(k) == y.get(k) else '%s → %s' % (x.get(k, ''), y.get(k, '')))  # noqa: E731
+            other = [k for k in d if k not in cols and k != 'log_hash']
+            print('| %d | %s | %s | %s | %s | %s |' % (i, x['group'], x['method'], cond,
+                                                     ' | '.join(cell(k) for k in cols), ', '.join(other)))
+    print('\n%d회 중 %d회 다름 (로그 해시 기준)' % (len(ra), diff))
     return 1 if diff else 0
 
 

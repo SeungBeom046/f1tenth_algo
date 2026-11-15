@@ -43,3 +43,24 @@ def test_geometric():
     assert 'speed=unknown' in m.last_reason
     with pytest.raises(ValueError):
         AEBSafetyModel(model='x')
+
+
+def test_curved_band_follows_steering():
+    straight = AEBSafetyModel(model='geometric', path_margin=0.01, ttc_threshold=0.35)
+    curved = AEBSafetyModel(model='geometric', path_margin=0.01, ttc_threshold=0.35, curved_band=True)
+    left, right = ReactiveDriveCommand(0.2, 5000.0, 'PASS'), ReactiveDriveCommand(-0.2, 5000.0, 'PASS')
+    # 조향 0이면 직선 띠와 같다
+    for x, y in ((0.30, 0.0), (0.10, 0.20), (0.24, 0.0)):
+        sc = scan_with_point(x, y)
+        assert curved.check_emergency_braking(sc, 0.9, CMD) == straight.check_emergency_braking(sc, 0.9, CMD)
+    # 앞 0.4 m, 왼쪽 0.2 m 점: 직선 띠 밖, 왼쪽으로 꺾으면 원호 위 → AEB, 오른쪽으로 꺾으면 아님
+    sc = scan_with_point(0.40, 0.20)
+    assert not straight.check_emergency_braking(sc, 1.5, left)
+    assert curved.check_emergency_braking(sc, 1.5, left)
+    assert not curved.check_emergency_braking(sc, 1.5, right)
+    # 정면 0.4 m 점: 직선 띠는 걸리고, 오른쪽으로 크게 꺾으면 피해 간다
+    sc = scan_with_point(0.40, 0.0)
+    assert straight.check_emergency_braking(sc, 1.5, right)
+    assert not curved.check_emergency_braking(sc, 1.5, ReactiveDriveCommand(-0.7, 5000.0, 'PASS'))
+    # legacy에서는 curved_band가 꺼진다
+    assert not AEBSafetyModel(curved_band=True).curved_band

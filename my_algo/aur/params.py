@@ -52,6 +52,7 @@ class AurParams:
     k_d: float = 1.5                # 거리 유지 P 게인 [1/s]
     probe_tol: float = 0.05         # d ≤ d_ref + probe_tol이면 PROBE
     merge_tol: float = 0.05         # MERGE 완료 판정 횡오차 [m]
+    lane_change_tol: float = 0.05   # PASS에서 추월 차선 도착 판정 횡오차 [m]. 도착 전에는 추종 속도
     track_hold: float = 0.5         # 추적이 끊겨도 직전 값을 쓰는 시간 [s]
     # --- tracker ---
     lidar_to_front: float = 0.30    # AEB의 lidar_to_bumper_dist와 같은 값 (실측 0.28). d가 AEB closest와 일치하게

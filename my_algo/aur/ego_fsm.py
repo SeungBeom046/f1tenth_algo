@@ -95,11 +95,12 @@ class EgoFSM:
                 v = self._follow_speed(trk)
         if self.state == 'PASS':
             y_ref = delta
-            v, reason = self._pass_speed(obs, v, reason)
+            v, reason = self._pass_speed(obs, delta, v, reason)
             if obs.front_rel is not None and obs.front_rel <= -p.m_stop:
                 self.state = 'MERGE'
         if self.state == 'MERGE':
-            y_ref, v, reason = -delta, p.v_pass, 'merging'
+            # 차선 변경 중에는 추종 속도. 선행차는 뒤에 있으므로 앞에 차가 없을 때의 속도(v_B_nominal)
+            y_ref, v, reason = -delta, self._follow_speed(None), 'merging'
             if abs(obs.ego_lat + delta) < p.merge_tol:
                 self.state = 'DONE'
         if self.state == 'DONE':
@@ -175,15 +176,17 @@ class EgoFSM:
             return True
         return False
 
-    def _pass_speed(self, obs, v, reason):
-        """PASS 속도: 선행차와 횡으로 완전히 어긋나기 전에는 추종 속도, 그 뒤 v_pass."""
+    def _pass_speed(self, obs, delta, v, reason):
+        """PASS 속도: 선행차와 횡으로 완전히 어긋나고 추월 차선(+δ)에 도착하기 전에는 추종 속도, 그 뒤 v_pass.
+        차선 변경 중 빠르면 틀어진 차체 앞에 벽이 AEB 한계 안으로 들어온다. 이미 옆에 겹쳤으면 바로 v_pass."""
         p = self.p
         if self._overlapped:
             self._cleared = True
         if not self._cleared and self._last is not None:
             # 중심 간격 ≥ w + c 이면 옆으로 나란히 가도 c 이상 떨어진다. 그 전에는 추종 속도를 지킨다.
             self._cleared = obs.ego_lat - self._last.y_b >= p.w_car + p.c_lat
-        if self._cleared:
+        in_lane = abs(obs.ego_lat - delta) < p.lane_change_tol
+        if self._cleared and (in_lane or self._overlapped):
             return p.v_pass, 'passing'
         return v, reason
 

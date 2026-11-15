@@ -40,6 +40,7 @@ AEB = {'off': {'aeb.enabled': False},
        'legacy_zero_wide': {'aeb.model': 'legacy', 'aeb.speed_source': 'zero', 'aeb.path_margin': 0.15,
                             'aeb.ttc_threshold': 0.55},                           # 현재 실차 그대로
        'geometric': {},                                                           # scenario.yaml 기본 (±0.16, TTC 0.35)
+       'geometric_straight': {'aeb.curved_band': False},                          # B1 전 (직선 띠)
        'geometric_ttc055': {'aeb.ttc_threshold': 0.55},
        'geometric_unknown': {'aeb.speed_source': 'unknown'},                      # 속도 없음 → 고정 0.25 m
        'legacy_zero': {'aeb.model': 'legacy', 'aeb.speed_source': 'zero', 'aeb.path_margin': 0.15, 'aeb.ttc_threshold': 0.55},

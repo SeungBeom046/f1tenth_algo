@@ -31,6 +31,10 @@
         geometric: 한계 = max(bumper_emergency_distance, 속도 × ttc_threshold). 제동거리 항은 쓰지 않는다.
         속도를 모르면(speed_mps=None, odom 없음) 고정 거리 bumper_emergency_distance로 fallback.
         tracker와 무관하게 scan만 본다. 검사 폭은 vehicle_half_width + path_margin으로 정한다.
+    curved_band (geometric 전용, 기본 False):
+        검사 띠를 직선이 아니라 지금 조향 명령이 그리는 원호(곡률 κ = tan δ / wheelbase, 뒤축 기준)를
+        따라 휜다. 점마다 원호까지의 횡거리와 원호를 따라간 거리(앞범퍼 기준)로 판정한다.
+        차선 변경 중 차체가 벽 쪽으로 틀어져 있어도, 이미 반대로 꺾고 있으면 벽이 띠에 들어오지 않는다.
 """
 
 import math
@@ -52,10 +56,16 @@ class AEBSafetyModel:
         path_margin=0.15,
         comfortable_decel=2.8,
         model='legacy',
+        curved_band=False,
+        wheelbase=0.33,
+        lidar_x_from_rear_axle=0.13,
     ):
         if model not in ('legacy', 'geometric'):
             raise ValueError('AEB model은 legacy|geometric: %r' % (model,))
         self.model = model
+        self.curved_band = curved_band and model == 'geometric'
+        self.wheelbase = wheelbase
+        self.lidar_x_from_rear_axle = lidar_x_from_rear_axle
         self.ttc_threshold = ttc_threshold
         self.stopping_margin = stopping_margin
         self.bumper_emergency_distance = bumper_emergency_distance
@@ -89,6 +99,7 @@ class AEBSafetyModel:
         # 검사 반폭 = 차량 반폭 + 경로 여유거리.
         # 예: 0.15 + 0.10 = 중심선 좌우 0.25 m 안 장애물만 긴급제동 후보.
         corridor_half_width = self.vehicle_half_width + self.path_margin
+        curvature = math.tan(requested_command.steering_rad) / self.wheelbase if self.curved_band else 0.0
         closest_x = None
         angle = scan_msg.angle_min
         for raw_range in scan_msg.ranges:
@@ -100,6 +111,8 @@ class AEBSafetyModel:
                 # x는 앞범퍼 기준 전방거리, y는 차량 중심선 기준 좌우거리다.
                 x = raw_range * math.cos(vehicle_angle) - self.lidar_to_bumper_dist
                 y = raw_range * math.sin(vehicle_angle)
+                if abs(curvature) > 1e-6:
+                    x, y = self._along_arc(raw_range, vehicle_angle, curvature)
                 # 앞범퍼보다 살짝 뒤로 계산되는 근접점도 0 m 충돌 후보로 취급한다.
                 # 이렇게 해야 라이다 장착 오차/손 테스트/범퍼 근처 장애물에서 AEB가 빠지지 않는다.
                 if x >= -self.bumper_overlap_tolerance and abs(y) <= corridor_half_width:
@@ -134,6 +147,17 @@ class AEBSafetyModel:
             f'aeb_limit={dynamic_emergency_distance:.2f}m'
         )
         return emergency
+
+    def _along_arc(self, raw_range, vehicle_angle, curvature):
+        """점을 (원호를 따라간 앞범퍼 기준 거리, 원호까지의 횡거리)로 바꾼다. 원호 반 바퀴 밖은 띠 밖으로 보낸다."""
+        radius = 1.0 / curvature                      # 왼쪽(+) 회전이면 양수, 중심 (0, R) (뒤축 기준)
+        xr = raw_range * math.cos(vehicle_angle) + self.lidar_x_from_rear_axle
+        yr = raw_range * math.sin(vehicle_angle)
+        theta = math.atan2(xr, math.copysign(1.0, radius) * (radius - yr))   # 뒤축에서 돈 각 [0, π]
+        if theta < 0.0:
+            return -math.inf, 0.0
+        s = abs(radius) * theta - (self.lidar_x_from_rear_axle + self.lidar_to_bumper_dist)
+        return s, math.hypot(xr, yr - radius) - abs(radius)
 
     def estimate_stopping_distance(self, speed_mps):
         """

@@ -44,6 +44,7 @@ aur:
   d_probe_c: 0.4            # TUNE: 방법 c 공격적 접근 거리 | m | 기획안
   k_d: 1.5                  # TUNE: 거리 유지 P 게인 (방법 a·b·c) | 1/s | 임시
   probe_tol: 0.05           # TUNE: PROBE 진입 허용 오차 (d ≤ d_ref + 이 값) | m | 기획안
+  lane_change_tol: 0.05     # TUNE: PASS에서 추월 차선(+δ) 도착 판정 횡오차, 도착 전에는 v_pass 대신 추종 속도 | m | 임시
   merge_tol: 0.05           # TUNE: MERGE 완료 판정 횡오차 | m | 임시
   track_hold: 0.5           # TUNE: 추적이 끊겨도 직전 값을 쓰는 시간 | s | 임시
   # --- tracker ---
