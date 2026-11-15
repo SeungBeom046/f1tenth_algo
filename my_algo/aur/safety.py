@@ -1,11 +1,20 @@
-"""안전 거리와 속도 한계, 식 (6)~(11). d는 앞범퍼 → 선행차 뒷면 거리."""
+"""안전 거리와 속도 한계, 식 (6)~(11). d는 앞범퍼 → 선행차 뒷면 거리.
+
+기획안 변경 (docs/PROGRESS.md): 반응 지연을 t_d가 아니라 t_d + Δ(scan 주기)로 둔다.
+scan k에서 고른 명령은 다음 결정까지 Δ 동안 유지되므로 선행차 제동에 대한 최대 반응 지연이 t_d + Δ다.
+scan_period = 0이면 기획안 식 그대로다.
+"""
 import math
+
+
+def _td(p):
+    return p.t_d + p.scan_period
 
 
 def d_safe(v_e, v_b, p):
     """식 (6): 선행차가 감속도 a로 급정지해도 여유 m을 남기고 설 수 있는 최소 거리."""
     v_b = max(0.0, v_b)
-    return v_e * p.t_d + (v_e * v_e - v_b * v_b) / (2.0 * p.a_brake) + p.m_stop
+    return v_e * _td(p) + (v_e * v_e - v_b * v_b) / (2.0 * p.a_brake) + p.m_stop
 
 
 def h(d, v_e, v_b, p):
@@ -16,14 +25,14 @@ def h(d, v_e, v_b, p):
 def v_lim(d, v_b, p):
     """식 (8): h ≥ ε를 지키는 최대 ego 속도."""
     v_b = max(0.0, v_b)
-    a, td = p.a_brake, p.t_d
+    a, td = p.a_brake, _td(p)
     disc = a * a * td * td + 2.0 * a * (d - p.m_stop - p.eps_follow) + v_b * v_b
     return max(0.0, -a * td + math.sqrt(disc)) if disc > 0.0 else 0.0
 
 
 def d_star(v_b, p):
     """식 (9): v_E = v_B로 따라갈 수 있는 최근접 거리."""
-    return max(0.0, v_b) * p.t_d + p.m_stop + p.eps_follow
+    return max(0.0, v_b) * _td(p) + p.m_stop + p.eps_follow
 
 
 def probe_feasible(v_b, p):

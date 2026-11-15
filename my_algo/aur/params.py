@@ -13,7 +13,8 @@ from my_algo.vehicle_utils import ERPM_GAIN, MIN_DRIVING_RPM
 @dataclass
 class AurParams:
     # --- 안전 (식 6~11) ---
-    t_d: float = 0.15               # 제동 지연 [s]
+    t_d: float = 0.15               # 제동 지연 [s] (명령 → 감속 시작)
+    scan_period: float = 0.1        # 인지 주기 Δ [s]. 식 (6)·(8)·(9)는 t_d + Δ를 쓴다 (기획안 변경)
     a_brake: float = 3.0            # 최대 감속도 [m/s^2]
     m_stop: float = 0.15            # 정지 후 남길 여유 [m]
     eps_follow: float = 0.05        # 추종 여유 ε [m]
@@ -33,6 +34,7 @@ class AurParams:
     w_car: float = 0.27
     c_lat: float = 0.10             # 횡 여유 [m]
     W: Optional[float] = None       # 통로 폭 측정값 [m]. None이면 corridor.W_est를 쓴다
+    W_leader: Optional[float] = None    # 선행차 전용 실측 통로 폭 [m]. 주면 선행차는 오른쪽 벽만으로 횡위치를 구한다
     lane_offset: Optional[float] = None   # None이면 δ = W/2 − w/2 − c
     # --- 속도 ---
     v_B_nominal: float = 0.9

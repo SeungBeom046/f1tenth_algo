@@ -6,7 +6,8 @@
 #       이 값들의 코드 기본값은 기존 주행 값이고 여기서만 덮어쓴다.
 aur:
   # --- 안전 (식 6~11) ---
-  t_d: 0.15                 # TUNE: 제동 지연 | s | 기획안 (보정 실험으로 대체)
+  t_d: 0.15                 # TUNE: 제동 지연 (명령 → 감속 시작) | s | 기획안 (보정 실험으로 대체)
+  scan_period: 0.1          # TUNE: 인지 주기 Δ, 식 (6)·(8)·(9)에 t_d + Δ로 들어간다 | s | 측정 (scan 10 Hz)
   a_brake: 3.0              # TUNE: 최대 감속도 | m/s^2 | 기획안 (보정 실험으로 대체)
   m_stop: 0.15              # TUNE: 정지 후 남길 여유 m | m | 기획안
   eps_follow: 0.05          # TUNE: 추종 여유 ε | m | 기획안
@@ -26,6 +27,7 @@ aur:
   w_car: 0.27               # TUNE: 차폭 w | m | 측정
   c_lat: 0.10               # TUNE: 횡 여유 c | m | 기획안
   W: null                   # TUNE: 통로 폭 W, null이면 scan 추정값 사용 | m | 임시 (실험 장소에서 측정)
+  W_leader: null            # TUNE: 선행차 전용 실측 통로 폭, 주면 오른쪽 벽만으로 횡위치 (옆에 온 후행차를 벽으로 안 봄) | m | 임시 (실험 장소에서 측정해 leader yaml에)
   lane_offset: null         # TUNE: 차선 횡 오프셋 δ, null이면 W/2 − w/2 − c | m | 기획안
   # --- 속도 ---
   v_B_nominal: 0.9          # TUNE: 선행차 목표 속도 | m/s | 기획안

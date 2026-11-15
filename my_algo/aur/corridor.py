@@ -16,7 +16,9 @@ class Corridor:
         self.valid = False          # 이번 scan에서 양쪽 벽이 다 보였는가
         self.heading = 0.0          # 통로 방향 기준 차 헤딩 [rad] (왼쪽 양수). 벽 점 직선 맞춤, 못 구하면 직전 값
 
-    def update(self, points, exclude_idx=()):
+    def update(self, points, exclude_idx=(), W_fixed=None):
+        """W_fixed(실측 통로 폭)를 주면 오른쪽 벽만 쓴다: ego_lateral = right − W/2.
+        선행차 전용이다. 후행차는 왼쪽으로 추월하므로 오른쪽 벽은 가려지지 않는다."""
         p = self.p
         ex = set(exclude_idx)
         lo = math.radians(p.corridor_sector_min_deg)
@@ -27,6 +29,8 @@ class Corridor:
                 continue
             if q.x - p.lidar_to_front > p.min_point_x:
                 sides[1 if q.ang > 0 else -1].append(q)
+        if W_fixed is not None:
+            sides[1] = []
         slopes = [s for s in (self._slope(sides[1]), self._slope(sides[-1])) if s is not None]
         if slopes:
             # 차가 ψ만큼 틀어지면 차량 좌표계에서 벽은 기울기 tan(−ψ)인 직선이다.
@@ -34,6 +38,13 @@ class Corridor:
         # 벽까지 수직 거리 = 분위 |y| × cos ψ (헤딩이 0이면 기존 방식과 같다)
         c = math.cos(self.heading)
         self.left, self.right = self._dist(sides[1], c), self._dist(sides[-1], c)
+        if W_fixed is not None:
+            self.valid = self.right is not None
+            self.W_est = W_fixed
+            if self.valid:
+                self.ego_lateral = self.right - W_fixed / 2.0
+                self.left = W_fixed - self.right
+            return self
         self.valid = self.left is not None and self.right is not None
         if self.valid:
             self.ego_lateral = (self.right - self.left) / 2.0

@@ -47,6 +47,12 @@ def load_cfg(path=None, **overrides):
     return cfg
 
 
+def rmin(values):
+    """결과 표용 최솟값 (없으면 None: NaN은 같은 결과끼리도 ==가 거짓이라 결정성 비교가 깨진다)."""
+    values = list(values)
+    return round(min(values), 3) if values else None
+
+
 def corners(x, y, yaw, cfg):
     v = cfg['vehicle']
     c, s = math.cos(yaw), math.sin(yaw)
@@ -89,7 +95,9 @@ class Car:
         self.y_ref = 0.0
         self.scripted = None        # (y, yaw): 선행차 yaw 고정 양보 중일 때의 자세
         a = cfg['aeb']      # 나머지 기본값 = launch/lidar_drive.launch.py 값
-        self.aeb = AEBSafetyModel(path_margin=a['path_margin'], bumper_emergency_distance=a['bumper_emergency_distance'])
+        self.aeb = AEBSafetyModel(path_margin=a['path_margin'], bumper_emergency_distance=a['bumper_emergency_distance'],
+                                  model=a['model'], ttc_threshold=a['ttc_threshold'])
+        self.W_fixed = p.W_leader if name == 'leader' else None
         self.scan_ns = None         # AEB 입력 (LaserScan 필드)
         self.cmd = (0.0, 0.0)       # planner가 낸 (rpm, 조향) = /reactive/lidar_command
         self.aeb_active = False
@@ -104,12 +112,12 @@ class Car:
                                      scan['range_min'], scan['range_max'])
         cor, p = self.corridor, sim.p
         if cor.W_est is None:
-            cor.update(self.points)
-        W = p.W if p.W is not None else cor.W_est
+            cor.update(self.points, W_fixed=self.W_fixed)
+        W = self.W_fixed or (p.W if p.W is not None else cor.W_est)
         args = (self.points, sim.t, self.kin.v, cor.ego_lateral, W)
         self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
         self.front = self.shadow.update(*args)
-        cor.update(self.points, self.track.idx)
+        cor.update(self.points, self.track.idx, W_fixed=self.W_fixed)
         return W
 
     def drive(self, sim, v_cmd, y_ref):
@@ -123,7 +131,7 @@ class Car:
         a = sim.cfg['aeb']
         emergency = False
         if a['enabled'] and self.scan_ns is not None:
-            speed = self.kin.v if a['speed_source'] == 'true' else 0.0
+            speed = {'measured': self.kin.v, 'zero': 0.0, 'unknown': None}[a['speed_source']]
             emergency = self.aeb.check_emergency_braking(self.scan_ns, speed, ReactiveDriveCommand(steer, rpm))
         if emergency and not self.aeb_active:
             self.n_aeb += 1
@@ -136,7 +144,8 @@ class Sim:
     def __init__(self, method='d', cfg=None, seed=0, run_id=None, reuse=None, **param_overrides):
         """reuse = (MjModel, MjData): 뷰어 재시작 때 창이 붙어 있는 모델·데이터를 다시 쓴다 (같은 설정이어야 함)."""
         self.cfg = cfg or load_cfg()
-        self.p = load_params(COMMON_YAML, **dict(self.cfg.get('params') or {}, **param_overrides))
+        extra = {'W_leader': float(self.cfg['track']['W'])} if self.cfg['leader'].get('fix_W') else {}
+        self.p = load_params(COMMON_YAML, **dict(self.cfg.get('params') or {}, **extra, **param_overrides))
         self.cfg['w_car'] = self.p.w_car
         self.seed = seed
         self.method = method
@@ -205,7 +214,7 @@ class Sim:
         d_rear = lead.track.d if lead.track.valid else None
         if not lead.track.valid:    # 후행차가 옆으로 오면 이어서 추적해 그 점을 벽 계산에서 뺀다
             side = lead.tracker.update_side(lead.points, self.t, lead.kin.v, lead.corridor.ego_lateral, Wl)
-            lead.corridor.update(lead.points, side.idx)
+            lead.corridor.update(lead.points, side.idx, W_fixed=lead.W_fixed)
         lv, ly_ref = self.logic.step(self.t, lead.kin.v, d_rear, Wl)
         if self.t < cfg['start']['leader_delay']:
             lv = 0.0
@@ -273,6 +282,14 @@ class Sim:
         return self.result()
 
     # ------------------------------------------------------------ 결과
+    def _return_after_overlap(self):
+        lg = self.logic
+        if lg.return_after is None or lg.t_yield is None:
+            return False
+        t_ret = lg.t_yield + lg.return_after
+        t_ov = next((r['t'] for r in self.log if r['gap'] < 0.0), None)
+        return t_ov is not None and t_ov <= t_ret <= self.t
+
     def result(self):
         log, fsm = self.log, self.fsm
         # 추적 유지: 선행차가 앞쪽 검출 범위 안(참값)에 있는 scan 중 정면 규칙이 차를 찾은 비율.
@@ -306,8 +323,16 @@ class Sim:
             decided=fsm.decided or '', T_id=None if fsm.t_decided is None else round(fsm.t_decided - fsm.t0, 2),
             pass_entered=any(r['state'] == 'PASS' for r in log),
             T_pass=round(getattr(self, '_t_done', float('nan')) - fsm.t0, 2) if success else None,
-            h_min=round(min((r['h'] for r in post if r['state'] in ('APPROACH', 'PROBE', 'FOLLOW')), default=float('nan')), 3),
-            gap_min=round(min((r['gap'] for r in post if r['state'] in ('APPROACH', 'PROBE', 'FOLLOW')), default=float('nan')), 3),
+            # 안전 판정 (기획안 변경): 급정지 전 h_min ≥ 0, 급정지 후 정지 간격 ≥ m
+            h_min=rmin(r['h'] for r in post if r['state'] in ('APPROACH', 'PROBE', 'FOLLOW') and not r['brake_fired']),
+            stop_gap=rmin(r['gap'] for r in post if r['brake_fired']),
+            stop_gap_ok=all(r['gap'] >= self.p.m_stop for r in post if r['brake_fired']),
+            brake_fired=self.logic.brake_fired,
+            deadlock=(not self.collision and fsm.state in ('APPROACH', 'PROBE', 'PASS', 'MERGE')
+                      and self.t >= self.cfg['sim']['max_time'] and self.ego.kin.v < 0.05),
+            # YR: 후행차가 이미 옆에 온 뒤(앞뒤 겹침 후) 복귀했는가 = 시뮬 전용 시나리오
+            return_after_overlap=self._return_after_overlap(),
+            gap_min=rmin(r['gap'] for r in post if r['state'] in ('APPROACH', 'PROBE', 'FOLLOW')),
             hold_count=fsm.hold_count, N_AEB=self.ego.n_aeb, N_AEB_leader=self.leader.n_aeb,
             aeb_speed_source=self.cfg['aeb']['speed_source'] if self.cfg['aeb']['enabled'] else 'off',
             n_abort=fsm.abort_count, track_need=len(need), track_lost=len(lost),

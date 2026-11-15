@@ -1,6 +1,8 @@
 import os
 import tempfile
 
+from dataclasses import replace
+
 import pytest
 
 from my_algo.aur import safety, speed
@@ -12,7 +14,8 @@ P = AurParams()
 def test_closed_form_identities():
     for v_b in (0.0, 0.5, 0.9, 1.5):
         assert abs(safety.v_lim(safety.d_star(v_b, P), v_b, P) - v_b) < 1e-6
-    assert abs(safety.d_star(0.9, P) - 0.335) < 1e-12
+    assert abs(safety.d_star(0.9, replace(P, scan_period=0.0)) - 0.335) < 1e-12    # 기획안 식
+    assert abs(safety.d_star(0.9, P) - 0.425) < 1e-12                               # t_d + Δ
     lo, hi = safety.pass_window(0.27, 0.10)
     assert abs(lo - 0.84) < 1e-12 and abs(hi - 1.21) < 1e-12
 

@@ -113,3 +113,12 @@ def test_corridor_heading_and_perpendicular_distance():
         cor = Corridor(P).update(pts)
         assert cor.valid and abs(cor.heading - psi) < 0.01
         assert abs(cor.ego_lateral - y_e) < 0.01 and abs(cor.W_est - W) < 0.01
+
+
+def test_corridor_w_fixed_ignores_left_side():
+    # 선행차: 왼쪽에 후행차가 붙어도 오른쪽 벽 + 실측 W로 횡위치를 구한다
+    W, y = 1.0, -0.265
+    pts = scan(W, y, [box(-0.3, 0.3, 0.13, 0.40)])          # 왼쪽 옆 후행차
+    assert abs(Corridor(P).update(pts).ego_lateral - y) > 0.05   # W 고정 없으면 틀어진다
+    cor = Corridor(P).update(pts, W_fixed=W)
+    assert cor.valid and abs(cor.ego_lateral - y) < 0.01 and cor.W_est == W

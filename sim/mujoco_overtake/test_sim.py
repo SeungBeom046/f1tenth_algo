@@ -12,11 +12,18 @@ def run(method, behavior, **over):
     return Sim(method, load_cfg(**dict(base, **over))).run()
 
 
-def test_real_aeb_stops_on_wall_in_yield_lane():
-    # 알려진 문제 (docs/PROGRESS.md): 실차 AEB 띠 ±0.30 m > 양보 차선 벽 여유 0.235 m.
-    # 고치면 이 테스트를 바꾼다.
-    r = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0, 'sim.max_time': 8.0})).run()
+def test_legacy_aeb_stops_on_wall_in_yield_lane():
+    # 기존 주행 AEB(띠 ±0.30 m)는 양보 차선 벽(여유 0.235 m)에서 선다. 그래서 실험은 geometric(±0.16)을 쓴다.
+    r = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0, 'sim.max_time': 8.0, 'aeb.model': 'legacy',
+                             'aeb.path_margin': 0.15, 'aeb.speed_source': 'zero'})).run()
     assert r['N_AEB_leader'] >= 1 and not r['success']
+
+
+def test_geometric_aeb_does_not_stop_leader_on_wall():
+    # 기하 AEB(±0.16)는 양보 차선 벽에서 선행차를 세우지 않는다.
+    # ego는 차선 변경 중 차체가 틀어져 벽을 볼 수 있다 (알려진 문제, docs/PROGRESS.md).
+    r = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0})).run()
+    assert r['N_AEB_leader'] == 0 and r['collision'] == ''
 
 
 def test_proposed_passes_yielding_leader():

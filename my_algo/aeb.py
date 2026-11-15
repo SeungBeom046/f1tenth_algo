@@ -26,6 +26,11 @@
         허용치 [m]. 실차 장착 오차와 손 테스트를 흡수한다.
     lidar_to_bumper_dist:
         LiDAR x축 원점에서 앞범퍼까지의 수평거리 [m].
+    model:
+        legacy(기본, 기존 동작 그대로) | geometric(추월 실험용 독립 기하 AEB).
+        geometric: 한계 = max(bumper_emergency_distance, 속도 × ttc_threshold). 제동거리 항은 쓰지 않는다.
+        속도를 모르면(speed_mps=None, odom 없음) 고정 거리 bumper_emergency_distance로 fallback.
+        tracker와 무관하게 scan만 본다. 검사 폭은 vehicle_half_width + path_margin으로 정한다.
 """
 
 import math
@@ -46,7 +51,11 @@ class AEBSafetyModel:
         vehicle_half_width=0.15,
         path_margin=0.15,
         comfortable_decel=2.8,
+        model='legacy',
     ):
+        if model not in ('legacy', 'geometric'):
+            raise ValueError('AEB model은 legacy|geometric: %r' % (model,))
+        self.model = model
         self.ttc_threshold = ttc_threshold
         self.stopping_margin = stopping_margin
         self.bumper_emergency_distance = bumper_emergency_distance
@@ -73,7 +82,8 @@ class AEBSafetyModel:
             self.last_reason = 'invalid_reactive_command'
             return True
 
-        speed = max(0.0, speed_mps)
+        speed_known = speed_mps is not None
+        speed = max(0.0, speed_mps) if speed_known else 0.0
 
         # AEB는 차량 전체 주변이 아니라 "지금 차가 지나갈 앞쪽 띠"만 본다.
         # 검사 반폭 = 차량 반폭 + 경로 여유거리.
@@ -105,6 +115,12 @@ class AEBSafetyModel:
         # planner가 먼저 맡되, 현재 속도에서 충돌 경로가 제동거리/TTC 안으로
         # 들어오면 AEB가 마지막 안전망으로 즉시 개입한다.
         ttc = closest_x / max(speed, 1e-3)
+        if self.model == 'geometric':
+            limit = max(self.bumper_emergency_distance, speed * self.ttc_threshold) if speed_known \
+                else self.bumper_emergency_distance
+            self.last_reason = (f'ttc={ttc:.2f}s closest={closest_x:.2f}m '
+                                f'aeb_limit={limit:.2f}m model=geometric' + ('' if speed_known else ' speed=unknown'))
+            return closest_x <= limit
         stopping_distance = self.estimate_stopping_distance(speed)
         dynamic_emergency_distance = max(
             self.bumper_emergency_distance,
