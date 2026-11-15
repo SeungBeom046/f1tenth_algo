@@ -61,6 +61,7 @@ aur:
   track_beta: 0.2           # TUNE: d의 α-β 필터 β | - | 임시
   track_jump_reset: 0.3     # TUNE: 예측과 이만큼 다르면 필터 초기화 | m | 임시
   track_timeout: 0.5        # TUNE: 이 시간 넘게 안 보이면 필터 초기화 | s | 임시
+  rear_face_depth: 0.05     # TUNE: 측면 추적에서 뒷면으로 보는 깊이 (x0부터), 선행차가 틀어져도 뒷면 중앙으로 y_B를 구한다 | m | 임시
   side_gate: 0.6            # TUNE: 측면 추적 연관 거리 | m | 임시
   # --- corridor ---
   corridor_sector_min_deg: 45.0     # TUNE: 벽 거리 측면 섹터 시작각 | deg | 측정 (lidar_reactive_drive와 같은 값)

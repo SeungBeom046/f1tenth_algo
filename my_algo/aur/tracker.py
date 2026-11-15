@@ -11,7 +11,8 @@ Pt = namedtuple('Pt', 'i ang x y')      # scan bin 번호, 각도, 라이다 좌
 # front_rel: (측면 추적) 선행차 앞면 x − ego 뒤범퍼 x. 음수면 선행차가 뒤에 있다.
 Track = namedtuple('Track', 'valid d y_b v_b idx front_rel width')
 Track.__new__.__defaults__ = (None,)
-_Cluster = namedtuple('_Cluster', 'x0 x1 y0 y1 idx')
+# rear_y: 가장 가까운 면(x0에서 rear_face_depth 안) 점들의 y 범위 중앙 = 상대 차 뒷면(후방 뷰는 앞면) 중심
+_Cluster = namedtuple('_Cluster', 'x0 x1 y0 y1 idx rear_y')
 
 
 def scan_to_points(ranges, angle_min, angle_increment, range_min, range_max):
@@ -63,7 +64,9 @@ class VehicleTracker:
             if len(g) >= p.cluster_min_points:
                 xs = [(-q.x - p.lidar_to_rear) if self.rear else (q.x - p.lidar_to_front) for q in g]
                 ys = [q.y for q in g]
-                out.append(_Cluster(min(xs), max(xs), min(ys), max(ys), [q.i for q in g]))
+                x0 = min(xs)
+                face = [y for x, y in zip(xs, ys) if x <= x0 + p.rear_face_depth]
+                out.append(_Cluster(x0, max(xs), min(ys), max(ys), [q.i for q in g], (min(face) + max(face)) / 2.0))
         return out
 
     def update(self, points, t, v_ego, ego_lat, W):
@@ -119,8 +122,12 @@ class VehicleTracker:
         c = best[1]
         y_mid = (c.y0 + c.y1) / 2.0
         self._c, self._front = ((c.x0 + c.x1) / 2.0, y_mid), c.x1
-        # 옆에서는 가까운 옆면만 보인다. 그 면에서 반 차폭 들어간 곳을 중심으로 본다.
-        y_c = c.y1 - p.w_car / 2.0 if y_mid < 0.0 else c.y0 + p.w_car / 2.0
-        if c.y1 - c.y0 >= p.w_car:
-            y_c = y_mid
+        if c.x0 > 0.0:
+            # 아직 앞에 있으면 뒷면이 보인다. 틀어진 선행차는 옆면까지 보여 범위 중앙이 치우치므로 뒷면 중앙을 쓴다.
+            y_c = c.rear_y
+        else:
+            # 옆에서는 가까운 옆면만 보인다. 그 면에서 반 차폭 들어간 곳을 중심으로 본다.
+            y_c = c.y1 - p.w_car / 2.0 if y_mid < 0.0 else c.y0 + p.w_car / 2.0
+            if c.y1 - c.y0 >= p.w_car:
+                y_c = y_mid
         return Track(True, c.x0, y_c + ego_lat, self._v_b, c.idx, c.x1 + offset, c.y1 - c.y0)

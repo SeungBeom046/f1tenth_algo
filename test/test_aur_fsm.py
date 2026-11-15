@@ -164,3 +164,14 @@ def test_no_abort_after_overlap():
     fsm.step(Obs(t + 0.1, 1.2, True, -0.05, y, 0.9, 0.2, 1.0, 0.8))    # 앞뒤로 겹침
     v, y_ref, state, _ = fsm.step(Obs(t + 0.2, 1.3, True, -0.10, y + 0.15, 0.9, 0.25, 1.0, 0.7))
     assert state == 'PASS' and y_ref > 0 and v == P.v_pass
+
+
+def test_pass_abort_reference_is_most_yielded_position():
+    # 선행차가 비키는 중(−0.12)에 PASS 진입 → −0.26까지 비켰다가 −0.17로 돌아오면 중단
+    fsm = EgoFSM(P, 'd')
+    t, y = _to_pass(fsm)
+    for y in (-0.20, -0.26):
+        t += 0.1
+        assert fsm.step(Obs(t, 0.9, True, 0.30, y, 0.9, 0.1, 1.0))[2] == 'PASS'
+    t += 0.1
+    assert fsm.step(Obs(t, 0.9, True, 0.30, -0.26 + P.y_yield_thr + 0.01, 0.9, 0.1, 1.0))[2] == 'FOLLOW'

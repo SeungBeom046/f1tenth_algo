@@ -69,6 +69,7 @@ class AurParams:
     track_jump_reset: float = 0.3   # 예측과 이만큼 다르면 다른 물체로 보고 필터 초기화 [m]
     track_timeout: float = 0.5
     side_gate: float = 0.6          # 측면 추적 연관 거리 [m]
+    rear_face_depth: float = 0.05   # 측면 추적에서 뒷면으로 보는 깊이 (x0부터) [m]
     # --- corridor (lidar_reactive_drive.PLANNER_CONSTANTS와 같은 값) ---
     corridor_sector_min_deg: float = 45.0
     corridor_sector_max_deg: float = 115.0

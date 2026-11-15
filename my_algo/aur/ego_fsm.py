@@ -39,7 +39,7 @@ class EgoFSM:
         self._prev = None           # belief용 직전 (t, y_b)
         self._cleared = False       # PASS에서 선행차와 횡으로 완전히 어긋났는가
         self._overlapped = False    # PASS에서 앞뒤로 겹쳤는가 (d ≤ 0). 그 뒤에는 중단하지 않는다
-        self._y_b_pass = None       # PASS 진입 때 선행차 횡위치 (복귀 판정 기준)
+        self._y_b_pass = None       # PASS 중 선행차가 가장 많이 비킨 횡위치 (복귀 판정 기준)
         self.abort_count = 0
 
     def _d_ref(self, v_b):
@@ -109,6 +109,8 @@ class EgoFSM:
                 self.follow_reason = reason
 
         if self.state == 'PASS' and not self._overlapped and obs.valid:
+            # 선행차가 아직 비키는 중에 PASS에 들어올 수 있으므로 기준은 진입 값이 아니라 지금까지의 최소 y_B
+            self._y_b_pass = min(self._y_b_pass, obs.y_b)
             if obs.d <= 0.0:
                 self._overlapped = True     # 겹친 뒤 감속하면 나란히 있는 시간만 길어진다: 차선 유지, v_pass
             elif obs.y_b > self._y_b_pass + p.y_yield_thr \
