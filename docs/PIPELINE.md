@@ -45,7 +45,7 @@ flowchart TD
 |---|---|---|
 | 1 인지 | `my_algo/aur/tracker.py` `scan_to_points` | LaserScan 필드 → 각도순 점 (라이다 좌표) |
 | 1 인지 | `my_algo/aur/corridor.py` `Corridor.update` | 점, 차 점 idx, (선행차) 실측 W → 좌·우 벽 수직 거리, `ego_lateral`, `heading`, `W_est` |
-| 2 추적 | `my_algo/aur/tracker.py` `VehicleTracker.update` | 점, 시각, v_E, ego 횡위치, W → `Track(d, y_b, v_b, idx, width)`. v_B는 α-β 필터 |
+| 2 추적 | `my_algo/aur/tracker.py` `VehicleTracker.update` | 점, 시각, v_E, ego 횡위치, W, 헤딩 → `Track(d, y_b, v_b, idx, width, y_l)`. `heading_comp`이면 점을 corridor 헤딩만큼 돌린 뒤 클러스터링. v_B는 α-β 필터, y_l은 왼쪽 옆면 직선 피팅 |
 | 2 추적 | `VehicleTracker.update_side` | PASS·MERGE에서 직전 위치 근처 클러스터를 이어 추적 → `front_rel` (선행차 앞면 − ego 뒤범퍼) |
 | 3 belief | `my_algo/aur/belief.py` `Belief.update` | z = y_B 변위, d, Δt → λ, `prob_yield()` |
 | 4 판단 | `my_algo/aur/ego_fsm.py` `EgoFSM.step` | `Obs` → (v_cmd, y_ref, 상태, 이유) |
@@ -67,7 +67,8 @@ stateDiagram-v2
     PROBE --> PASS: go
     APPROACH --> FOLLOW: belief NY 확정
     PROBE --> FOLLOW: belief NY 확정 / PROBE 후 T_max
-    PASS --> FOLLOW: 추월 중단 (겹치기 전)
+    PASS --> RETREAT: 추월 중단 (겹치기 전, abort_mode = retreat)
+    RETREAT --> FOLLOW: 선행차 뒷면이 앞범퍼보다 retreat_clear_gap 앞
     PASS --> MERGE: front_rel ≤ −m
     MERGE --> DONE: |ego_lat + δ| < merge_tol
 ```
@@ -78,7 +79,8 @@ stateDiagram-v2
 | belief 확정 | b = P(Y)가 처음 η(0.9) 이상 → Y, 처음 1−η 이하 → NY. 한 번 정하면 바뀌지 않는다 |
 | 횡 여유 (`lateral_pass_ok`) | W/2 − y_B − w/2 ≥ w + 2c (선행차 왼쪽에 ego 폭 + 양쪽 여유) |
 | go | a: PROBE 후 `T_wait_a`(3 s) 경과 + 횡 여유. b·c·d: belief Y 확정 + 횡 여유 |
-| 추월 중단 | PASS, 앞뒤로 겹치기 전(d > 0): 선행차 y_B > (PASS 중 최소 y_B) + `y_yield_thr` 또는 횡 여유 없음 → y_ref 0, 추종 속도, `follow_reason = pass_abort`. 겹친 뒤(d ≤ 0)에는 중단하지 않고 차선 유지 + v_pass |
+| 추월 중단 | PASS, 앞뒤로 겹치기 전(d > 0): 선행차 y_B > (PASS 중 최소 y_B) + `y_yield_thr` 또는 횡 여유 없음 → RETREAT (`follow_reason = pass_abort`). 겹친 뒤(d ≤ 0)에는 중단하지 않고 차선 유지 + v_pass. 횡 여유 기준은 `lateral_ref` (center: y_B, left_edge: y_L) |
+| RETREAT | 추월 차선(+δ) 유지, `retreat_speed_ratio` × v_B, 측면 추적 유지(선행차 점을 벽 계산에서 뺌). 선행차 뒷면이 앞범퍼보다 `retreat_clear_gap` 이상 앞서면 FOLLOW |
 | front_rel | 선행차 앞면 x − ego 뒤범퍼 x (측면 추적, 안 보이면 마지막 v_B로 추측 항법) |
 
 상태별 명령:
@@ -86,8 +88,9 @@ stateDiagram-v2
 | 상태 | y_ref | v_cmd |
 |---|---|---|
 | WAIT·APPROACH·PROBE·FOLLOW | 0 | 방법별 추종: d는 min(v_pass, v_lim(d, v_B)) (식 8), c는 d_probe_c까지 v_pass 후 P 제어, a·b는 v_B + k_d(d − d_ref). 선행차가 안 보이면 v_B_nominal |
-| PASS | +δ (δ = W/2 − w/2 − c) | 선행차와 중심 간격이 w + c가 되기 전에는 추종 속도, 그 뒤 v_pass |
-| MERGE | −δ | v_pass |
+| PASS | +δ (δ = W/2 − w/2 − c) | 선행차와 중심 간격이 w + c가 되고 추월 차선에 도착(`lane_change_tol`)하기 전에는 추종 속도, 그 뒤 v_pass (이미 옆에 겹쳤으면 바로 v_pass) |
+| RETREAT | +δ | `retreat_speed_ratio` × v_B |
+| MERGE | −δ | v_B_nominal (차선 변경 중 추종 속도) |
 | DONE | −δ | v_B_nominal |
 
 모든 상태에서 마지막에 `min_speed_rule`을 적용한다 (hold 히스테리시스: v_E > 0.35에서 켜짐, < 0.25에서 꺼짐).
@@ -124,7 +127,7 @@ t_d' = t_d + Δ (Δ = `scan_period`, 기획안 변경):
 
 | 층 | 상태 | 대상 | 판정 |
 |---|---|---|---|
-| (a) 독립 기하 AEB `model='geometric'` | 구현, 시뮬에서만 사용 (`autonomous_drive`에는 아직 model 파라미터가 없다) | scan 전체, 차 중심 ±(vehicle_half_width + path_margin) 직선 띠 (실험값 ±0.16 m) | closest ≤ max(0.25 m, v·TTC). 속도를 모르면 0.25 m. tracker와 무관 |
+| (a) 독립 기하 AEB `model='geometric'` | 구현, 시뮬에서만 사용 (`autonomous_drive`에는 아직 model 파라미터가 없다) | scan 전체, 차 중심 ±(vehicle_half_width + path_margin) 띠 (실험값 ±0.16 m). `curved_band`면 조향 명령의 원호를 따라 휜다 | closest ≤ max(0.25 m, v·TTC). 속도를 모르면 0.25 m. tracker와 무관 |
 | (b) relative AEB | 미구현 (5단계) | tracker 차량 클러스터 | 상대속도 기반 |
 | `legacy` | 기본 주행 기본값, 변경 없음 | 띠 ±0.30 m | closest ≤ max(0.25, v²/(2·2.8) + 0.20, 0.55·v) |
 
