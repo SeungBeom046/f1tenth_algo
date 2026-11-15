@@ -65,7 +65,7 @@
 | config/exp_common.yaml | 66 | `leader_width` | 0.27 | m | 선행차 전폭, 왼쪽 모서리 추정에서 왼쪽 옆면 점 선택 (가장 왼쪽 점에서 이 값의 절반 안) | 측정 (차폭 0.27) | 선행차 실제 전폭. 크게 주면 뒷면 점까지 옆면으로 섞인다 | 실측 |
 | config/exp_common.yaml | 67 | `leader_length` | 0.50 | m | 선행차 길이, 왼쪽 옆면 직선을 연장하는 구간 | 측정 (뒤축→앞 0.41 + 뒤축→뒤 0.09) | 옆면 직선을 앞쪽으로 연장하는 길이. 크면 틀어진 선행차의 앞 모서리를 과대 추정한다 (보수적) | 실측 |
 | config/exp_common.yaml | 68 | `side_fit_min_points` | 3 | 개 | 왼쪽 옆면 직선 피팅 최소 점 수, 모자라면 가장 왼쪽 점 | 임시 | 키우면 먼 거리·좁은 각에서 피팅 대신 가장 왼쪽 점을 쓴다 | 3~6 |
-| config/exp_common.yaml | 69 | `heading_comp` | false | - | tracker 입력 점을 corridor 헤딩 추정으로 회전 보정 | 임시 (2026-11-15, 측정 중) | 끄면 차선 변경 중 ego가 틀어진 만큼(앞 1 m·10°에서 0.17 m) 선행차 y_B·y_L이 오른쪽으로 치우친다. 켜면 corridor 헤딩 오차가 그대로 들어간다 | true (측정 후) |
+| config/exp_common.yaml | 69 | `heading_comp` | true | - | tracker 입력 점을 corridor 헤딩 추정으로 회전 보정 (off면 차선 변경 중 y_B가 최대 0.18 m 치우침) | 임시 (2026-11-15 측정으로 on) | 끄면 차선 변경 중 ego가 틀어진 만큼(앞 1 m·10°에서 0.17 m) 선행차 y_B·y_L이 오른쪽으로 치우친다. 켜면 corridor 헤딩 오차가 그대로 들어간다 | true (측정 후) |
 | config/exp_common.yaml | 70 | `abort_mode` | follow | - | 추월 중단 뒤 follow(바로 FOLLOW) / retreat(차선 유지하며 물러난 뒤 FOLLOW) | 임시 (2026-11-15) | follow면 중단 직후 중앙으로 붙으며 옆의 선행차를 벽으로 볼 수 있다 | retreat (측정 후) |
 | config/exp_common.yaml | 71 | `retreat_speed_ratio` | 0.8 | - | RETREAT 속도 = 이 값 × v_B (v_min 0.867보다 작으면 최소 속도 규칙에 따라 v_min 또는 0) | 임시 | 작을수록 빨리 물러나지만 0.96(= v_min/v_B) 아래는 최소 속도 규칙 때문에 v_min 또는 0이 된다 | 0.5~0.95 |
 | config/exp_common.yaml | 72 | `retreat_clear_gap` | 0.15 | m | RETREAT 탈출 조건, 선행차 뒷면이 앞범퍼보다 이만큼 앞 (m 여유) | 임시 (m과 같은 값) | 작으면 선행차와 가까운 채 중앙으로 돌아온다 | m 이상 |

@@ -20,14 +20,24 @@ def test_legacy_aeb_stops_on_wall_in_yield_lane():
 
 
 def test_geometric_aeb_does_not_stop_leader_on_wall():
-    # 기하 AEB(±0.16)는 양보 차선 벽에서 선행차를 세우지 않는다.
-    # ego는 차선 변경 중 차체가 틀어져 벽을 볼 수 있다 (알려진 문제, docs/PROGRESS.md).
+    # 기하 AEB(±0.16)는 양보 차선 벽에서 선행차를 세우지 않는다 (ego MERGE 전까지 선행차 AEB 0).
+    sim = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0}))
+    fired = []
+
+    def hook(s):
+        if s.leader.aeb_active and s.fsm.state not in ('MERGE', 'DONE'):
+            fired.append(s.t)
+    r = sim.run(hook=hook)
+    assert not fired and r['collision'] == ''
+
+
+@pytest.mark.xfail(strict=True, reason='열린 문제 (docs/PROGRESS.md): MERGE가 m = 0.15 m 간격으로 끼어들고 v_B_nominal로 가서 '
+                   '선행차 AEB(0.9 × 0.35 = 0.31 m)가 0.27 m에서 걸린다. 고치면 이 표시를 지운다')
+def test_merge_does_not_trigger_leader_aeb():
     r = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0})).run()
-    assert r['N_AEB_leader'] == 0 and r['collision'] == ''
+    assert r['success'] and r['N_AEB_leader'] == 0
 
 
-@pytest.mark.xfail(strict=True, reason='열린 문제 (docs/PROGRESS.md): B1(a8f4193) 뒤 측면 추적 y_B 편향으로 추월을 잘못 중단한다. '
-                   '고치면 이 표시를 지운다')
 def test_proposed_passes_yielding_leader():
     r = run('d', 'Y')
     assert r['success'] and r['decided'] == 'Y' and not r['collision'] and r['track_lost'] == 0

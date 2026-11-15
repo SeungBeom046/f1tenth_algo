@@ -163,7 +163,7 @@ def test_heading_compensation():
                   for q in pts0), key=lambda q: q.ang)
     cor = Corridor(P).update(pts)
     assert abs(cor.heading - psi) < 0.01
-    off = VehicleTracker(P).update(pts, 0.0, 0.9, cor.ego_lateral, W, cor.heading)
+    off = VehicleTracker(replace(P, heading_comp=False)).update(pts, 0.0, 0.9, cor.ego_lateral, W, cor.heading)
     on = VehicleTracker(replace(P, heading_comp=True)).update(pts, 0.0, 0.9, cor.ego_lateral, W, cor.heading)
     assert off.y_b < -0.265 - 0.1                 # 보정 없으면 오른쪽으로 0.1 m 넘게 치우친다
     assert abs(on.y_b + 0.265) < 0.03 and abs(on.d - 0.8) < 0.05
