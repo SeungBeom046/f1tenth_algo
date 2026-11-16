@@ -15,6 +15,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch',
             glob('launch/*.launch.py')),
+        ('share/' + package_name + '/config', ['config/exp_common.yaml']),     # exp_planner가 읽는다
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -29,6 +30,7 @@ setup(
             'autonomous_drive = my_algo.baseline.autonomous_drive:main',
             'joy_controller = my_algo.baseline.joy_controller:main',
             'autonomous_metrics_logger = my_algo.baseline.autonomous_metrics_logger:main',
+            'exp_planner = my_algo.exp_planner:main',
         ],
     },
 )

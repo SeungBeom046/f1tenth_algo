@@ -21,6 +21,25 @@ def test_events_show_leader_yield_before_ego_pass():
     assert yield_i < pass_i and any('belief 확정 Y' in e for e in ev)
 
 
+@pytest.mark.parametrize('behavior', ['Y', 'NY'])
+def test_leader_runner_matches_sim_leader(behavior):
+    # 실차 노드가 쓰는 LeaderRunner에 시뮬 선행차와 같은 scan·속도를 넣으면 같은 명령이 나와야 한다
+    from my_algo.aur.leader_runner import LeaderRunner
+    sim = Sim('d', load_cfg(**{'leader.behavior': behavior, 'leader.d_y': 1.0}))
+    runner = LeaderRunner(sim.p, behavior, sim.seed, d_y=1.0)
+    frame, out = sim._leader_frame, []
+
+    def checked():
+        t, v = sim.t, sim.leader.kin.v
+        frame()
+        rv, steer, _ = runner.step(t, sim.leader.scan_ns, v)
+        out.append((rv * sim.p.erpm_gain, steer) == sim.leader.cmd)
+    sim._leader_frame = checked
+    sim.run()
+    assert len(out) > 50 and all(out)
+    assert runner.logic.yield_triggered == (behavior == 'Y') and runner.logic.brake_fired == (behavior == 'NY')
+
+
 def test_legacy_aeb_stops_on_wall_in_yield_lane():
     # 기존 주행 AEB(띠 ±0.30 m)는 양보 차선 벽(여유 0.235 m)에서 선다. 그래서 실험은 geometric(±0.16)을 쓴다.
     r = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0, 'sim.max_time': 8.0, 'aeb.model': 'legacy',
