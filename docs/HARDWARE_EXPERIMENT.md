@@ -197,6 +197,7 @@ ros2 topic echo /reactive/lidar_command
 
 | 무엇 | 방법 | 기록 | 구하는 값 | 지금 가정값 |
 |---|---|---|---|---|
+| **서보 중심 (직진성)** | `exp_overtake.launch.py role:=straight`로 조향 0 직진, 찍히는 횡위치·헤딩 변화를 보며 `servo_center`를 0.01씩 조정 ([CAR_TERMINALS.md](CAR_TERMINALS.md) "서보 중심 보정") | 터미널 로그 | 차마다 `servo_center` (3 m에 ±0.05 m, ±1° 안) | 0.50 |
 | 제동 지연 t_d, 최대 감속 a | 한 차씩 기본 주행으로 직선을 달리다 앞에 장애물을 두어 AEB로 세운다 (차마다 3회). 또는 `/autonomous_mode` false | bag (`/commands/motor/speed`, `/sensors/core`, `/aeb/active`) + 옆에서 영상 | 0 명령 시각 → 속도가 줄기 시작한 시각 = t_d, 감속 구간 기울기 = a | t_d 0.15 s, a 3.0 m/s² |
 | ERPM → m/s 환산 | 테이프로 5 m 구간 표시, 일정 속도로 통과하는 시간을 잰다 | bag (`/sensors/core` 속도) + 스톱워치/영상 | ERPM_GAIN = 평균 ERPM / 실제 m/s | 4614 |
 | 정지 선행차 측정 잡음 | 선행차를 통로 중심에 세우고, ego를 2 m, 1 m, 0.5 m 뒤에 세워 각 10 s 기록 (ego는 알고리즘 끄고 드라이버만) | bag (`/scan`) | 선행차 거리 d와 횡위치의 표준편차 (σ), 줄자 값과의 차이 | σ 0.02 m |

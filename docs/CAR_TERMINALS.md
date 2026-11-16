@@ -26,6 +26,7 @@
 | **추월 실험: 앞차가 비켜 줌 (Y)** | `exp_overtake.launch.py role:=leader intent:=Y ...` | `exp_overtake.launch.py role:=ego method:=d ...` |
 | **추월 실험: 앞차가 안 비키고 급정지 (NY)** | `exp_overtake.launch.py role:=leader intent:=NY ...` | `exp_overtake.launch.py role:=ego method:=d ...` |
 | 방법 비교 (a·b·c·d) | 위와 같음 | `method:=a` / `b` / `c` / `d` |
+| **서보 중심 보정 (차마다 처음 한 번, 직진성)** | `exp_overtake.launch.py role:=straight servo_center:=0.50` | 같음 |
 | 기본 주행 확인, 보정 실험 | `lidar_drive.launch.py` | `lidar_drive.launch.py` |
 
 **`lidar_drive.launch.py`는 추월 코드가 아니다.** 기본 주행(gap follow: 막히면 빈 공간으로 피해 감)이고, 값은 main 브랜치와 같다. 추월 실험에서는 두 차 모두 `exp_overtake.launch.py`를 쓴다.
@@ -118,7 +119,7 @@ export ROS_DOMAIN_ID=37
 source /opt/ros/jazzy/setup.bash
 source ~/f1_tenth_ws/install/setup.bash
 source ~/ros2_ws/install/setup.bash
-ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=test1 W:=1.0         # test1·1.0을 회차 이름·실측 폭으로
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=test1 W:=1.0 servo_center:=0.50    # 회차 이름·실측 폭·보정한 서보 값으로
 ```
 
 (나) 기본 주행 (gap follow): 보정 실험용.
@@ -214,7 +215,7 @@ export ROS_DOMAIN_ID=38
 source /opt/ros/foxy/setup.bash
 source ~/vesc_ws/install/setup.bash
 source ~/f1tenth_ws/install/setup.bash
-ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0         # 1.0을 실측 통로 폭으로
+ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0 servo_center:=0.50    # 실측 통로 폭·보정한 서보 값으로
 ```
 
 (나) 기본 주행 (gap follow): 보정 실험용. **추월 코드가 아니다.**
@@ -256,6 +257,30 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 | 바퀴가 안 돈다 | 터미널 2 VESC 오류, 또는 차 앞 0.25 m 안에 무언가가 있어 AEB가 걸렸다 (`/aeb/status`) |
 | 다른 차가 같이 움직인다 / 토픽이 섞인다 | 두 차 `ROS_DOMAIN_ID`가 같다. 37·38로 나눈다 |
 
+## 서보 중심 보정 (차마다 처음 한 번)
+
+**직진성이 떨어지는 가장 큰 원인은 서보 중심(트림) 오차다.** 조향 명령이 0인데 바퀴가 조금 꺾여 있으면 차가 한쪽으로 흐른다.
+시뮬에서 트림 0.03 rad(1.7°)만 넣어도 앞차가 비키는 반응이 늦어져 비켜 주는(Y) 회차의 절반이 "안 비킨다"로 오판됐다. 횡 제어의 적분항이 남은 작은 오차(±0.01 rad 정도)는 잡지만, 큰 트림은 먼저 이 보정으로 없앤다.
+
+1. 양쪽 벽이 있는 직선 통로 중앙, 앞이 5 m 이상 빈 곳에 차를 놓는다. 터미널 1~4는 평소대로.
+2. 터미널 5 (그 차의 환경 설정 줄을 먼저 붙인 뒤):
+
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=straight servo_center:=0.50
+```
+
+3. 차가 조향 0, 0.9 m/s로 직진하면서 0.5 s마다 이렇게 찍는다 (횡위치 + = 왼쪽, 통로 중앙 기준):
+
+```text
+[EXP straight] 횡위치 +0.012 m  헤딩 +0.4°  (양쪽 벽 보임)
+[EXP straight] 횡위치 +0.035 m  헤딩 +1.1°  (양쪽 벽 보임)
+```
+
+4. 3~4 m 가서 손으로 잡거나 정지 명령. **횡위치가 계속 커지면(왼쪽으로 흐름) `servo_center`를 키우고, 작아지면(오른쪽) 줄인다.** 0.01씩 바꿔 다시 한다. (바꿨더니 더 흐르면 차의 서보 방향이 코드 가정과 반대다. 반대로 바꾼다.)
+5. 3 m 동안 횡위치 변화가 ±0.05 m 안, 헤딩이 ±1° 안이면 그 값을 그 차의 `servo_center`로 정하고 회차표 맨 위에 적는다. 이후 모든 `exp_overtake.launch.py` 명령에 `servo_center:=<그 값>`을 붙인다.
+
+`lidar_drive.launch.py`(기본 주행)는 main과 같게 두기 위해 이 값을 쓰지 않는다.
+
 ## 추월 실험
 
 터미널 1~4는 그대로이고 **터미널 5 명령만 바뀐다.** `exp_overtake.launch.py`는 라이다 변환 + 추월 실험 노드(`exp_planner`) + AEB·VESC 노드(`autonomous_drive`, 좁은 검사 띠)를 띄운다. gap follow와 카메라는 띄우지 않는다.
@@ -263,6 +288,7 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 
 명령 끝에 `2>&1 | tee ...`를 붙이면 터미널 내용이 파일로도 남는다 (터미널이 꺼져도 확인 가능). 아래 명령은 모두 이 형태다.
 `run_id`(회차 이름)와 `W`(줄자로 잰 통로 폭)는 회차마다 바꾼다. **꺾쇠 `< >`는 쓰지 않는다.**
+통로 폭은 시뮬에서 1·2·3 m 모두 확인했다 (넓으면 비키는·추월 차선을 중앙에서 0.3 m로 제한). 다만 "비켜야만 추월할 수 있다"는 실험 조건은 W ≤ 1.21 m에서만 성립하므로 본 실험은 1.0 m로 한다.
 
 ### 검정이 (앞차): 시나리오별 명령
 
@@ -279,7 +305,7 @@ mkdir -p ~/runs
 **시나리오 Y: 비켜 준다**
 
 ```bash
-ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=dY1 W:=1.0 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dY1_black.log
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=dY1 W:=1.0 servo_center:=0.50 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dY1_black.log
 ```
 
 - 동작: 0.9 m/s로 통로 중앙을 달린다. 뒤차가 `d_y`(0.6~1.2 m, `run_id`로 정해짐) 안으로 오면 오른쪽 차선(오른쪽 벽에서 약 0.24 m)으로 비키고 그대로 달린다.
@@ -295,7 +321,7 @@ ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=dY1 W:
 **시나리오 NY: 안 비키고 급정지한다**
 
 ```bash
-ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=NY run_id:=dNY1 W:=1.0 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dNY1_black.log
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=NY run_id:=dNY1 W:=1.0 servo_center:=0.50 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dNY1_black.log
 ```
 
 - 동작: 0.9 m/s로 중앙을 달린다. 비키지 않는다. 뒤차가 1.0 m 안으로 오면 "무장"하고, `brake_delay`(0.5~2.0 s, `run_id`로 정해짐) 뒤 급정지해서 그대로 서 있는다.
@@ -336,7 +362,7 @@ mkdir -p ~/runs
 ```
 
 ```bash
-ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dY1_blue.log
+ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0 servo_center:=0.50 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dY1_blue.log
 ```
 
 - 동작: 출발 → 앞차에 다가감(APPROACH) → 안전 거리가 허용하는 곳까지 붙어 관찰(PROBE) → 앞차가 비켰다고 확정하면 왼쪽으로 추월(PASS) → 앞질러서 중앙으로 복귀(MERGE) → 완료(DONE). 안 비킨다고 확정하면 안전 거리로 따라간다(FOLLOW). 추월 중 앞차가 다시 들어오면 중단하고 물러난다(RETREAT → FOLLOW).
@@ -387,3 +413,4 @@ grep -E "EXP|mode=AEB" ~/runs/*_dY1_*.log      # 그 회차의 상태 전이·�
 | 파랑이 `[Drive] mode=AEB`가 자주 | AEB 정지 거리가 지금 0.25 m 고정 (속도 입력 0). 횟수를 회차표에 적는다 |
 | 파랑이가 왼쪽 벽 앞에서 `mode=AEB`로 섬 | 차선 변경 중 벽이 검사 띠에 들어옴. 통로 폭이 1.0 m보다 넓으면 잘 생긴다 (시뮬에서도 확인된 문제) |
 | 파랑이 `MERGE`가 오래 감 | 알려진 문제: MERGE 속도가 앞차와 같아 간격이 천천히 벌어진다 |
+| NY에서 파랑이가 선 뒤 `mode=AEB`가 켜졌다 꺼졌다 | 앞차 뒤 0.2~0.3 m에 서 있으면 라이다 잡음으로 AEB 경계(0.25 m)를 오간다. 차는 서 있다 (시뮬에서 확인). AEB 횟수는 움직이는 동안의 것만 센다 |
