@@ -19,6 +19,18 @@
 > **터미널 5를 실행하는 순간 차가 바로 출발한다** (조이스틱 없음). 처음에는 바퀴를 띄우고 실행한다.
 > 이 명령들은 Mac에서 정리했고 차에서 그대로 실행해 확인하지 않았다. 다르면 이 문서를 고친다.
 
+### 무엇을 하느냐에 따라 터미널 5만 다르다
+
+| 하려는 것 | 검정이 터미널 5 (앞차) | 파랑이 터미널 5 (추월하는 차) |
+|---|---|---|
+| **추월 실험: 앞차가 비켜 줌 (Y)** | `exp_overtake.launch.py role:=leader intent:=Y ...` | `exp_overtake.launch.py role:=ego method:=d ...` |
+| **추월 실험: 앞차가 안 비키고 급정지 (NY)** | `exp_overtake.launch.py role:=leader intent:=NY ...` | `exp_overtake.launch.py role:=ego method:=d ...` |
+| 방법 비교 (a·b·c·d) | 위와 같음 | `method:=a` / `b` / `c` / `d` |
+| 기본 주행 확인, 보정 실험 | `lidar_drive.launch.py` | `lidar_drive.launch.py` |
+
+**`lidar_drive.launch.py`는 추월 코드가 아니다.** 기본 주행(gap follow: 막히면 빈 공간으로 피해 감)이고, 값은 main 브랜치와 같다. 추월 실험에서는 두 차 모두 `exp_overtake.launch.py`를 쓴다.
+각 명령의 인자와 터미널 로그는 맨 아래 "추월 실험" 절에 있다.
+
 ---
 
 ## 검정이: 앞차 leader (`ROS_DOMAIN_ID=37`, jazzy)
@@ -188,10 +200,24 @@ source ~/vesc_ws/install/setup.bash          # /sensors/core(vesc_msgs) 기록�
 mkdir -p ~/runs && cd ~/runs
 ros2 bag record -o $(date +%m%d_%H%M)_test1_blue \
   /scan /sensors/core /commands/motor/speed /commands/servo/position \
-  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode
+  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state
 ```
 
 ### 터미널 5: 주행 알고리즘 (실행하면 바로 출발)
+
+**둘 중 하나만** 띄운다.
+
+(가) 추월 알고리즘: 추월 실험용. 인자 설명은 아래 "추월 실험" 절.
+
+```bash
+export ROS_DOMAIN_ID=38
+source /opt/ros/foxy/setup.bash
+source ~/vesc_ws/install/setup.bash
+source ~/f1tenth_ws/install/setup.bash
+ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0         # 1.0을 실측 통로 폭으로
+```
+
+(나) 기본 주행 (gap follow): 보정 실험용. **추월 코드가 아니다.**
 
 ```bash
 export ROS_DOMAIN_ID=38
@@ -221,7 +247,8 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 | `package 'my_algo' not found` | 터미널 0의 빌드가 실패했거나, 터미널 5에서 워크스페이스 `install/setup.bash`를 source하지 않았다 |
 | `package 'pointcloud_to_laserscan' not found` | `sudo apt install ros-<foxy|jazzy>-pointcloud-to-laserscan` (패키지 이름 미확인) |
 | `executable 'exp_planner' not found` | 빌드가 예전 것. 터미널 0의 `git pull` → `colcon build`를 다시 |
-| `/scan`, `/aeb/status`가 없다 (터미널 5 전) | 정상. 둘 다 터미널 5(`lidar_drive.launch.py`)가 만든다 |
+| `/scan`, `/aeb/status`가 없다 (터미널 5 전) | 정상. 둘 다 터미널 5가 만든다 |
+| `[Drive] mode=FAILSAFE ... missing_command`만 계속 | `exp_planner`가 죽었다. 그 위의 `[exp_planner-2]` 에러 줄을 본다 |
 | `ros2 topic list`에 방금 띄운 토픽이 없다 | ros2 daemon이 늦게 갱신한다. `ros2 daemon stop` 후 `ros2 topic list --no-daemon --spin-time 5` |
 | `No module named 'vesc_msgs'` | 그 터미널에서 VESC 워크스페이스를 source하지 않았다 (파랑이 `source ~/vesc_ws/install/setup.bash`) |
 | RViz에는 점군이 보이는데 `Unknown topic '/livox/lidar'` | 터미널끼리 `ROS_DOMAIN_ID`가 다르다. 각 터미널에서 `echo $ROS_DOMAIN_ID`로 비교한다 (빈칸 = 0) |
@@ -229,60 +256,134 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 | 바퀴가 안 돈다 | 터미널 2 VESC 오류, 또는 차 앞 0.25 m 안에 무언가가 있어 AEB가 걸렸다 (`/aeb/status`) |
 | 다른 차가 같이 움직인다 / 토픽이 섞인다 | 두 차 `ROS_DOMAIN_ID`가 같다. 37·38로 나눈다 |
 
-## 추월 실험: 터미널 5만 바뀐다
+## 추월 실험
 
-터미널 1~4는 그대로이고 **터미널 5 명령만 바뀐다.** 이 launch는 gap follow와 카메라를 띄우지 않는다.
+터미널 1~4는 그대로이고 **터미널 5 명령만 바뀐다.** `exp_overtake.launch.py`는 라이다 변환 + 추월 실험 노드(`exp_planner`) + AEB·VESC 노드(`autonomous_drive`, 좁은 검사 띠)를 띄운다. gap follow와 카메라는 띄우지 않는다.
+**실행하면 바로 출발한다.** 차 앞 0.2 m에 출발 게이트(상자)를 두면 AEB로 서 있다가, 게이트를 치우면 출발한다.
 
-### 검정이 터미널 5: 앞차 시나리오 (지금 가능)
+명령 끝에 `2>&1 | tee ...`를 붙이면 터미널 내용이 파일로도 남는다 (터미널이 꺼져도 확인 가능). 아래 명령은 모두 이 형태다.
+`run_id`(회차 이름)와 `W`(줄자로 잰 통로 폭)는 회차마다 바꾼다. **꺾쇠 `< >`는 쓰지 않는다.**
 
-`lidar_drive.launch.py` 대신 이것을 띄운다. **실행하면 바로 출발한다** (출발 게이트로 대기).
+### 검정이 (앞차): 시나리오별 명령
+
+환경 설정 (터미널 5를 열 때마다):
 
 ```bash
 export ROS_DOMAIN_ID=37
 source /opt/ros/jazzy/setup.bash
 source ~/f1_tenth_ws/install/setup.bash
 source ~/ros2_ws/install/setup.bash
-ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=test1 W:=1.0         # test1·1.0을 회차 이름·실측 폭으로
+mkdir -p ~/runs
+```
+
+**시나리오 Y: 비켜 준다**
+
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=dY1 W:=1.0 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dY1_black.log
+```
+
+- 동작: 0.9 m/s로 통로 중앙을 달린다. 뒤차가 `d_y`(0.6~1.2 m, `run_id`로 정해짐) 안으로 오면 오른쪽 차선(오른쪽 벽에서 약 0.24 m)으로 비키고 그대로 달린다.
+- 로그:
+
+```text
+[EXP leader] 시작 role=leader intent=Y d_y=0.87 m brake_delay=1.32 s W=1.0 v_B=0.90 m/s speed_source=sensors_core
+[EXP leader] 주행 (중앙)
+[EXP leader] 출발 감지 (t0), 후행차 1.62 m
+[EXP leader] 양보 시작: 오른쪽 차선 y_ref=-0.27, 후행차 0.85 m
+```
+
+**시나리오 NY: 안 비키고 급정지한다**
+
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=NY run_id:=dNY1 W:=1.0 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dNY1_black.log
+```
+
+- 동작: 0.9 m/s로 중앙을 달린다. 비키지 않는다. 뒤차가 1.0 m 안으로 오면 "무장"하고, `brake_delay`(0.5~2.0 s, `run_id`로 정해짐) 뒤 급정지해서 그대로 서 있는다.
+- 로그:
+
+```text
+[EXP leader] 시작 role=leader intent=NY d_y=0.87 m brake_delay=1.32 s W=1.0 v_B=0.90 m/s speed_source=sensors_core
+[EXP leader] 출발 감지 (t0), 후행차 1.62 m
+[EXP leader] 급정지 무장: 1.32 s 뒤 정지
+[EXP leader] 급정지 (NY)
 ```
 
 | 인자 | 값 | 뜻 |
 |---|---|---|
-| `intent` | `Y` | 뒤차가 `d_y` 안으로 오면 오른쪽 차선으로 비킨다. 속도 0.9 m/s 유지 |
-| | `NY` | 비키지 않는다. 뒤차가 1.0 m 안으로 온 뒤 0.5~2.0 s 지나 급정지하고 그대로 선다 |
-| `run_id` | 회차표 이름 (예: `dY1`) | 이 이름으로 `d_y`(0.6~1.2 m)와 급정지 지연이 정해진다. 같은 이름이면 같은 값 |
-| `W` | 줄자로 잰 통로 폭 [m] (예: `1.0`) | 비키는 차선 위치와 횡위치 계산에 쓴다. 안 주면 벽으로 추정 |
+| `intent` | `Y` / `NY` | 위 두 시나리오 |
+| `run_id` | 회차 이름 (예: `dY1`, `bNY2`) | `d_y`와 급정지 지연이 이 이름으로 정해진다. 같은 이름이면 같은 값. 시작 줄의 값을 회차표에 적는다 |
+| `W` | 실측 통로 폭 [m] | 중앙·비키는 차선 위치를 오른쪽 벽 기준으로 잡는 데 쓴다. **실제와 다르면 차가 한쪽으로 쏠린다** |
 | `d_y` | m (선택) | 주면 `run_id` 대신 이 반응 거리로 고정 |
-| `speed_source` | `sensors_core`(기본) / `command` | 출발 감지에 쓰는 자기 속도. `vesc_msgs`가 없으면 자동으로 `command` |
+| `speed_source` | `sensors_core`(기본) / `command` | 출발 감지에 쓰는 자기 속도 |
 
-시작하면 터미널에 이렇게 찍힌다. 이 줄을 회차표에 옮겨 적는다 (`d_y`, `brake_delay`).
+주의:
+- 앞차는 **뒤쪽 1.2 m 안의 차 크기 물체를 뒤차로 본다.** 출발할 때 뒤에 사람·상자·벽 모서리가 있으면 바로 비킨다. 뒤가 빈 곳에서 출발한다.
+- 오른쪽 벽이 끊기거나 울퉁불퉁하면 횡위치가 흔들린다 (양쪽 벽이 이어진 직선 통로 전제).
+- 차가 선 이유가 시나리오 급정지면 `[EXP leader] 급정지 (NY)`, AEB면 `[Drive] mode=AEB ...` 줄이 뜬다.
 
-```text
-[EXP leader] 시작 role=leader intent=Y d_y=0.87 m brake_delay=1.32 s W=1.0 v_B=0.90 m/s speed_source=sensors_core
-[EXP leader] 출발 감지 (t0), 후행차 거리 1.62
-[EXP leader] 양보 시작: 오른쪽 차선 y_ref=-0.27, 후행차 0.85 m
-```
+검정이만 먼저 확인할 때: 바퀴를 띄우고 시작 줄 확인 → 내려서 달리게 → 뒤에서 차 크기 상자를 들고 다가가 양보·급정지 줄이 뜨는지 본다.
 
-NY면 `급정지 무장: 1.32 s 뒤 정지` → `급정지 (NY)`가 찍힌다.
-AEB가 걸리면 `autonomous_drive`가 `[Drive] mode=AEB ...` 줄을 낸다. 그래서 차가 선 이유가 시나리오 급정지인지 AEB인지 구분된다.
+### 파랑이 (추월하는 차): 추월 알고리즘 켜기
 
-**처음에는 검정이 혼자 확인한다.**
-1. 바퀴를 띄우고 실행해 위의 "시작" 줄을 본다.
-2. 차를 내려 통로를 달리게 한다.
-3. 뒤에서 사람이 상자를 들고 다가가 양보·급정지 줄이 뜨는지 본다.
-
-상자는 차 크기와 비슷해야 차로 잡힌다.
-
-기록(터미널 4)에 `/exp/state`를 더한다. 그 scan의 모드, 뒤차 거리, `d_y`, 양보·급정지 시각이 JSON으로 들어 있다.
+환경 설정 (터미널 5를 열 때마다):
 
 ```bash
-ros2 bag record -o $(date +%m%d_%H%M)_test1_black \
-  /scan /sensors/core /commands/motor/speed /commands/servo/position \
-  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state
+export ROS_DOMAIN_ID=38
+source /opt/ros/foxy/setup.bash
+source ~/vesc_ws/install/setup.bash          # 없으면 실제 속도를 못 읽는다
+source ~/f1tenth_ws/install/setup.bash
+mkdir -p ~/runs
 ```
 
-### 파랑이 터미널 5: 추월하는 차 (아직 없음)
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dY1_blue.log
+```
 
-`role:=ego`는 아직 구현되지 않았다. 지금 실행하면 "아직 없다"는 메시지와 함께 노드가 끝난다.
-그때까지 파랑이는 앞차 시나리오 확인용으로 쓰지 않는다.
+- 동작: 출발 → 앞차에 다가감(APPROACH) → 안전 거리가 허용하는 곳까지 붙어 관찰(PROBE) → 앞차가 비켰다고 확정하면 왼쪽으로 추월(PASS) → 앞질러서 중앙으로 복귀(MERGE) → 완료(DONE). 안 비킨다고 확정하면 안전 거리로 따라간다(FOLLOW). 추월 중 앞차가 다시 들어오면 중단하고 물러난다(RETREAT → FOLLOW).
+- 로그 예시 (Y 회차. 형식은 시뮬 scan을 노드에 넣어 본 출력과 같고, 거리·시각은 회차마다 다르다):
 
-출발 순서 (ego가 생긴 뒤): 검정이 게이트를 먼저 치우고 1 s 뒤 파랑이 게이트를 치운다.
+```text
+[EXP ego] 시작 role=ego method=d W=1.0 t_d=0.25 s (+scan 0.10 s) v_pass=1.50 m/s eta=0.90 speed_source=sensors_core
+[EXP ego] - → WAIT (d), 선행차 1.48 m
+[EXP ego] WAIT → APPROACH (d), 선행차 1.48 m
+[EXP ego] APPROACH → PROBE (d), 선행차 0.45 m
+[EXP ego] belief 확정 Y (b=0.99)
+[EXP ego] PROBE → PASS (pass_start), 선행차 0.51 m
+[EXP ego] PASS → MERGE (merging), 선행차 -1.22 m
+[EXP ego] MERGE → DONE (done), 선행차 -0.97 m
+```
+
+NY 회차는 `belief 확정 NY` → `→ FOLLOW (belief_NY)`로 끝난다. 추월 중단은 `추월 중단 (...)` 줄이 뜬다.
+
+| 인자 | 값 | 뜻 |
+|---|---|---|
+| `method` | `d`(제안, 기본) / `a` / `b` / `c` | a 고정 규칙(0.8 m에서 3 s 기다린 뒤 추월), b 소극적(1.5 m에서 관찰), c 공격적(0.4 m까지 붙음, 안전 거리 무시), d 안전 거리가 허용하는 최근접까지 |
+| `W` | 실측 통로 폭 [m] | 추월 차선 위치와 "추월할 공간이 있나" 판단에 쓴다. 안 주면 양쪽 벽으로 추정 |
+| `t_d` | s (기본 0.25) | 제동 지연. 안전 거리 계산에 쓴다. 보정 실험으로 잰 값으로 바꾼다 (scan 주기 0.1 s는 따로 더해진다) |
+| `speed_source` | `sensors_core`(기본) / `command` | 안전 거리에 쓰는 자기 속도. `vesc_msgs`가 없으면 명령 속도로 대신하고 경고를 낸다 (안전 거리가 낙관적이 된다) |
+
+**방법 c는 안전 거리를 무시하는 비교용이다.** NY 회차에서 추돌할 수 있으니 처음에는 d로만 하고, c는 AEB와 사람 대기 상태를 확인한 뒤 한다.
+
+### 한 회차 순서 (두 차 같이)
+
+1. 두 차 모두 터미널 1~3을 띄우고 토픽을 확인한다 (위 각 차 절).
+2. 검정이를 앞, 파랑이를 뒤에 통로 중앙으로 놓는다. **간격(파랑이 앞범퍼 → 검정이 뒷면) 1.5 m 이상.** 각 차 앞 0.2 m에 출발 게이트.
+3. 두 차 터미널 4(기록)를 시작한다. 파일 이름의 `test1`을 회차 이름으로.
+4. 검정이 터미널 5 (`intent`는 회차표대로) → 파랑이 터미널 5 (`method`는 회차표대로). 둘 다 `시작` 줄이 뜨는지 본다.
+5. 검정이 게이트를 치우고 1 s 뒤 파랑이 게이트를 치운다.
+6. 끝나면(파랑이 DONE, 또는 따라가다 통로 끝): 두 차 터미널 3에서 정지 명령 → 터미널 5 Ctrl+C → 터미널 4 Ctrl+C.
+7. 회차표에 적는다: 검정이 시작 줄의 `d_y`·`brake_delay`, 파랑이 마지막 상태, 충돌·벽 접촉·사람 개입.
+
+### 끝나고 볼 것
+
+```bash
+grep -E "EXP|mode=AEB" ~/runs/*_dY1_*.log      # 그 회차의 상태 전이·양보·AEB
+```
+
+| 보이는 것 | 뜻 |
+|---|---|
+| 파랑이 `PASS`가 검정이 `양보 시작`보다 먼저 | 비정상. 회차와 로그를 보관하고 알려 준다 |
+| 파랑이가 NY 회차에서 `PASS` | 비정상 (NY에 추월 시작은 0이어야 한다) |
+| 파랑이 `[Drive] mode=AEB`가 자주 | AEB 정지 거리가 지금 0.25 m 고정 (속도 입력 0). 횟수를 회차표에 적는다 |
+| 파랑이가 왼쪽 벽 앞에서 `mode=AEB`로 섬 | 차선 변경 중 벽이 검사 띠에 들어옴. 통로 폭이 1.0 m보다 넓으면 잘 생긴다 (시뮬에서도 확인된 문제) |
+| 파랑이 `MERGE`가 오래 감 | 알려진 문제: MERGE 속도가 앞차와 같아 간격이 천천히 벌어진다 |

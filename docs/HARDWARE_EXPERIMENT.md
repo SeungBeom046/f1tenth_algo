@@ -11,7 +11,7 @@
 | 보정 실험 (제동 지연·감속도, ERPM 환산, 정지 선행차 측정 잡음, 벽 헤딩) | **가능** (기본 주행 + 수동 배치 + bag 기록) |
 | 앞차 시나리오 (검정이: Y 양보 / NY 급정지) | **가능** (`exp_overtake.launch.py role:=leader`, [CAR_TERMINALS.md](CAR_TERMINALS.md) "추월 실험"). 차에서 아직 실행해 보지 않음 |
 | 선행차 양보 동작 측정 (`t_react`) | **가능** (검정이 혼자, 뒤에서 상자나 손으로 민 차가 다가가게 하고 `/exp/state`의 양보 시각과 영상 비교) |
-| 추월 실험 (파랑이가 belief로 판단) | **아직 불가.** `exp_planner`의 ego 역할, 비상정지 heartbeat가 없다. 아래 5~6절의 추월 회차 절차는 그 코드가 생긴 뒤를 위한 계획이다 |
+| 추월 실험 (파랑이가 belief로 판단) | **코드 있음, 차에서 확인 전** (`exp_overtake.launch.py role:=ego`, [CAR_TERMINALS.md](CAR_TERMINALS.md) "추월 실험"). 비상정지 heartbeat는 아직 없으니 사람이 차 옆에서 잡을 수 있게 하고, AEB 속도 입력이 0이라 정지 거리가 0.25 m 고정임을 감안한다 |
 
 이 문서의 명령은 Mac에서 작성했고 차에서 실행해 확인하지 않았다. 다르면 고친다.
 

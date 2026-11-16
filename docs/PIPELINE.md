@@ -10,18 +10,18 @@
 ```mermaid
 flowchart LR
     L[Livox /livox/lidar] --> P2L[pointcloud_to_laserscan]
-    P2L -->|/scan| EP["exp_planner<br/>leader: 있음 / ego: 계획<br/>my_algo.aur 호출"]
+    P2L -->|/scan| EP["exp_planner<br/>role leader / ego<br/>my_algo.aur 호출"]
     VESC[VESC] -->|"/sensors/core (계획)<br/>지금은 /vesc/odom, 발행 안 됨"| EP
     EP -->|/reactive/lidar_command JSON| AD[autonomous_drive<br/>AEB 50 Hz]
     P2L -->|/scan| AD
     AD -->|/commands/motor/speed, /commands/servo/position| VESC
     AD -->|/aeb/active, /aeb/status| LOG[(bag)]
-    EP -->|"/exp/state (leader만)"| LOG
+    EP -->|/exp/state| LOG
     HB["estop_sender (계획)"] -->|"/estop/heartbeat (계획)"| AD
 ```
 
 - `exp_planner`(`my_algo/exp_planner.py`)는 기본 주행의 `lidar_reactive_drive`를 대체한다 (같은 토픽·JSON 형식). `autonomous_drive`와 AEB 경로는 그대로 쓰고, `launch/exp_overtake.launch.py`가 `aeb_model:=geometric`으로 띄운다.
-- leader 역할은 scan마다 `LeaderRunner.step`(`my_algo/aur/leader_runner.py`)을 부른다. 순서는 시뮬 `Sim._leader_frame`과 같고 `test_leader_runner_matches_sim_leader`가 명령 일치를 확인한다. ego 역할은 아직 없다.
+- leader 역할은 scan마다 `LeaderRunner.step`(`my_algo/aur/leader_runner.py`)을 부른다. 순서는 시뮬 `Sim._leader_frame`과 같고 `test_leader_runner_matches_sim_leader`가 명령 일치를 확인한다. ego 역할은 `EgoRunner.step`(`my_algo/aur/ego_runner.py`, 시뮬 `Car.perceive` + `Sim._ego_frame`과 같은 순서, `test_ego_runner_matches_sim_ego`).
 - 두 차는 서로 다른 `ROS_DOMAIN_ID`를 쓴다 (통신 없음).
 - 시뮬(`sim/aur_overtake/sim.py`)은 같은 순서를 한 프로세스에서 흉내 낸다: `Car.perceive` → `Sim._ego_frame` / `_leader_frame` (= exp_planner), `Car.control` (= autonomous_drive).
 

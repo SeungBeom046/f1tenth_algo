@@ -7,7 +7,7 @@
 ## 0. 먼저 알아둘 것
 
 - 저장소 하나에 브랜치가 여럿이다. Jetson에서는 폴더를 골라 옮기지 않고 **`exp/aur-overtake` 브랜치로 바꾸면** 된다. 브랜치 전체(`occlusion_archive/`, `sim/` 포함)가 내려오지만 colcon은 `my_algo` 패키지(`my_algo/baseline`, `my_algo/aur`, `launch/`)만 빌드·설치한다. `occlusion_archive/`, `archive/`는 `COLCON_IGNORE`로 빠지고 `sim/`은 Mac 전용이다.
-- **지금 이 브랜치로 차에서 돌릴 수 있는 것은 기본 주행(`lidar_drive.launch.py`)과 앞차 시나리오(`exp_overtake.launch.py role:=leader`)다.** 추월하는 차(ego) 역할은 아직 없다. 차별 터미널 명령은 [CAR_TERMINALS.md](CAR_TERMINALS.md).
+- **지금 이 브랜치로 차에서 돌릴 수 있는 것은 기본 주행(`lidar_drive.launch.py`)과 추월 실험(`exp_overtake.launch.py role:=leader` / `role:=ego`)이다.** 추월 실험은 차에서 아직 확인 전이다. 차별 터미널 명령은 [CAR_TERMINALS.md](CAR_TERMINALS.md).
 - 실행 파일·launch 이름은 main 때와 같다 (`ros2 launch my_algo lidar_drive.launch.py`). 내부 모듈 경로만 `my_algo.baseline.*`로 바뀌어서 **다시 빌드해야 한다.**
 - 이전 연구 브랜치(`exp/occlusion-speed`)에 있던 `scripts/env_ego.sh`, `launch/livox_mid360.launch.py`, `launch/vesc_odom.launch.py`는 이 브랜치에 없다 (`occlusion_archive/algo/`에 보관만).
 
