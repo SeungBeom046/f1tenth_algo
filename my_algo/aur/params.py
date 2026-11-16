@@ -53,6 +53,8 @@ class AurParams:
     k_d: float = 1.5                # 거리 유지 P 게인 [1/s]
     probe_tol: float = 0.05         # d ≤ d_ref + probe_tol이면 PROBE
     merge_tol: float = 0.05         # MERGE 완료 판정 횡오차 [m]
+    merge_gap: Optional[float] = None   # 선행차 앞면이 ego 뒤범퍼보다 이만큼 뒤면 MERGE [m]. None = m_stop
+    merge_v: Optional[float] = None     # MERGE 중 속도 [m/s]. None = v_B_nominal
     lane_change_tol: float = 0.05   # PASS에서 추월 차선 도착 판정 횡오차 [m]. 도착 전에는 추종 속도
     track_hold: float = 0.5         # 추적이 끊겨도 직전 값을 쓰는 시간 [s]
     # --- tracker ---

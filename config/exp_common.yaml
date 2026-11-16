@@ -47,6 +47,8 @@ aur:
   probe_tol: 0.05           # TUNE: PROBE 진입 허용 오차 (d ≤ d_ref + 이 값) | m | 기획안
   lane_change_tol: 0.05     # TUNE: PASS에서 추월 차선(+δ) 도착 판정 횡오차, 도착 전에는 v_pass 대신 추종 속도 | m | 임시
   merge_tol: 0.05           # TUNE: MERGE 완료 판정 횡오차 | m | 임시
+  merge_gap: null           # TUNE: 선행차 앞면이 ego 뒤범퍼보다 이만큼 뒤면 MERGE 시작, null이면 m_stop | m | 임시
+  merge_v: null             # TUNE: MERGE 중 속도, null이면 v_B_nominal | m/s | 임시
   track_hold: 0.5           # TUNE: 추적이 끊겨도 직전 값을 쓰는 시간 | s | 임시
   # --- tracker ---
   lidar_to_front: 0.30      # TUNE: 라이다 → 앞범퍼 (AEB lidar_to_bumper_dist와 같게) | m | 측정 (실측 0.28, 코드 0.30)

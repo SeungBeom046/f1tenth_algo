@@ -47,51 +47,53 @@
 | config/exp_common.yaml | 47 | `probe_tol` | 0.05 | m | PROBE 진입 허용 오차 (d ≤ d_ref + 이 값) | 기획안 | 키우면 PROBE에 일찍 들어간다 (T_max·T_wait_a 시작 시점) | 0.03~0.10 |
 | config/exp_common.yaml | 48 | `lane_change_tol` | 0.05 | m | PASS에서 추월 차선(+δ) 도착 판정 횡오차, 도착 전에는 v_pass 대신 추종 속도 | 임시 | 줄이면 v_pass 가속이 늦어져 추월이 길어지고, 키우면 차선 변경 중 가속해 벽이 AEB 띠에 들어온다 | 0.03~0.08 |
 | config/exp_common.yaml | 49 | `merge_tol` | 0.05 | m | MERGE 완료 판정 횡오차 | 임시 | 키우면 DONE 판정이 빨라진다 | 0.03~0.08 |
-| config/exp_common.yaml | 50 | `track_hold` | 0.5 | s | 추적이 끊겨도 직전 값을 쓰는 시간 | 임시 | 키우면 추적 끊김에 둔해지지만 오래된 d로 속도를 낸다 | 0.2~0.8 |
-| config/exp_common.yaml | 52 | `lidar_to_front` | 0.30 | m | 라이다 → 앞범퍼 (AEB lidar_to_bumper_dist와 같게) | 측정 (실측 0.28, 코드 0.30) | d 전체에 더해지는 오프셋. AEB와 다르면 d와 closest가 어긋난다 | 측정값 고정 |
-| config/exp_common.yaml | 53 | `lidar_to_rear` | 0.22 | m | 라이다 → 뒤범퍼 | 측정 | d_rear와 MERGE 판정 | 측정값 고정 |
-| config/exp_common.yaml | 54 | `cluster_jump` | 0.15 | m | 연속 점 사이 거리가 이보다 크면 클러스터 분할 | 임시 | 키우면 벽 근처 차와 벽 조각이 붙고, 줄이면 먼 차가 쪼개진다 | 0.10~0.20 |
-| config/exp_common.yaml | 55 | `cluster_min_points` | 3 | 개 | 클러스터 최소 점 수 | 임시 | 키우면 먼 차를 놓치고, 줄이면 잡음 점을 차로 본다 | 3~6 |
-| config/exp_common.yaml | 56 | `track_x_max` | 3.0 | m | 전방 차량 검출 최대 거리 | 임시 | 검출 시작 거리 | 2.5~4.0 |
-| config/exp_common.yaml | 57 | `veh_width_min` | 0.12 | m | 차량 클러스터 폭 게이트 하한 | 임시 | 줄이면 벽 조각·기둥을 차로 본다 | 0.10~0.20 |
-| config/exp_common.yaml | 58 | `veh_width_max` | 0.45 | m | 차량 클러스터 폭 게이트 상한 | 임시 | 선행차가 틀면 보이는 폭이 w·cosψ + L·sinψ로 커진다. 작으면 양보 중 추적이 끊긴다 | 0.45~0.60 |
-| config/exp_common.yaml | 59 | `veh_depth_max` | 0.60 | m | 차량 클러스터 깊이(x 범위) 상한 | 임시 | 헤딩이 틀어졌을 때 통로 안으로 들어온 벽 조각 제거 | 0.55~0.70 |
-| config/exp_common.yaml | 60 | `wall_margin` | 0.05 | m | 벽에서 이 거리 안의 점은 벽으로 버림 | 임시 | c_lat보다 작아야 벽에 붙은 차를 잃지 않는다. 너무 작으면 벽 잡음이 남는다 | 0.03~0.08 |
-| config/exp_common.yaml | 61 | `rear_fov_half_deg` | 60.0 | deg | 후방 차량 검출 반시야각 | 임시 | 선행차가 후행차를 찾는 범위 | 45~75 |
-| config/exp_common.yaml | 62 | `track_alpha` | 0.5 | - | d의 α-β 필터 α | 임시 | 키우면 d 추정이 빠르고 잡음에 민감하다 | 0.3~0.7 |
-| config/exp_common.yaml | 63 | `track_beta` | 0.2 | - | d의 α-β 필터 β | 임시 | 키우면 v_B 추정이 빠르고 잡음에 민감하다 | 0.05~0.3 |
-| config/exp_common.yaml | 64 | `track_jump_reset` | 0.3 | m | 예측과 이만큼 다르면 필터 초기화 | 임시 | 작으면 잡음에 필터가 초기화되어 v_B가 v_E로 튄다 | 0.2~0.5 |
-| config/exp_common.yaml | 65 | `track_timeout` | 0.5 | s | 이 시간 넘게 안 보이면 필터 초기화 | 임시 | 끊긴 뒤 필터를 이어 쓸지 | 0.3~1.0 |
-| config/exp_common.yaml | 66 | `rear_face_depth` | 0.05 | m | 측면 추적에서 뒷면으로 보는 깊이 (x0부터), 선행차가 틀어져도 뒷면 중앙으로 y_B를 구한다 | 임시 | 키우면 옆면 점이 섞여 틀어진 선행차의 y_B가 치우치고, 줄이면 뒷면 점이 모자라 흔들린다 | 0.03~0.08 |
-| config/exp_common.yaml | 67 | `leader_width` | 0.27 | m | 선행차 전폭, 왼쪽 모서리 추정에서 왼쪽 옆면 점 선택 (가장 왼쪽 점에서 이 값의 절반 안) | 측정 (차폭 0.27) | 선행차 실제 전폭. 크게 주면 뒷면 점까지 옆면으로 섞인다 | 실측 |
-| config/exp_common.yaml | 68 | `leader_length` | 0.50 | m | 선행차 길이, 왼쪽 옆면 직선을 연장하는 구간 | 측정 (뒤축→앞 0.41 + 뒤축→뒤 0.09) | 옆면 직선을 앞쪽으로 연장하는 길이. 크면 틀어진 선행차의 앞 모서리를 과대 추정한다 (보수적) | 실측 |
-| config/exp_common.yaml | 69 | `side_fit_min_points` | 3 | 개 | 왼쪽 옆면 직선 피팅 최소 점 수, 모자라면 가장 왼쪽 점 | 임시 | 키우면 먼 거리·좁은 각에서 피팅 대신 가장 왼쪽 점을 쓴다 | 3~6 |
-| config/exp_common.yaml | 70 | `heading_comp` | true | - | tracker 입력 점을 corridor 헤딩 추정으로 회전 보정 (off면 차선 변경 중 y_B가 최대 0.18 m 치우침) | 임시 (2026-11-15 측정으로 on) | 끄면 차선 변경 중 ego가 틀어진 만큼(앞 1 m·10°에서 0.17 m) 선행차 y_B·y_L이 오른쪽으로 치우친다. 켜면 corridor 헤딩 오차가 그대로 들어간다 | true (측정 후) |
-| config/exp_common.yaml | 71 | `abort_mode` | retreat | - | 추월 중단 뒤 follow(바로 FOLLOW) / retreat(차선 유지하며 물러난 뒤 FOLLOW) | 임시 (2026-11-15 승인) | follow면 중단 직후 중앙으로 붙으며 옆의 선행차를 벽으로 볼 수 있다 | retreat (측정 후) |
-| config/exp_common.yaml | 72 | `retreat_speed_ratio` | 0.8 | - | RETREAT 속도 = 이 값 × v_B (v_min 0.867보다 작으면 최소 속도 규칙에 따라 v_min 또는 0) | 임시 | 작을수록 빨리 물러나지만 0.96(= v_min/v_B) 아래는 최소 속도 규칙 때문에 v_min 또는 0이 된다 | 0.5~0.95 |
-| config/exp_common.yaml | 73 | `retreat_clear_gap` | 0.15 | m | RETREAT 탈출 조건, 선행차 뒷면이 앞범퍼보다 이만큼 앞 (m 여유) | 임시 (m과 같은 값) | 작으면 선행차와 가까운 채 중앙으로 돌아온다 | m 이상 |
-| config/exp_common.yaml | 74 | `lateral_ref` | center | - | 횡 여유 판정 기준 center(y_B 중심) / left_edge(y_L 왼쪽 모서리) | 임시 (2026-11-15, 측정 중) | left_edge면 횡 여유(go, 중단)를 선행차 왼쪽 모서리로 판정 | center (측정 후 결정) |
-| config/exp_common.yaml | 75 | `abort_yb_window` | 3 | 개 | 추월 중단 판정 y_B를 최근 n개 중앙값으로 (라이다 튐 제거), 1이면 그 scan 값 | 임시 (2026-11-16 시뮬, 잡음 0.02 m W 2·3에서 가짜 중단 제거) | - | - |
-| config/exp_common.yaml | 76 | `side_gate` | 0.6 | m | 측면 추적 연관 거리 | 임시 | 추월 중 선행차를 다시 붙잡는 범위 | 0.4~0.8 |
-| config/exp_common.yaml | 78 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
-| config/exp_common.yaml | 79 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
-| config/exp_common.yaml | 80 | `corridor_min_points` | 8 | 개 | 한쪽 벽으로 인정할 최소 점 수 | 측정 (lidar_reactive_drive와 같은 값) | 벽 인정 점 수 | 기존 값 유지 |
-| config/exp_common.yaml | 81 | `corridor_wall_percentile` | 0.35 | - | 측면 거리 분위값 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 분위값 | 기존 값 유지 |
-| config/exp_common.yaml | 82 | `min_point_x` | -1.0 | m | 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | 임시 | −0.05면 벽 거리 < 0.25 m에서 벽을 놓친다 (추월 차선 0.235 m). −1.0은 곡선에서 편향이 더 작지만 앞쪽 벽을 미리 보는 효과가 없다 | −1.0 (직선 통로) |
-| config/exp_common.yaml | 84 | `wall_follow_gain` | 0.30 | rad/m | 횡 오차 → 조향 P 게인 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 횡 수렴이 빠르지만 흔들린다 | 0.2~0.5 |
-| config/exp_common.yaml | 85 | `wall_error_filter_alpha` | 0.25 | - | 횡 오차 저역 필터 계수 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 반응이 빠르고 잡음에 민감하다 | 0.15~0.5 |
-| config/exp_common.yaml | 86 | `steer_rate_limit` | 0.08 | rad/scan | 조향 변화 한계 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 차선 변경이 빠르고 덜그럭거린다 | 0.05~0.15 |
-| config/exp_common.yaml | 87 | `steering_deadband` | 0.0 | rad | 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | 임시 (2026-11-16 시뮬) | 0.055 rad는 횡오차 약 0.09 m에 해당한다. 추월 차선 벽 여유(c = 0.10)와 merge_tol보다 크면 줄여야 한다 | 0.01~0.055 |
-| config/exp_common.yaml | 88 | `max_steering` | 0.78 | rad | 최대 조향각 | 측정 (lidar_reactive_drive와 같은 값) | 조향 포화 | 기존 값 유지 |
-| config/exp_common.yaml | 89 | `heading_gain` | 1.0 | rad/rad | 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°) | 감쇠비 ζ = heading_gain / (2·sqrt(2·wall_follow_gain·L)), 속도와 무관. 0.7이면 ζ ≈ 0.8 | 0.5~1.0 |
-| config/exp_common.yaml | 90 | `y_ref_rate` | 0.4 | m/s | 차선 변경 시 y_ref 기울기 제한 | 기획안 | 키우면 차선 변경이 빠르고 yaw가 커진다 (tracker 폭 게이트) | 0.2~0.5 |
-| config/exp_common.yaml | 91 | `lateral_ki` | 0.3 | rad/(m·s) | 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m) | - | - |
-| config/exp_common.yaml | 92 | `lateral_i_max` | 0.10 | rad | 횡 적분항 한계 | 임시 | - | - |
-| config/exp_common.yaml | 93 | `lateral_i_zone` | 0.10 | m | 횡오차가 이보다 작고 차선 변경 중이 아닐 때만 적분 | 임시 | - | - |
-| config/exp_common.yaml | 95 | `d_brake_trigger` | 1.0 | m | NY 급정지 이벤트 무장 거리 | 기획안 | NY 급정지 이벤트가 무장되는 거리 | 0.8~1.2 |
-| config/exp_common.yaml | 96 | `brake_delay_min` | 0.5 | s | 급정지 지연 최소 | 기획안 | 급정지 시점 난수 범위 | 0.5 |
-| config/exp_common.yaml | 97 | `brake_delay_max` | 2.0 | s | 급정지 지연 최대 | 기획안 | 급정지 시점 난수 범위 | 2.0 |
-| config/exp_common.yaml | 98 | `start_gap_margin` | 0.2 | m | t0에서 d_rear < d_y_max + 이 값이면 경고 | 기획안 | 출발 간격 경고 기준 | 0.2 |
+| config/exp_common.yaml | 50 | `merge_gap` | null | m | 선행차 앞면이 ego 뒤범퍼보다 이만큼 뒤면 MERGE 시작, null이면 m_stop | 임시 | - | - |
+| config/exp_common.yaml | 51 | `merge_v` | null | m/s | MERGE 중 속도, null이면 v_B_nominal | 임시 | - | - |
+| config/exp_common.yaml | 52 | `track_hold` | 0.5 | s | 추적이 끊겨도 직전 값을 쓰는 시간 | 임시 | 키우면 추적 끊김에 둔해지지만 오래된 d로 속도를 낸다 | 0.2~0.8 |
+| config/exp_common.yaml | 54 | `lidar_to_front` | 0.30 | m | 라이다 → 앞범퍼 (AEB lidar_to_bumper_dist와 같게) | 측정 (실측 0.28, 코드 0.30) | d 전체에 더해지는 오프셋. AEB와 다르면 d와 closest가 어긋난다 | 측정값 고정 |
+| config/exp_common.yaml | 55 | `lidar_to_rear` | 0.22 | m | 라이다 → 뒤범퍼 | 측정 | d_rear와 MERGE 판정 | 측정값 고정 |
+| config/exp_common.yaml | 56 | `cluster_jump` | 0.15 | m | 연속 점 사이 거리가 이보다 크면 클러스터 분할 | 임시 | 키우면 벽 근처 차와 벽 조각이 붙고, 줄이면 먼 차가 쪼개진다 | 0.10~0.20 |
+| config/exp_common.yaml | 57 | `cluster_min_points` | 3 | 개 | 클러스터 최소 점 수 | 임시 | 키우면 먼 차를 놓치고, 줄이면 잡음 점을 차로 본다 | 3~6 |
+| config/exp_common.yaml | 58 | `track_x_max` | 3.0 | m | 전방 차량 검출 최대 거리 | 임시 | 검출 시작 거리 | 2.5~4.0 |
+| config/exp_common.yaml | 59 | `veh_width_min` | 0.12 | m | 차량 클러스터 폭 게이트 하한 | 임시 | 줄이면 벽 조각·기둥을 차로 본다 | 0.10~0.20 |
+| config/exp_common.yaml | 60 | `veh_width_max` | 0.45 | m | 차량 클러스터 폭 게이트 상한 | 임시 | 선행차가 틀면 보이는 폭이 w·cosψ + L·sinψ로 커진다. 작으면 양보 중 추적이 끊긴다 | 0.45~0.60 |
+| config/exp_common.yaml | 61 | `veh_depth_max` | 0.60 | m | 차량 클러스터 깊이(x 범위) 상한 | 임시 | 헤딩이 틀어졌을 때 통로 안으로 들어온 벽 조각 제거 | 0.55~0.70 |
+| config/exp_common.yaml | 62 | `wall_margin` | 0.05 | m | 벽에서 이 거리 안의 점은 벽으로 버림 | 임시 | c_lat보다 작아야 벽에 붙은 차를 잃지 않는다. 너무 작으면 벽 잡음이 남는다 | 0.03~0.08 |
+| config/exp_common.yaml | 63 | `rear_fov_half_deg` | 60.0 | deg | 후방 차량 검출 반시야각 | 임시 | 선행차가 후행차를 찾는 범위 | 45~75 |
+| config/exp_common.yaml | 64 | `track_alpha` | 0.5 | - | d의 α-β 필터 α | 임시 | 키우면 d 추정이 빠르고 잡음에 민감하다 | 0.3~0.7 |
+| config/exp_common.yaml | 65 | `track_beta` | 0.2 | - | d의 α-β 필터 β | 임시 | 키우면 v_B 추정이 빠르고 잡음에 민감하다 | 0.05~0.3 |
+| config/exp_common.yaml | 66 | `track_jump_reset` | 0.3 | m | 예측과 이만큼 다르면 필터 초기화 | 임시 | 작으면 잡음에 필터가 초기화되어 v_B가 v_E로 튄다 | 0.2~0.5 |
+| config/exp_common.yaml | 67 | `track_timeout` | 0.5 | s | 이 시간 넘게 안 보이면 필터 초기화 | 임시 | 끊긴 뒤 필터를 이어 쓸지 | 0.3~1.0 |
+| config/exp_common.yaml | 68 | `rear_face_depth` | 0.05 | m | 측면 추적에서 뒷면으로 보는 깊이 (x0부터), 선행차가 틀어져도 뒷면 중앙으로 y_B를 구한다 | 임시 | 키우면 옆면 점이 섞여 틀어진 선행차의 y_B가 치우치고, 줄이면 뒷면 점이 모자라 흔들린다 | 0.03~0.08 |
+| config/exp_common.yaml | 69 | `leader_width` | 0.27 | m | 선행차 전폭, 왼쪽 모서리 추정에서 왼쪽 옆면 점 선택 (가장 왼쪽 점에서 이 값의 절반 안) | 측정 (차폭 0.27) | 선행차 실제 전폭. 크게 주면 뒷면 점까지 옆면으로 섞인다 | 실측 |
+| config/exp_common.yaml | 70 | `leader_length` | 0.50 | m | 선행차 길이, 왼쪽 옆면 직선을 연장하는 구간 | 측정 (뒤축→앞 0.41 + 뒤축→뒤 0.09) | 옆면 직선을 앞쪽으로 연장하는 길이. 크면 틀어진 선행차의 앞 모서리를 과대 추정한다 (보수적) | 실측 |
+| config/exp_common.yaml | 71 | `side_fit_min_points` | 3 | 개 | 왼쪽 옆면 직선 피팅 최소 점 수, 모자라면 가장 왼쪽 점 | 임시 | 키우면 먼 거리·좁은 각에서 피팅 대신 가장 왼쪽 점을 쓴다 | 3~6 |
+| config/exp_common.yaml | 72 | `heading_comp` | true | - | tracker 입력 점을 corridor 헤딩 추정으로 회전 보정 (off면 차선 변경 중 y_B가 최대 0.18 m 치우침) | 임시 (2026-11-15 측정으로 on) | 끄면 차선 변경 중 ego가 틀어진 만큼(앞 1 m·10°에서 0.17 m) 선행차 y_B·y_L이 오른쪽으로 치우친다. 켜면 corridor 헤딩 오차가 그대로 들어간다 | true (측정 후) |
+| config/exp_common.yaml | 73 | `abort_mode` | retreat | - | 추월 중단 뒤 follow(바로 FOLLOW) / retreat(차선 유지하며 물러난 뒤 FOLLOW) | 임시 (2026-11-15 승인) | follow면 중단 직후 중앙으로 붙으며 옆의 선행차를 벽으로 볼 수 있다 | retreat (측정 후) |
+| config/exp_common.yaml | 74 | `retreat_speed_ratio` | 0.8 | - | RETREAT 속도 = 이 값 × v_B (v_min 0.867보다 작으면 최소 속도 규칙에 따라 v_min 또는 0) | 임시 | 작을수록 빨리 물러나지만 0.96(= v_min/v_B) 아래는 최소 속도 규칙 때문에 v_min 또는 0이 된다 | 0.5~0.95 |
+| config/exp_common.yaml | 75 | `retreat_clear_gap` | 0.15 | m | RETREAT 탈출 조건, 선행차 뒷면이 앞범퍼보다 이만큼 앞 (m 여유) | 임시 (m과 같은 값) | 작으면 선행차와 가까운 채 중앙으로 돌아온다 | m 이상 |
+| config/exp_common.yaml | 76 | `lateral_ref` | center | - | 횡 여유 판정 기준 center(y_B 중심) / left_edge(y_L 왼쪽 모서리) | 임시 (2026-11-15, 측정 중) | left_edge면 횡 여유(go, 중단)를 선행차 왼쪽 모서리로 판정 | center (측정 후 결정) |
+| config/exp_common.yaml | 77 | `abort_yb_window` | 3 | 개 | 추월 중단 판정 y_B를 최근 n개 중앙값으로 (라이다 튐 제거), 1이면 그 scan 값 | 임시 (2026-11-16 시뮬, 잡음 0.02 m W 2·3에서 가짜 중단 제거) | - | - |
+| config/exp_common.yaml | 78 | `side_gate` | 0.6 | m | 측면 추적 연관 거리 | 임시 | 추월 중 선행차를 다시 붙잡는 범위 | 0.4~0.8 |
+| config/exp_common.yaml | 80 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
+| config/exp_common.yaml | 81 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
+| config/exp_common.yaml | 82 | `corridor_min_points` | 8 | 개 | 한쪽 벽으로 인정할 최소 점 수 | 측정 (lidar_reactive_drive와 같은 값) | 벽 인정 점 수 | 기존 값 유지 |
+| config/exp_common.yaml | 83 | `corridor_wall_percentile` | 0.35 | - | 측면 거리 분위값 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 분위값 | 기존 값 유지 |
+| config/exp_common.yaml | 84 | `min_point_x` | -1.0 | m | 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | 임시 | −0.05면 벽 거리 < 0.25 m에서 벽을 놓친다 (추월 차선 0.235 m). −1.0은 곡선에서 편향이 더 작지만 앞쪽 벽을 미리 보는 효과가 없다 | −1.0 (직선 통로) |
+| config/exp_common.yaml | 86 | `wall_follow_gain` | 0.30 | rad/m | 횡 오차 → 조향 P 게인 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 횡 수렴이 빠르지만 흔들린다 | 0.2~0.5 |
+| config/exp_common.yaml | 87 | `wall_error_filter_alpha` | 0.25 | - | 횡 오차 저역 필터 계수 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 반응이 빠르고 잡음에 민감하다 | 0.15~0.5 |
+| config/exp_common.yaml | 88 | `steer_rate_limit` | 0.08 | rad/scan | 조향 변화 한계 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 차선 변경이 빠르고 덜그럭거린다 | 0.05~0.15 |
+| config/exp_common.yaml | 89 | `steering_deadband` | 0.0 | rad | 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | 임시 (2026-11-16 시뮬) | 0.055 rad는 횡오차 약 0.09 m에 해당한다. 추월 차선 벽 여유(c = 0.10)와 merge_tol보다 크면 줄여야 한다 | 0.01~0.055 |
+| config/exp_common.yaml | 90 | `max_steering` | 0.78 | rad | 최대 조향각 | 측정 (lidar_reactive_drive와 같은 값) | 조향 포화 | 기존 값 유지 |
+| config/exp_common.yaml | 91 | `heading_gain` | 1.0 | rad/rad | 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°) | 감쇠비 ζ = heading_gain / (2·sqrt(2·wall_follow_gain·L)), 속도와 무관. 0.7이면 ζ ≈ 0.8 | 0.5~1.0 |
+| config/exp_common.yaml | 92 | `y_ref_rate` | 0.4 | m/s | 차선 변경 시 y_ref 기울기 제한 | 기획안 | 키우면 차선 변경이 빠르고 yaw가 커진다 (tracker 폭 게이트) | 0.2~0.5 |
+| config/exp_common.yaml | 93 | `lateral_ki` | 0.3 | rad/(m·s) | 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m) | - | - |
+| config/exp_common.yaml | 94 | `lateral_i_max` | 0.10 | rad | 횡 적분항 한계 | 임시 | - | - |
+| config/exp_common.yaml | 95 | `lateral_i_zone` | 0.10 | m | 횡오차가 이보다 작고 차선 변경 중이 아닐 때만 적분 | 임시 | - | - |
+| config/exp_common.yaml | 97 | `d_brake_trigger` | 1.0 | m | NY 급정지 이벤트 무장 거리 | 기획안 | NY 급정지 이벤트가 무장되는 거리 | 0.8~1.2 |
+| config/exp_common.yaml | 98 | `brake_delay_min` | 0.5 | s | 급정지 지연 최소 | 기획안 | 급정지 시점 난수 범위 | 0.5 |
+| config/exp_common.yaml | 99 | `brake_delay_max` | 2.0 | s | 급정지 지연 최대 | 기획안 | 급정지 시점 난수 범위 | 2.0 |
+| config/exp_common.yaml | 100 | `start_gap_margin` | 0.2 | m | t0에서 d_rear < d_y_max + 이 값이면 경고 | 기획안 | 출발 간격 경고 기준 | 0.2 |
 | sim/aur_overtake/scenario.yaml | 4 | `dt` | 0.01 | s | 시뮬 고정 스텝 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 5 | `max_time` | 25.0 | s | 회차 최대 시간 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 6 | `end_after_done` | 1.0 | s | DONE 또는 FOLLOW 후 정지 뒤 이만큼 더 돌고 끝 | 임시 | - | - |

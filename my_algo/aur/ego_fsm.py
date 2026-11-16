@@ -101,11 +101,13 @@ class EgoFSM:
         if self.state == 'PASS':
             y_ref = delta
             v, reason = self._pass_speed(obs, delta, v, reason)
-            if obs.front_rel is not None and obs.front_rel <= -p.m_stop:
+            merge_gap = p.m_stop if p.merge_gap is None else p.merge_gap
+            if obs.front_rel is not None and obs.front_rel <= -merge_gap:
                 self.state = 'MERGE'
         if self.state == 'MERGE':
-            # 차선 변경 중에는 추종 속도. 선행차는 뒤에 있으므로 앞에 차가 없을 때의 속도(v_B_nominal)
-            y_ref, v, reason = -delta, self._follow_speed(None), 'merging'
+            # 선행차는 뒤에 있으므로 앞에 차가 없을 때의 속도(v_B_nominal). merge_v를 주면 그 속도로 간격을 벌리며 들어간다
+            v_merge = self._follow_speed(None) if p.merge_v is None else p.merge_v
+            y_ref, v, reason = -delta, v_merge, 'merging'
             if abs(obs.ego_lat + delta) < p.merge_tol:
                 self.state = 'DONE'
         if self.state == 'DONE':
