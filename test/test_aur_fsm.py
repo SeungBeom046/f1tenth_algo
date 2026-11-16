@@ -131,9 +131,25 @@ def test_lateral_controller():
     s = [lat.step(0.0, 0.265, 0.1) for _ in range(10)]
     assert abs(lat.y_ref - 0.265) < 1e-9                          # 0.4 m/s 기울기로 0.7 s 안에 도달
     assert s[-1] > 0 and max(abs(b - a) for a, b in zip([0.0] + s, s)) <= P.steer_rate_limit + 1e-12
-    lat2 = Lateral(P)
+    from dataclasses import replace
+    lat2 = Lateral(replace(P, steering_deadband=0.055, lateral_ki=0.0))    # 기존 주행 deadband, 적분 끔
     assert lat2.step(0.02, 0.0, 0.1) == 0.0                       # deadband (오차 0.04 m → 0.012 rad)
-    assert lat2.step(0.3, 0.0, 0.1) < 0                           # 왼쪽으로 치우쳤으면 오른쪽 조향
+    assert lat2.step(0.5, 0.0, 0.1) < 0                           # 왼쪽으로 치우쳤으면 오른쪽 조향 (필터 뒤 deadband 0.055 넘게)
+
+
+def test_lateral_integral_only_while_holding_lane():
+    from my_algo.aur.lateral import Lateral
+    lat = Lateral(P)
+    for _ in range(5):                      # 차선 변경 중(y_ref가 아직 목표로 가는 중)에는 쌓지 않는다
+        lat.step(0.0, 0.265, 0.1)
+    assert lat.i_term == 0.0
+    lat = Lateral(P)
+    for _ in range(200):                    # 0.05 m 왼쪽에 계속 머물면 (트림) 오른쪽 조향 적분이 한계까지
+        lat.step(0.05, 0.0, 0.1)
+    assert lat.i_term == -P.lateral_i_max
+    lat = Lateral(P)
+    lat.step(0.5, 0.0, 0.1)                 # 오차가 i_zone 밖이면 쌓지 않는다
+    assert lat.i_term == 0.0
 
 
 def _to_pass(fsm):
@@ -168,14 +184,31 @@ def test_no_abort_after_overlap():
 
 
 def test_pass_abort_reference_is_most_yielded_position():
-    # 선행차가 비키는 중(−0.12)에 PASS 진입 → −0.26까지 비켰다가 −0.17로 돌아오면 중단
-    fsm = EgoFSM(P, 'd')
+    # 선행차가 비키는 중(−0.12)에 PASS 진입 → −0.26까지 비켰다가 −0.17로 돌아오면 중단 (중앙값 끔: 그 scan 값)
+    from dataclasses import replace
+    fsm = EgoFSM(replace(P, abort_yb_window=1), 'd')
     t, y = _to_pass(fsm)
     for y in (-0.20, -0.26):
         t += 0.1
         assert fsm.step(Obs(t, 0.9, True, 0.30, y, 0.9, 0.1, 1.0))[2] == 'PASS'
     t += 0.1
     assert fsm.step(Obs(t, 0.9, True, 0.30, -0.26 + P.y_yield_thr + 0.01, 0.9, 0.1, 1.0))[2] == 'FOLLOW'
+
+
+def test_pass_abort_ignores_single_outlier():
+    # abort_yb_window 3: 튄 값 하나(−0.40)가 기준을 끌어내려도, 정상값(−0.26)으로 돌아왔다고 중단하지 않는다.
+    # 실제로 돌아오는 값이 두 scan 이어지면 중단한다
+    assert P.abort_yb_window == 3
+    fsm = EgoFSM(P, 'd')
+    t, y = _to_pass(fsm)
+    for y in (-0.26, -0.26, -0.40, -0.26, -0.26, -0.26):
+        t += 0.1
+        assert fsm.step(Obs(t, 0.9, True, 0.30, y, 0.9, 0.1, 1.0))[2] == 'PASS'
+    back = -0.26 + P.y_yield_thr + 0.01
+    t += 0.1
+    assert fsm.step(Obs(t, 0.9, True, 0.30, back, 0.9, 0.1, 1.0))[2] == 'PASS'
+    t += 0.1
+    assert fsm.step(Obs(t, 0.9, True, 0.30, back, 0.9, 0.1, 1.0))[2] != 'PASS'
 
 
 def test_abort_retreat():

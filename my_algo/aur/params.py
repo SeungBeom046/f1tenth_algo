@@ -36,7 +36,7 @@ class AurParams:
     W: Optional[float] = None       # 통로 폭 측정값 [m]. None이면 corridor.W_est를 쓴다
     W_leader: Optional[float] = None    # 선행차 전용 실측 통로 폭 [m]. 주면 선행차는 오른쪽 벽만으로 횡위치를 구한다
     lane_offset: Optional[float] = None   # None이면 δ = W/2 − w/2 − c
-    lane_offset_max: Optional[float] = None   # δ 상한 [m]. 넓은 통로에서 벽까지 붙지 않게 (None = 상한 없음)
+    lane_offset_max: Optional[float] = 0.3    # δ 상한 [m]. 넓은 통로에서 벽까지 붙지 않게 (None = 상한 없음). W 1.0의 δ 0.265보다 커서 W ≤ 1.27은 그대로
     # --- 속도 ---
     v_B_nominal: float = 0.9
     v_pass: float = 1.5
@@ -79,7 +79,7 @@ class AurParams:
     abort_mode: str = 'retreat'     # 추월 중단 뒤: follow(바로 FOLLOW) | retreat(RETREAT 거쳐 FOLLOW)
     retreat_speed_ratio: float = 0.8    # RETREAT 속도 = 이 값 × v_B
     retreat_clear_gap: float = 0.15     # RETREAT 탈출: 선행차 뒷면이 앞범퍼보다 이만큼 앞 [m] (m과 같은 값)
-    abort_yb_window: int = 1        # 추월 중단 판정의 y_B를 최근 n개(유효 scan) 중앙값으로. 1 = 그 scan 값 그대로
+    abort_yb_window: int = 3        # 추월 중단 판정의 y_B를 최근 n개(유효 scan) 중앙값으로. 1 = 그 scan 값 그대로
     lateral_ref: str = 'center'     # 횡 여유 판정 기준: center(y_B 중심, 기존) | left_edge(y_L 왼쪽 모서리)
     # --- corridor (lidar_reactive_drive.PLANNER_CONSTANTS와 같은 값) ---
     corridor_sector_min_deg: float = 45.0
@@ -95,7 +95,7 @@ class AurParams:
     max_steering: float = 0.78
     heading_gain: float = 0.0       # 헤딩 감쇠 [rad/rad]. 0 = 기존 방식(횡위치 P만). 실험은 0.7 (exp_common.yaml)
     y_ref_rate: float = 0.4         # 차선 변경 시 y_ref 기울기 제한 [m/s]
-    lateral_ki: float = 0.0         # 횡 적분 게인 [rad/(m·s)]. 서보 중심 오차(트림) 보정. 0 = 끔
+    lateral_ki: float = 0.3         # 횡 적분 게인 [rad/(m·s)]. 서보 중심 오차(트림) 보정. 0 = 끔
     lateral_i_max: float = 0.10     # 적분항 한계 [rad]
     lateral_i_zone: float = 0.10    # |y_ref − ego_lateral|이 이보다 작고 차선 변경 중이 아닐 때만 적분 [m]
     # --- 선행차 ---
@@ -111,7 +111,7 @@ class AurParams:
 
 
 # exp_common.yaml이 기본값과 다르게 두는 값 (실험 전용). 이유는 yaml의 TUNE 태그와 docs/PROGRESS.md.
-EXPERIMENT_OVERRIDES = {'min_point_x': -1.0, 'steering_deadband': 0.02, 'heading_gain': 0.7}
+EXPERIMENT_OVERRIDES = {'min_point_x': -1.0, 'steering_deadband': 0.0, 'heading_gain': 1.0}
 
 
 def load_params(*paths, **overrides):
