@@ -20,6 +20,7 @@ python -m pytest sim/aur_overtake/test_sim.py -q      # 14 통과, 약 20초
 ```bash
 python sim/aur_overtake/run.py --method d --leader Y                                 # 창 없음, 회차 결과 JSON 한 줄
 mjpython sim/aur_overtake/run.py --method d --leader Y --viewer --start-paused       # 뷰어 (macOS는 mjpython), Enter로 시작
+mjpython sim/aur_overtake/run.py --method d --leader Y --viewer --speed 5          # 5배속으로 시작 (끝나면 실제 재생 배속을 터미널에 찍는다)
 python sim/aur_overtake/run.py --method c --leader NY --aeb off --set start.gap0=2.0 eta=0.95
 ```
 
@@ -116,7 +117,7 @@ python sim/aur_overtake/media/make_media.py --out research_record/2026-11-16_sim
 |---|---|
 | Enter | 일시정지 / 재개 |
 | `.` | 일시정지 중 scan 1프레임(0.1 s) 진행 |
-| 9 / 0 | 배속 1× → 2× → 5× → 0.5× 순서로 바꿈 / 1×로. 화면은 실제 시간 기준 약 50~60 fps로 그린다. 라이다 점은 실차처럼 scan 주기(시뮬 시간 0.1 s)마다 바뀐다 |
+| 9 / 0 | 배속 1× → 2× → 5× → 0.5× 순서로 바꿈 / 1×로. 화면은 실제 시간 기준 약 50~60 fps로, 글자 패널은 초당 4번 갱신한다 (글자 갱신이 느려 매번 하면 재생이 밀린다). 글자 패널 playback 줄에 실제 배속이 나온다. 라이다 점은 실차처럼 scan 주기(시뮬 시간 0.1 s)마다 바뀐다 |
 | 5 | 라이다가 맞히는 판정용 모양 (벽 판, 차 상자) 보기. 화면의 차 모양·가드레일·차선은 보기용이라 scan에 안 들어간다 |
 | 6 | 라이다 점 (초록) |
 | 7 | ego가 인식한 선행차 영역 (주황 반투명, `d` 표시) + ego AEB 검사 영역 (빨강, 작동하면 진해짐) |

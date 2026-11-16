@@ -9,6 +9,7 @@
 MuJoCo 기본 Reset/Run/Pause(Backspace, Space, 왼쪽 패널 버튼)는 이 시뮬 루프에 영향이 없다.
 내장 글꼴은 ASCII만 그리므로 화면 글자는 영어다.
 """
+import sys
 import time
 
 import mujoco
@@ -21,6 +22,7 @@ KEY_ENTER, KEY_PERIOD, KEY_END, KEY_HOME = 257, 46, 269, 268
 KEY_0, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9 = 48, 53, 54, 55, 56, 57
 SPEEDS = (1.0, 2.0, 5.0, 0.5)     # 키 9로 이 순서로 바꾼다
 RENDER_HZ = 60.0
+TEXT_PERIOD = 0.25     # [s] 글자 패널 갱신 주기 (실제 시간)
 KEYS = [('Enter', 'pause / resume'), ('.', 'step 1 scan frame (0.1 s) while paused'),
         ('9 / 0', 'speed 1x > 2x > 5x > 0.5x / back to 1x'), ('5', 'lidar collision shapes (what the rays hit)'), ('6', 'lidar points (green)'),
         ('7', 'detected leader region (orange) + ego AEB zone (red)'), ('8', 'lane lines +-delta (purple) and y_ref (yellow)'),
@@ -52,6 +54,11 @@ class ViewerUI:
         self.anchor = None
         self.ended = False
         self.last_draw = None
+        self.actual = None          # 실제 재생 배속 (최근 약 1 s의 시뮬 시간 / 실제 시간)
+        self.draw_ms = None         # 최근 그리기(오버레이 + sync) 평균 [ms]
+        self._rate_ref = None
+        self._draw_acc = [0.0, 0]
+        self._last_text = None
 
     def attach(self, handle):
         self.handle = handle
@@ -81,8 +88,11 @@ class ViewerUI:
             elif key == KEY_9:
                 i = SPEEDS.index(self.speed) if self.speed in SPEEDS else -1
                 self.speed, self.anchor = SPEEDS[(i + 1) % len(SPEEDS)], None
+                self._rate_ref = None
+                print('[viewer] 배속 %gx' % self.speed, file=sys.stderr, flush=True)
             elif key == KEY_0:
-                self.speed, self.anchor = 1.0, None
+                self.speed, self.anchor, self._rate_ref = 1.0, None, None
+                print('[viewer] 배속 1x', file=sys.stderr, flush=True)
             elif key == KEY_5 and self.handle is not None:
                 self.handle.opt.geomgroup[SENSE_GROUP] = 1 - self.handle.opt.geomgroup[SENSE_GROUP]
             elif key == KEY_6:
@@ -117,10 +127,13 @@ class ViewerUI:
             elif now - target > 1.0:       # 시뮬이 배속을 못 따라가면 (5x 등) 기준만 옮긴다. 시뮬 시간은 이어진다
                 self.anchor = (now, sim.t)
         now = self.clock()
+        self._measure(now, sim.t)
         if changed or stepped or self.paused or self.last_draw is None or now - self.last_draw >= 1.0 / RENDER_HZ:
             self.last_draw = now
-            self.draw()
+            self.draw(force_text=changed or stepped)
             h.sync()
+            self._draw_acc[0] += self.clock() - now
+            self._draw_acc[1] += 1
             if not h.is_running():
                 return False
         while self.paused and self.step_until is None:
@@ -134,6 +147,21 @@ class ViewerUI:
                 return False
         return True
 
+    def _measure(self, now, t):
+        """재생 중 약 1 s마다 실제 배속과 그리기 시간을 갱신한다 (화면 글자 playback 줄)."""
+        if self.paused or self.step_until is not None:
+            self._rate_ref = None
+            return
+        if self._rate_ref is None:
+            self._rate_ref, self._draw_acc = (now, t), [0.0, 0]
+            return
+        w0, t0 = self._rate_ref
+        if now - w0 >= 1.0:
+            self.actual = (t - t0) / (now - w0)
+            if self._draw_acc[1]:
+                self.draw_ms = 1000.0 * self._draw_acc[0] / self._draw_acc[1]
+            self._rate_ref, self._draw_acc = (now, t), [0.0, 0]
+
     def hold_until_closed(self):
         self.ended = True
         h = self.handle
@@ -143,11 +171,17 @@ class ViewerUI:
             h.sync()
             self.sleep(0.05)
 
-    def draw(self):
+    def draw(self, force_text=False):
+        """오버레이는 매번, 글자 패널은 TEXT_PERIOD마다(또는 키를 눌렀을 때)만 바꾼다.
+        set_texts는 뷰어가 다 그릴 때까지 기다려서(실측 약 47 ms) 매번 부르면 재생이 0.1배속까지 느려진다."""
         h = self.handle
         with h.lock():
             h.user_scn.ngeom = 0
             draw_overlays(h.user_scn, self.sim, self.show, self.max_points)
+        now = self.clock()
+        if not (force_text or self._last_text is None or now - self._last_text >= TEXT_PERIOD):
+            return
+        self._last_text = now
         if self.show['text']:
             h.set_texts(self.texts())
         else:
@@ -173,7 +207,8 @@ class ViewerUI:
                 ('ego y est / y_ref', f'{f(ego.corridor.ego_lateral)} / {f(ego.lateral.y_ref, " m")}'),
                 ('leader', f'd_y={sim.logic.d_y:.2f} yield={sim.logic.yield_triggered} brake={sim.logic.brake_fired}'),
                 ('collision', sim.collision or 'none'),
-                ('sim time', f'{sim.t:.2f} s'), ('playback', f'{self.speed:g}x {play}')]
+                ('sim time', f'{sim.t:.2f} s'), ('playback', f'{self.speed:g}x {play}' + (
+                    f'  (actual {self.actual:.1f}x, draw {self.draw_ms:.0f} ms)' if self.actual and play == 'RUN' else ''))]
         return [(None, mujoco.mjtGridPos.mjGRID_TOPLEFT, '\n'.join(a for a, _ in rows), '\n'.join(b for _, b in rows)),
                 (None, mujoco.mjtGridPos.mjGRID_BOTTOMLEFT, '\n'.join(a for a, _ in KEYS), '\n'.join(b for _, b in KEYS))]
 

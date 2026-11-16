@@ -26,6 +26,7 @@ def parse(argv=None):
     ap.add_argument('--set', nargs='*', default=[], metavar='K=V', help="덮어쓰기: 'start.gap0=2.0'(scenario) 또는 'eta=0.95'(AurParams)")
     ap.add_argument('--viewer', action='store_true')
     ap.add_argument('--start-paused', action='store_true')
+    ap.add_argument('--speed', type=float, default=1.0, help='(뷰어) 재생 배속. 실행 중에는 키 9 / 0')
     ap.add_argument('--quiet', action='store_true', help='상태 전이·양보·AEB 이벤트 줄을 찍지 않는다')
     return ap.parse_args(argv)
 
@@ -59,12 +60,19 @@ def main(argv=None):
     import mujoco.viewer
     from viewer_ui import ViewerUI
     ui = ViewerUI(sim, start_paused=args.start_paused)
+    ui.speed = args.speed
     with mujoco.viewer.launch_passive(sim.m, sim.d, key_callback=ui.on_key) as handle:
         ui.attach(handle)
         handle.cam.lookat[:] = [3.0, 0.0, 0.0]
         handle.cam.distance, handle.cam.elevation, handle.cam.azimuth = 6.0, -55.0, 90.0
         while handle.is_running():
+            import time
+            w0, t_start = time.monotonic(), sim.t
             result = sim.run(hook=ui.after_step)
+            if not args.start_paused:
+                print('[viewer] 재생: 시뮬 %.2f s / 실제 %.2f s = %.2fx (설정 %gx, 그리기 평균 %s ms)' % (
+                    sim.t - t_start, time.monotonic() - w0, (sim.t - t_start) / max(1e-6, time.monotonic() - w0),
+                    ui.speed, '%.1f' % ui.draw_ms if ui.draw_ms else '-'), file=sys.stderr, flush=True)
             print(json.dumps(result, ensure_ascii=False))
             if not ui.restart_requested:
                 ui.hold_until_closed()
