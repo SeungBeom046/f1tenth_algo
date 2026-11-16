@@ -5,7 +5,7 @@
 ## 1. 결론: 두 차에 같은 코드를 올린다
 
 - 두 차 모두 같은 저장소의 같은 브랜치 **`exp/aur-overtake`** 를 받는다. ego 코드와 leader 코드를 차마다 나눠 올리지 않는다.
-- **역할(ego/leader)은 코드가 아니라 실행 명령으로 정한다.** 그래서 회차마다 두 차의 역할을 바꿔도 다시 빌드할 필요가 없다.
+- **역할: 파랑이(Foxy) = 추월하는 차 ego, 검정이(jazzy) = 앞차 leader.** 역할은 코드가 아니라 실행 명령(`role:=`)으로 정하므로 코드는 같다.
 - 빌드 대상은 `my_algo` 패키지 하나다.
 
 | 폴더 | 차에서 쓰나 | 설명 |
@@ -48,7 +48,7 @@
 
 추월 실험에서는 두 차가 실행하는 노드가 역할에 따라 달라진다. 이 절의 노드·launch 이름(`exp_planner`, `exp_overtake.launch.py`, `role`, `method`)은 계획이고 아직 저장소에 없다.
 
-| | ego (뒤차, 추월하는 쪽) | leader (앞차, 실험 조건) |
+| | ego = **파랑이** (뒤차, 추월하는 쪽) | leader = **검정이** (앞차, 실험 조건) |
 |---|---|---|
 | 실행 (예정) | `ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d` | `ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y` (또는 `NY`) |
 | 판단 | `exp_planner`가 `my_algo/aur/ego_fsm.py`(EgoFSM)를 돌린다. 접근 → belief로 Y/NY 판단 → 추월 또는 추종 | `exp_planner`가 `my_algo/aur/leader_logic.py`(Leader)를 돌린다. Y면 뒤차가 d_y 안으로 오면 오른쪽으로 비키고, NY면 비키지 않고 급정지 |

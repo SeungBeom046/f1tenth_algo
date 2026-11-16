@@ -1,5 +1,7 @@
 # 차 실행: 터미널별 명령
 
+**역할: 파랑이(Foxy) = 추월하는 차(ego, 뒤), 검정이(jazzy) = 앞차(leader).** 출발할 때 검정이를 앞에, 파랑이를 뒤에 둔다.
+
 차 한 대에 터미널 6개를 띄운다. 아래 블록을 터미널마다 **그대로 복사해** 붙인다.
 각 블록 안에 환경 설정(`ROS_DOMAIN_ID`, `source`)이 들어 있으므로 터미널을 새로 열 때마다 블록 전체를 붙인다.
 
@@ -19,9 +21,9 @@
 
 ---
 
-## 검정이 (`ROS_DOMAIN_ID=37`)
+## 검정이: 앞차 leader (`ROS_DOMAIN_ID=37`, jazzy)
 
-검정이 ROS가 jazzy인지 humble인지 확인되지 않았다. humble이면 아래 `jazzy`를 모두 `humble`로 바꾼다.
+이 코드는 Foxy(Python 3.8) 기준으로 만들었고 jazzy(Python 3.12)에서는 빌드·실행해 보지 않았다. 터미널 0의 빌드 결과를 먼저 본다.
 
 ### 터미널 0: 코드 받기·빌드
 
@@ -107,7 +109,7 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 
 ---
 
-## 파랑이 (`ROS_DOMAIN_ID=38`, Foxy)
+## 파랑이: 추월하는 차 ego (`ROS_DOMAIN_ID=38`, Foxy)
 
 ### 터미널 0: 코드 받기·빌드
 
@@ -208,11 +210,26 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 
 터미널 1~4는 그대로이고 **터미널 5 명령만 바뀐다.** 이 노드와 launch는 아직 없다 ([CAR_CODE.md](CAR_CODE.md) 4절).
 
+파랑이 터미널 5 (추월하는 차):
+
 ```bash
-# ego (뒤차, 추월하는 쪽)
-ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d
-# leader (앞차)
-ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y      # 또는 intent:=NY
+export ROS_DOMAIN_ID=38
+source /opt/ros/foxy/setup.bash
+source ~/vesc_ws/install/setup.bash
+source ~/f1tenth_ws/install/setup.bash
+ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d          # method: a b c d (회차표대로)
 ```
+
+검정이 터미널 5 (앞차):
+
+```bash
+export ROS_DOMAIN_ID=37
+source /opt/ros/jazzy/setup.bash
+source ~/f1_tenth_ws/install/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y       # 또는 intent:=NY (회차표대로)
+```
+
+출발 순서: 검정이 터미널 5 → 1 s 뒤 파랑이 터미널 5 (또는 출발 게이트를 그 순서로 치운다).
 
 기록(터미널 4)에는 `/exp/state`, `/aeb/events`, `/estop/heartbeat`가 추가된다.

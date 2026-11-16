@@ -18,13 +18,13 @@
 
 | 항목 | 검정이 | 파랑이 |
 |---|---|---|
-| ROS | jazzy를 source한다 (아래 터미널 기록 기준). **humble이라고 들었는데 기록은 `/opt/ros/jazzy`라 확인 필요** | Foxy (Python 3.8) |
+| ROS | jazzy (Python 3.12. 이 코드는 jazzy에서 아직 빌드·실행해 보지 않음) | Foxy (Python 3.8) |
 | 이 저장소 | `~/ros2_ws/src/f1tenth_algo` (빌드: `~/ros2_ws`) | `~/f1tenth_ws/src/f1tenth_algo` (빌드: `~/f1tenth_ws`) |
 | Livox 드라이버 워크스페이스 | `~/f1_tenth_ws` | `~/f1tenth_ws` |
 | VESC 드라이버 | (기록에 source 없음, 기본 환경에 있는 것으로 보임) | `~/vesc_ws` |
 | Livox launch | `msg_MID360_launch.py` | `rviz_MID360_launch.py` |
 | `ROS_DOMAIN_ID` (제안) | 37 | 38 |
-| 역할 (회차마다 기록) | ego 또는 leader | ego 또는 leader |
+| 역할 (고정) | **leader (앞차)** | **ego (추월하는 차)** |
 
 - **두 차는 서로 다른 `ROS_DOMAIN_ID`를 쓴다.** 차량 간 통신이 없다는 실험 전제와 맞고, 같은 토픽 이름(`/scan`, `/commands/*`)이 섞이지 않는다. 그 차를 보는 노트북·Foxglove도 같은 ID로 맞춘다. 배포판이 달라도(jazzy/Foxy) 서로 통신하지 않으므로 상관없다.
 - **확인 필요 (검정이)**: livox_ros_driver2의 `msg_MID360_launch.py`는 기본으로 Livox 전용 메시지(`CustomMsg`)를 낸다고 알고 있다 (미확인). `pointcloud_to_laserscan`은 `sensor_msgs/msg/PointCloud2`가 필요하다. 처음 한 번 `ros2 topic info /livox/lidar`로 타입을 확인하고, CustomMsg면 `rviz_MID360_launch.py`를 쓰거나 설정의 `xfer_format`을 0으로 바꾼다.
@@ -41,7 +41,7 @@ git fetch origin && git switch exp/aur-overtake    # 처음 한 번 (이미 이 
 git pull --ff-only
 cd ~/ros2_ws
 rm -rf src/f1tenth_algo/scripts/__pycache__ build/my_algo install/my_algo   # 브랜치를 바꾼 직후 한 번
-source /opt/ros/jazzy/setup.bash              # humble이면 humble
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select my_algo
 source install/setup.bash
 ros2 pkg executables my_algo                  # 확인: lidar_reactive_drive, autonomous_drive 등 5개
@@ -163,9 +163,9 @@ ros2 topic echo /reactive/lidar_command --once
 
 ### 출발 배치 (추월 실험, 계획)
 
-- 선행차를 앞, ego를 뒤에. **ego 앞범퍼 → 선행차 뒷면 1.5 m 이상** (가까우면 선행차가 출발하자마자 양보 거리 안이라 회차가 무효. d_y는 0.6~1.2 m).
+- 선행차(검정이)를 앞, ego(파랑이)를 뒤에. **ego 앞범퍼 → 선행차 뒷면 1.5 m 이상** (가까우면 선행차가 출발하자마자 양보 거리 안이라 회차가 무효. d_y는 0.6~1.2 m).
 - 두 차 모두 통로 중심. 각 차 앞에 출발 게이트 장애물 (AEB로 정지 대기).
-- 출발: 선행차 게이트를 먼저 치우고 1 s 뒤 ego 게이트를 치운다 (출발 시각 차이를 기록).
+- 출발: 선행차(검정이) 게이트를 먼저 치우고 1 s 뒤 ego(파랑이) 게이트를 치운다 (출발 시각 차이를 기록).
 
 ### 안전
 
@@ -187,8 +187,8 @@ ros2 topic echo /reactive/lidar_command --once
 
 회차표 (지시서 10단계): 방법 4(a·b·c·d) × 선행차 의도 2(Y·NY) × 3회 = 24회 + 예비 4회. run_id 규칙 `<방법><의도><번호>` (예: `dY2`, `bNY1`). 순서는 섞는다.
 
-| run_id | 날짜·시각 | ego 차 | leader 차 | W [m] | 출발 간격 [m] | 선행차 d_y (로그) | 결과 (DONE/FOLLOW/중단/충돌) | 사람 개입 | 메모 |
-|---|---|---|---|---|---|---|---|---|---|
+| run_id | 날짜·시각 | W [m] | 출발 간격 [m] | 선행차 d_y (로그) | 결과 (DONE/FOLLOW/중단/충돌) | 사람 개입 | 메모 |
+|---|---|---|---|---|---|---|---|
 
 ## 6. 보정 실험 (지금 가능)
 
@@ -251,7 +251,7 @@ ros2 topic echo /reactive/lidar_command --once
 
 ## 9. 미확인 목록
 
-- 검정이 ROS 배포판 (jazzy인지 humble인지), VESC 드라이버 위치
+- 검정이(jazzy)에서 이 브랜치 빌드·실행, VESC 드라이버 위치
 - 검정이 `msg_MID360_launch.py`의 메시지 타입
 - 두 차 라이다 높이, 실제 차폭·차 길이 (코드 가정 0.27 m, 0.50 m)
 - `/sensors/core` 속도 단위 (ERPM 가정)
