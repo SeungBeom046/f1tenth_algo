@@ -19,7 +19,7 @@ def generate_launch_description():
         return ParameterValue(LaunchConfiguration(name), value_type=typ)
 
     return LaunchDescription([
-        DeclareLaunchArgument('role', default_value='leader', description='leader(앞차) | ego(추월하는 차)'),
+        DeclareLaunchArgument('role', default_value='leader', description='leader(앞차) | ego(추월하는 차) | straight(서보 보정 직진)'),
         DeclareLaunchArgument('method', default_value='d', description='(ego) a 고정 규칙 | b 소극적 | c 공격적 | d 제안'),
         # 시뮬 차량과 같은 값(구동 0.15 + 1차 지연 0.10). 기획안 0.15로는 시뮬에서 NY 급정지 때 추돌했다. 보정 실험 값으로 바꾼다
         DeclareLaunchArgument('t_d', default_value='0.25', description='(ego) 제동 지연 [s], scan 주기 0.1 s는 따로 더해진다'),

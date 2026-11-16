@@ -9,8 +9,10 @@ leader 시나리오 (intent):
   d_y·brake_delay는 run_id로 정해지고 시작할 때 터미널에 찍힌다.
 ego (method a|b|c|d): 접근 → belief로 Y/NY 판단 → 추월(PASS → MERGE → DONE) 또는 추종(FOLLOW).
   상태 전이·belief 확정·추월 중단이 터미널에 [EXP ego] 줄로 찍힌다.
+straight: 서보 중심 보정용. 조향 0으로 v_B_nominal 직진만 하고, 벽으로 잰 횡위치·헤딩을 0.5 s마다 찍는다.
 """
 import json
+import math
 import os
 
 import rclpy
@@ -21,9 +23,11 @@ from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 
+from my_algo.aur.corridor import Corridor
 from my_algo.aur.ego_runner import EgoRunner
 from my_algo.aur.leader_runner import LeaderRunner
 from my_algo.aur.params import load_params
+from my_algo.aur.tracker import scan_to_points
 from my_algo.baseline.vehicle_utils import ReactiveDriveCommand, command_to_json, print_event_line
 
 
@@ -40,7 +44,7 @@ def parse_intent(value):
 class ExpPlanner(Node):
     def __init__(self):
         super().__init__('exp_planner')
-        self.declare_parameter('role', 'leader')        # leader | ego
+        self.declare_parameter('role', 'leader')        # leader | ego | straight
         # ROS 파라미터 YAML은 Y를 bool true로 읽는다 (intent:=Y → True). 타입을 열어 두고 아래에서 'Y'로 되돌린다.
         # dynamic_typing은 Galactic 이후에만 있다 (Foxy는 타입 검사를 안 해서 없어도 된다)
         intent_desc = ParameterDescriptor()
@@ -57,8 +61,8 @@ class ExpPlanner(Node):
             get_package_share_directory('my_algo'), 'config', 'exp_common.yaml'))
 
         self.role = self.get_parameter('role').value
-        if self.role not in ('leader', 'ego'):
-            raise SystemExit('exp_planner: role은 leader 또는 ego: %r' % self.role)
+        if self.role not in ('leader', 'ego', 'straight'):
+            raise SystemExit('exp_planner: role은 leader | ego | straight: %r' % self.role)
         W = float(self.get_parameter('W').value)
         t_d = float(self.get_parameter('t_d').value)
         over = {}
@@ -72,6 +76,9 @@ class ExpPlanner(Node):
             self.intent = parse_intent(self.get_parameter('intent').value)
             self.runner = LeaderRunner(self.p, self.intent, str(self.get_parameter('run_id').value),
                                        d_y=d_y if d_y > 0 else None)
+        elif self.role == 'straight':
+            self.runner = Corridor(self.p)
+            self.t_print = None
         else:
             self.method = str(self.get_parameter('method').value).strip().lower()
             if self.method not in ('a', 'b', 'c', 'd'):
@@ -100,6 +107,8 @@ class ExpPlanner(Node):
             lg = self.runner.logic
             self.event('시작 role=leader intent=%s d_y=%.2f m brake_delay=%.2f s W=%s v_B=%.2f m/s speed_source=%s' % (
                 self.intent, lg.d_y, lg.brake_delay, Wtxt, self.p.v_B_nominal, self.speed_source))
+        elif self.role == 'straight':
+            self.event('시작 role=straight: 조향 0, %.2f m/s 직진 (서보 중심 보정). 횡위치 + = 왼쪽' % self.p.v_B_nominal)
         else:
             self.event('시작 role=ego method=%s W=%s t_d=%.2f s (+scan %.2f s) v_pass=%.2f m/s eta=%.2f speed_source=%s' % (
                 self.method, Wtxt, self.p.t_d, self.p.scan_period, self.p.v_pass, self.p.eta, self.speed_source))
@@ -116,6 +125,8 @@ class ExpPlanner(Node):
         v = self.v if self.speed_source == 'sensors_core' else self.v_cmd
         if self.role == 'leader':
             state, mode, steer, reason = self.leader_step(t, msg, v)
+        elif self.role == 'straight':
+            state, mode, steer, reason = self.straight_step(t, msg, v)
         else:
             state, mode, steer, reason = self.ego_step(t, msg, v)
         self.cmd_pub.publish(String(data=command_to_json(ReactiveDriveCommand(
@@ -144,6 +155,18 @@ class ExpPlanner(Node):
         if s['brake_armed'] and not prev.get('brake_armed'):
             self.event('급정지 무장: %.2f s 뒤 정지' % lg.brake_delay)
         return s, mode, steer, 'intent=%s d_rear=%s' % (self.intent, 'none' if s['d_rear'] is None else '%.2f' % s['d_rear'])
+
+    def straight_step(self, t, msg, v):
+        cor = self.runner
+        cor.update(scan_to_points(list(msg.ranges), msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max))
+        self.v_cmd = self.p.v_B_nominal
+        if self.t_print is None or t - self.t_print >= 0.5:
+            self.t_print = t
+            self.event('횡위치 %+.3f m  헤딩 %+.1f°  (양쪽 벽 %s)' % (
+                cor.ego_lateral, math.degrees(cor.heading), '보임' if cor.valid else '안 보임'))
+        s = dict(t=t, role='straight', v=v, v_cmd=self.v_cmd, ego_lateral=cor.ego_lateral, heading=cor.heading,
+                 W=cor.W_est, valid=cor.valid)
+        return s, 'STRAIGHT', 0.0, 'servo_center_check'
 
     def ego_step(self, t, msg, v):
         self.v_cmd, steer, y_ref, st, reason = self.runner.step(t, msg, v)
