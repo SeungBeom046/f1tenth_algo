@@ -87,10 +87,10 @@
 ## 5. 받는 명령 (두 차 공통, 경로만 다름)
 
 ```bash
-cd <저장소 경로>                 # 검정이 ~/ros2_ws/src/f1tenth_algo, 파랑이 ~/f1tenth_ws/src/f1tenth_algo
+cd ~/f1tenth_ws/src/f1tenth_algo      # 파랑이. 검정이는 ~/ros2_ws/src/f1tenth_algo
 git fetch origin && git switch exp/aur-overtake   # 처음 한 번
 git pull --ff-only
-cd <워크스페이스>                # 검정이 ~/ros2_ws, 파랑이 ~/f1tenth_ws
+cd ~/f1tenth_ws                       # 파랑이. 검정이는 ~/ros2_ws
 colcon build --packages-select my_algo
 source install/setup.bash
 ```

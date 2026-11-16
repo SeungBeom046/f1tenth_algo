@@ -84,13 +84,13 @@ ros2 topic pub --once /autonomous_mode std_msgs/msg/Bool "{data: false}"
 
 ### 터미널 4: 기록
 
-`<run_id>`를 회차 이름으로 바꾼다 (예: `calib1`, `dY2`).
+`test1`을 회차 이름으로 바꾼다 (예: `calib1`, `dY2`). **꺾쇠 `< >`는 쓰지 않는다** (bash에서 파일 입력으로 해석돼 명령이 실행되지 않는다).
 
 ```bash
 export ROS_DOMAIN_ID=37
 source /opt/ros/jazzy/setup.bash
 mkdir -p ~/runs && cd ~/runs
-ros2 bag record -o $(date +%m%d_%H%M)_<run_id>_black \
+ros2 bag record -o $(date +%m%d_%H%M)_test1_black \
   /scan /sensors/core /commands/motor/speed /commands/servo/position \
   /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state
 ```
@@ -106,7 +106,7 @@ export ROS_DOMAIN_ID=37
 source /opt/ros/jazzy/setup.bash
 source ~/f1_tenth_ws/install/setup.bash
 source ~/ros2_ws/install/setup.bash
-ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=<run_id> W:=<실측 통로 폭>
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=test1 W:=1.0         # test1·1.0을 회차 이름·실측 폭으로
 ```
 
 (나) 기본 주행 (gap follow): 보정 실험용.
@@ -186,7 +186,7 @@ export ROS_DOMAIN_ID=38
 source /opt/ros/foxy/setup.bash
 source ~/vesc_ws/install/setup.bash          # /sensors/core(vesc_msgs) 기록에 필요
 mkdir -p ~/runs && cd ~/runs
-ros2 bag record -o $(date +%m%d_%H%M)_<run_id>_blue \
+ros2 bag record -o $(date +%m%d_%H%M)_test1_blue \
   /scan /sensors/core /commands/motor/speed /commands/servo/position \
   /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode
 ```
@@ -242,7 +242,7 @@ export ROS_DOMAIN_ID=37
 source /opt/ros/jazzy/setup.bash
 source ~/f1_tenth_ws/install/setup.bash
 source ~/ros2_ws/install/setup.bash
-ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=<run_id> W:=<실측 통로 폭>
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=test1 W:=1.0         # test1·1.0을 회차 이름·실측 폭으로
 ```
 
 | 인자 | 값 | 뜻 |
@@ -275,7 +275,7 @@ AEB가 걸리면 `autonomous_drive`가 `[Drive] mode=AEB ...` 줄을 낸다. 그
 기록(터미널 4)에 `/exp/state`를 더한다. 그 scan의 모드, 뒤차 거리, `d_y`, 양보·급정지 시각이 JSON으로 들어 있다.
 
 ```bash
-ros2 bag record -o $(date +%m%d_%H%M)_<run_id>_black \
+ros2 bag record -o $(date +%m%d_%H%M)_test1_black \
   /scan /sensors/core /commands/motor/speed /commands/servo/position \
   /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state
 ```

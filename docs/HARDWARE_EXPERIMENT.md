@@ -87,7 +87,7 @@ ros2 launch vesc_driver vesc_driver_node.launch.py
 export ROS_DOMAIN_ID=37
 source /opt/ros/jazzy/setup.bash
 mkdir -p ~/runs && cd ~/runs
-ros2 bag record -o $(date +%m%d)_<run_id>_black /scan /sensors/core /commands/motor/speed /commands/servo/position /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode
+ros2 bag record -o $(date +%m%d)_test1_black /scan /sensors/core /commands/motor/speed /commands/servo/position /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode
 
 # 터미널 D: 알고리즘
 export ROS_DOMAIN_ID=37
@@ -120,7 +120,7 @@ ros2 launch vesc_driver vesc_driver_node.launch.py
 export ROS_DOMAIN_ID=38
 source /opt/ros/foxy/setup.bash
 mkdir -p ~/runs && cd ~/runs
-ros2 bag record -o $(date +%m%d)_<run_id>_blue /scan /sensors/core /commands/motor/speed /commands/servo/position /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode
+ros2 bag record -o $(date +%m%d)_test1_blue /scan /sensors/core /commands/motor/speed /commands/servo/position /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode
 
 # 터미널 D: 알고리즘 (빌드는 2절에서 했으면 생략)
 export ROS_DOMAIN_ID=38
