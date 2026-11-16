@@ -34,7 +34,9 @@ STATE_KO = {'WAIT': '대기', 'APPROACH': '접근', 'PROBE': '탐색 (의도 관
 STATE_COLOR = {'WAIT': (150, 150, 150), 'APPROACH': (80, 160, 255), 'PROBE': (255, 190, 40), 'PASS': (60, 200, 110),
                'MERGE': (40, 200, 200), 'DONE': (60, 220, 120), 'FOLLOW': (240, 110, 80), 'RETREAT': (230, 80, 80)}
 METHOD_KO = {'a': 'a 고정 규칙', 'b': 'b 소극적', 'c': 'c 공격적', 'd': 'd 제안'}
-LEADER_KO = {'Y': 'Y · 비켜 줌', 'NY': 'NY · 안 비킴 + 급정지'}
+LEADER_KO = {'Y': 'Y · 비켜 줌', 'NY': 'NY · 안 비킴 + 급정지', 'YR': 'YR · 비켰다가 다시 들어옴'}
+# 영상으로 남길 회차: 방법 a~d × 앞차 Y/NY + 시뮬 전용 YR (방법 d)
+SCENARIOS = [(m, b) for b in ('Y', 'NY') for m in 'abcd'] + [('d', 'YR')]
 
 
 def ko_event(line):
@@ -176,7 +178,7 @@ class Recorder:
         # 미니맵 (위에서 본 모습)
         mx0, my0 = W_IMG - 30 - 760, 26
         self._panel(d, (mx0 - 12, my0 - 10, W_IMG - 18, my0 + 344))
-        d.text((mx0 + 4, my0 + 304), '위에서 본 모습 · 주황 = 인식한 앞차 영역, 빨강 = AEB 검사 영역, 보라 = 차선',
+        d.text((mx0 + 4, my0 + 304), '위에서 본 모습 · 주황 = 인식한 앞차 영역, 빨강 = AEB 검사 영역, 보라 = 추월·양보 경로',
                font=self.f_small, fill=(210, 215, 225, 255))
         # 이벤트 자막 (최근 3줄)
         ev = [ko_event(e) for e in s.events if not e.split('] ', 1)[-1].startswith('ego    - →')][-3:]
@@ -213,11 +215,13 @@ class Recorder:
                 tag = st + ('_leader_brake' if '급정지' in new else '_decided' if '확정' in new else '')
                 self.snaps.append(('%05.2fs_%s' % (sim.t, tag), frame))
             self.prev_state, self.prev_events = st, len(sim.events)
-        # NY: 추종 상태로 서서 2 s 지나면 끝
+        # 끝내기: 급정지 뒤 서서 2 s, 또는 급정지 없이 추종(FOLLOW)으로 3 s (b의 T_max, 추월 중단 뒤 등)
         if st == 'FOLLOW' and sim.ego.kin.v < 0.02 and sim.logic.brake_fired:
             self.stop_after = self.stop_after or sim.t + 2.0
-            if sim.t >= self.stop_after:
-                return False
+        elif st == 'FOLLOW' and not sim.logic.brake_fired:
+            self.stop_after = self.stop_after or sim.t + 3.0
+        if self.stop_after is not None and sim.t >= self.stop_after:
+            return False
         return True
 
 
@@ -235,7 +239,7 @@ def record(method, behavior, out, d_y=1.0, seed=0, cam='chase'):
         w.append_data(np.asarray(last))
     w.close()
     for tag, img in rec.snaps:
-        img.save(os.path.join(out, 'screenshots', f'{name}_{tag}.png'))
+        img.save(os.path.join(out, 'screenshots', f'{name}_{tag}.jpg'), quality=93)   # 장면 캡처는 jpg (png의 1/5 크기)
     return res, rec.trace, sim.events
 
 
@@ -276,7 +280,7 @@ def fig_traj(tr, out, name, title):
     x0, x1 = min(r[1] for r in tr) - 0.5, max(max(r[1], r[3]) for r in tr) + 0.8
     ax.axhspan(0.5, 0.56, color='#9aa0a6')
     ax.axhspan(-0.56, -0.5, color='#9aa0a6')
-    ax.axhline(0, color='#e0b020', ls=(0, (6, 6)), lw=1.2)
+    ax.axhline(0, color='#bbb', lw=0.8)       # 통로 중심 (기준선, 차선 아님)
     states = [r[5] for r in tr]
     for st in dict.fromkeys(states):
         idx = [i for i, s in enumerate(states) if s == st]
@@ -407,14 +411,14 @@ def main():
     if not args.skip_video:
         overview(args.out)
         traces, summary = {}, {}
-        for beh in ('Y', 'NY'):
-            res, tr, ev = record('d', beh, args.out)
-            traces[beh] = tr
-            summary[beh] = res
-            with open(os.path.join(args.out, 'data', f'events_d_{beh}.txt'), 'w') as f:
+        for method, beh in SCENARIOS:
+            res, tr, ev = record(method, beh, args.out)
+            if method == 'd' and beh in ('Y', 'NY'):
+                traces[beh] = tr
+            summary[f'{method}_{beh}'] = res
+            with open(os.path.join(args.out, 'data', f'events_{method}_{beh}.txt'), 'w') as f:
                 f.write('\n'.join(ev) + '\n')
-            print(beh, res['final_state'], 'T_pass', res['T_pass'], 'frames ok', flush=True)
-        record('c', 'NY', args.out)
+            print(method, beh, res['final_state'], res['cause'], 'T_pass', res['T_pass'], 't', res['t_end'], flush=True)
         fig_belief(traces, args.out)
         fig_traj(traces['Y'], args.out, 'trajectory_Y.png', '앞차가 비켜 줄 때: 탐색 → 추월 → 복귀 (위에서 본 궤적, 방법 d)')
         fig_traj(traces['NY'], args.out, 'trajectory_NY.png', '앞차가 안 비킬 때: 탐색 → 안전 추종 → 정지 (방법 d)')

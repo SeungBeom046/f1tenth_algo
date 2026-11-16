@@ -5,7 +5,7 @@
 geom 그룹 두 가지:
 - SENSE_GROUP(4): 라이다가 맞히는 판정용 모양 (벽 판, 차 상자). 예전 월드와 같은 크기·위치라 scan이 그대로다.
   뷰어 기본 표시에서는 숨는다 (뷰어 키 5로 보기).
-- 0: 보기용 (도로·차선·가드레일·바퀴·차체). 라이다(Lidar의 geomgroup)와 충돌 판정(sim.check_collision, 기하 계산)에 안 쓴다.
+- 0: 보기용 (도로·가장자리선·가드레일·바퀴·차체). 라이다(Lidar의 geomgroup)와 충돌 판정(sim.check_collision, 기하 계산)에 안 쓴다.
 """
 SENSE_GROUP = 4
 
@@ -16,7 +16,7 @@ def _box(name, pos, size, rgba, extra=''):
 
 
 def _corridor_visual(W, x0, x1):
-    """가드레일(연석 + 기둥 + 레일 2단), 차선(가장자리 실선, 중앙 점선), 출발선."""
+    """가드레일(연석 + 기둥 + 레일 2단), 가장자리 실선, 5 m 눈금. 중앙선 없음 (차선 하나짜리 통로)."""
     out = []
     xm, half = 0.5 * (x0 + x1), 0.5 * (x1 - x0)
     vis = 'contype="0" conaffinity="0"'
@@ -40,12 +40,7 @@ def _corridor_visual(W, x0, x1):
     for side, s in (('l', 1), ('r', -1)):
         out.append(_box(f'edge_{side}', (xm, s * (0.5 * W - 0.03), 0.0012), (half, 0.008, 0.0012),
                         '0.95 0.95 0.95 1', vis))
-    k = 0
-    x = x0 + 0.1
-    while x < x1:
-        out.append(_box(f'dash_{k}', (x + 0.1, 0.0, 0.0012), (0.1, 0.007, 0.0012), '0.97 0.80 0.15 1', vis))
-        x += 0.4
-        k += 1
+    # 중앙선은 그리지 않는다: 이 통로는 차선 하나짜리 좁은 길이다 (2차선이면 앞차가 비킬 필요 없이 추월된다)
     for k in range(int(x1) // 5 + 1):     # 5 m마다 거리 표시 (가장자리 짧은 가로줄)
         for s in (1, -1):
             out.append(_box(f'tick_{k}_{s}', (5.0 * k, s * (0.5 * W - 0.09), 0.0012), (0.006, 0.05, 0.0012),
