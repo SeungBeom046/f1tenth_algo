@@ -137,3 +137,39 @@ def test_viewer_overlay_draws_without_window():
     ui.on_key(KEY_ENTER)
     ui._apply_keys()
     assert ui.paused
+
+
+def test_viewer_draws_at_render_rate_and_cycles_speed():
+    import contextlib
+    from viewer_ui import KEY_0, KEY_9, RENDER_HZ, ViewerUI
+    sim = Sim('d', load_cfg())
+    syncs = []
+
+    class Handle:
+        user_scn = mujoco.MjvScene(sim.m, 3000)
+        def lock(self): return contextlib.nullcontext()
+        def set_texts(self, t): pass
+        def clear_texts(self): pass
+        def sync(self): syncs.append(now[0])
+        def is_running(self): return True
+
+    now = [0.0]
+
+    def sleep(dt):
+        now[0] += dt
+    ui = ViewerUI(sim, clock=lambda: now[0], sleep=sleep)
+    ui.attach(Handle())
+    for _ in range(100):                # 시뮬 1 s, 1x: 스텝마다(100번)가 아니라 약 RENDER_HZ번만 그린다
+        sim.step()
+        assert ui.after_step(sim)
+    assert 0.8 * RENDER_HZ <= len(syncs) <= 1.1 * RENDER_HZ and abs(now[0] - 1.0) < 0.02
+    speeds = []
+    for _ in range(4):
+        ui.on_key(KEY_9)
+        ui._apply_keys()
+        speeds.append(ui.speed)
+    assert speeds == [2.0, 5.0, 0.5, 1.0]
+    ui.on_key(KEY_9)
+    ui.on_key(KEY_0)
+    ui._apply_keys()
+    assert ui.speed == 1.0

@@ -1,10 +1,11 @@
 """대화형 뷰어 오버레이·재생 제어 (mjpython + mujoco.viewer.launch_passive).
 
 키 양식은 예전 시뮬(sim/mujoco 브랜치 sim/viewer_ui.py)과 같다. 화면 표시만 바꾸고 시뮬 진행은 건드리지 않는다.
-    Enter  일시정지 / 재개        .  일시정지 중 scan 1프레임(0.1 s) 진행      9  배속 1x <-> 0.25x
+    Enter  일시정지 / 재개        .  일시정지 중 scan 1프레임(0.1 s) 진행      9  배속 1x → 2x → 5x → 0.5x    0  1x로
     5      라이다가 맞히는 판정용 모양 (벽 판, 차 상자) 보기
     6      라이다 점               7  추적 중인 선행차 표시                       8  차선(±δ)·y_ref 표시
     End    글자 패널 (Mac: fn + →)                 Home  재시작: 같은 설정·시드로 처음부터 (Mac: fn + ←)
+화면은 실제 시간 기준 RENDER_HZ로만 다시 그린다 (시뮬 스텝 0.01 s마다 그리면 그리기가 밀려 끊겨 보인다).
 MuJoCo 기본 Reset/Run/Pause(Backspace, Space, 왼쪽 패널 버튼)는 이 시뮬 루프에 영향이 없다.
 내장 글꼴은 ASCII만 그리므로 화면 글자는 영어다.
 """
@@ -17,9 +18,11 @@ from my_algo.aur import safety
 from world import SENSE_GROUP
 
 KEY_ENTER, KEY_PERIOD, KEY_END, KEY_HOME = 257, 46, 269, 268
-KEY_5, KEY_6, KEY_7, KEY_8, KEY_9 = 53, 54, 55, 56, 57
+KEY_0, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9 = 48, 53, 54, 55, 56, 57
+SPEEDS = (1.0, 2.0, 5.0, 0.5)     # 키 9로 이 순서로 바꾼다
+RENDER_HZ = 60.0
 KEYS = [('Enter', 'pause / resume'), ('.', 'step 1 scan frame (0.1 s) while paused'),
-        ('9', 'speed 1x <-> 0.25x'), ('5', 'lidar collision shapes (what the rays hit)'), ('6', 'lidar points (green)'),
+        ('9 / 0', 'speed 1x > 2x > 5x > 0.5x / back to 1x'), ('5', 'lidar collision shapes (what the rays hit)'), ('6', 'lidar points (green)'),
         ('7', 'detected leader region (orange) + ego AEB zone (red)'), ('8', 'lane lines +-delta (purple) and y_ref (yellow)'),
         ('End', 'text panel (Mac: fn+Right)'), ('Home', 'restart run, same seed (Mac: fn+Left)'),
         ('note', 'MuJoCo Reset/Run/Pause buttons do not work here')]
@@ -48,6 +51,7 @@ class ViewerUI:
         self.keys_pending = []
         self.anchor = None
         self.ended = False
+        self.last_draw = None
 
     def attach(self, handle):
         self.handle = handle
@@ -56,6 +60,7 @@ class ViewerUI:
         """재시작: 새 Sim에 붙인다. 토글·배속·카메라는 유지, 재생 상태만 처음으로."""
         self.sim = sim
         self.paused, self.step_until, self.anchor, self.ended = False, None, None, False
+        self.last_draw = None
         self.restart_requested = False
         self.run_index += 1
 
@@ -64,6 +69,8 @@ class ViewerUI:
         self.keys_pending.append(int(key))
 
     def _apply_keys(self):
+        """쌓인 키를 처리한다. 반환: 처리한 키가 있었는가 (있으면 바로 다시 그린다)."""
+        changed = bool(self.keys_pending)
         while self.keys_pending:
             key = self.keys_pending.pop(0)
             if key == KEY_ENTER:
@@ -72,7 +79,10 @@ class ViewerUI:
                 period = self.sim.frame_dt
                 self.step_until = round((int(np.floor(self.sim.t / period + 1e-9)) + 1) * period, 9)
             elif key == KEY_9:
-                self.speed, self.anchor = (0.25 if self.speed == 1.0 else 1.0), None
+                i = SPEEDS.index(self.speed) if self.speed in SPEEDS else -1
+                self.speed, self.anchor = SPEEDS[(i + 1) % len(SPEEDS)], None
+            elif key == KEY_0:
+                self.speed, self.anchor = 1.0, None
             elif key == KEY_5 and self.handle is not None:
                 self.handle.opt.geomgroup[SENSE_GROUP] = 1 - self.handle.opt.geomgroup[SENSE_GROUP]
             elif key == KEY_6:
@@ -85,19 +95,34 @@ class ViewerUI:
                 self.show['text'] = not self.show['text']
             elif key == KEY_HOME:
                 self.restart_requested = True
+        return changed
 
     def after_step(self, sim):
         """시뮬 한 스텝 뒤에 불린다. False = 창 닫힘 또는 재시작 요청."""
         h = self.handle
-        self._apply_keys()
+        changed = self._apply_keys()
         if self.restart_requested:
             return False
-        if self.step_until is not None and sim.t + 1e-9 >= self.step_until:
+        stepped = self.step_until is not None and sim.t + 1e-9 >= self.step_until
+        if stepped:
             self.step_until = None
-        self.draw()
-        h.sync()
-        if not h.is_running():
-            return False
+        if not self.paused and self.step_until is None:
+            # 재생 중: 이 스텝이 보여야 할 실제 시각까지 기다린 뒤 그린다 (그리는 간격이 고르게)
+            now = self.clock()
+            if self.anchor is None:
+                self.anchor = (now, sim.t)
+            target = self.anchor[0] + (sim.t - self.anchor[1]) / self.speed
+            if target > now:
+                self.sleep(target - now)
+            elif now - target > 1.0:       # 시뮬이 배속을 못 따라가면 (5x 등) 기준만 옮긴다. 시뮬 시간은 이어진다
+                self.anchor = (now, sim.t)
+        now = self.clock()
+        if changed or stepped or self.paused or self.last_draw is None or now - self.last_draw >= 1.0 / RENDER_HZ:
+            self.last_draw = now
+            self.draw()
+            h.sync()
+            if not h.is_running():
+                return False
         while self.paused and self.step_until is None:
             self.sleep(0.02)
             self._apply_keys()
@@ -107,16 +132,6 @@ class ViewerUI:
             h.sync()
             if not h.is_running():
                 return False
-        if self.step_until is not None:
-            return True
-        now = self.clock()
-        if self.anchor is None:
-            self.anchor = (now, sim.t)
-        target = self.anchor[0] + (sim.t - self.anchor[1]) / self.speed
-        if target > now:
-            self.sleep(target - now)
-        elif now - target > 0.5:
-            self.anchor = (now, sim.t)
         return True
 
     def hold_until_closed(self):
