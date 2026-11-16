@@ -44,6 +44,7 @@ archive/imu_tools/          쓰지 않는 IMU 단독 기록 도구 보관 (main 
 | [sim/aur_overtake/README.md](sim/aur_overtake/README.md) | 시뮬 환경 세팅, 뷰어, 일괄 실행, 옵션, 결과 읽는 법, 키 |
 | [my_algo/aur/README.md](my_algo/aur/README.md), [my_algo/baseline/README.md](my_algo/baseline/README.md) | 패키지 파일별 역할 |
 | [docs/JETSON.md](docs/JETSON.md) | Jetson에서 이 브랜치 받기·빌드·기본 주행 실행 |
+| [docs/CAR_TERMINALS.md](docs/CAR_TERMINALS.md) | **차 실행: 검정이·파랑이 터미널별로 칠 명령** (복사해서 붙이기), 정지, 자주 막히는 곳 |
 | [docs/CAR_CODE.md](docs/CAR_CODE.md) | 차량별로 올리는 코드 (두 차 같은 브랜치, 역할은 실행 명령으로), 지금과 추월 실험 때 뜨는 노드 |
 | [docs/HARDWARE_EXPERIMENT.md](docs/HARDWARE_EXPERIMENT.md) | 차량 2대(검정이·파랑이) 터미널 순서, 실험 환경, 보정 실험, 기록·볼 값 |
 | [docs/DRIVE_BASELINE.md](docs/DRIVE_BASELINE.md) | 기본 주행 상세 (정지 수단, 파라미터, 알고리즘) |

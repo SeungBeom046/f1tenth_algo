@@ -63,6 +63,8 @@ ros2 pkg executables my_algo
 
 ## 3. 터미널 실행
 
+> 터미널마다 복사해서 붙일 명령은 [CAR_TERMINALS.md](CAR_TERMINALS.md)에 정리돼 있다. 이 절은 요약이다.
+
 **모든 터미널에서 맨 먼저 `export ROS_DOMAIN_ID=<그 차의 값>`.** 순서: A(라이다) → B(VESC) → 확인 → C(기록) → D(알고리즘).
 `lidar_drive.launch.py`는 실행하는 순간 **조이스틱 없이 바로 AUTO로 출발한다.** 출발 전에 차 앞 0.2 m 안에 장애물(출발 게이트)을 두면 AEB로 멈춰 있고, 장애물을 치우면 출발한다.
 
