@@ -151,6 +151,8 @@ ros2 launch vesc_driver vesc_driver_node.launch.py
 ```bash
 export ROS_DOMAIN_ID=38
 source /opt/ros/foxy/setup.bash
+source ~/vesc_ws/install/setup.bash          # 없으면 /sensors/core에서 No module named 'vesc_msgs'
+ros2 topic list                              # /livox/lidar, /sensors/core 가 보여야 한다. 안 보이면 터미널마다 ROS_DOMAIN_ID 확인
 ros2 topic info /livox/lidar                 # Type: sensor_msgs/msg/PointCloud2
 ros2 topic hz /sensors/core                  # 숫자가 나오면 VESC 정상. Ctrl+C
 ```
@@ -168,6 +170,7 @@ ros2 topic pub --once /autonomous_mode std_msgs/msg/Bool "{data: false}"    # �
 ```bash
 export ROS_DOMAIN_ID=38
 source /opt/ros/foxy/setup.bash
+source ~/vesc_ws/install/setup.bash          # /sensors/core(vesc_msgs) 기록에 필요
 mkdir -p ~/runs && cd ~/runs
 ros2 bag record -o $(date +%m%d_%H%M)_<run_id>_blue \
   /scan /sensors/core /commands/motor/speed /commands/servo/position \
@@ -202,6 +205,8 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 |---|---|
 | 터미널 5에서 `package 'realsense2_camera' not found` | 이 launch는 카메라를 꺼도 이 패키지 경로를 먼저 찾는다. 차에 RealSense 패키지를 설치하거나 그 환경을 source한다 |
 | `package 'my_algo' not found` | 터미널 0의 빌드가 실패했거나, 터미널 5에서 워크스페이스 `install/setup.bash`를 source하지 않았다 |
+| `No module named 'vesc_msgs'` | 그 터미널에서 VESC 워크스페이스를 source하지 않았다 (파랑이 `source ~/vesc_ws/install/setup.bash`) |
+| RViz에는 점군이 보이는데 `Unknown topic '/livox/lidar'` | 터미널끼리 `ROS_DOMAIN_ID`가 다르다. 각 터미널에서 `echo $ROS_DOMAIN_ID`로 비교한다 (빈칸 = 0) |
 | `/scan`이 안 나온다 | 터미널 1이 꺼졌거나 `/livox/lidar`가 PointCloud2가 아니다 (터미널 3 확인) |
 | 바퀴가 안 돈다 | 터미널 2 VESC 오류, 또는 차 앞 0.25 m 안에 무언가가 있어 AEB가 걸렸다 (`/aeb/status`) |
 | 다른 차가 같이 움직인다 / 토픽이 섞인다 | 두 차 `ROS_DOMAIN_ID`가 같다. 37·38로 나눈다 |
