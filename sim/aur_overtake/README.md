@@ -12,7 +12,7 @@ Python 3.12 (Homebrew, arm64 Mac에서 확인). 명령은 모두 저장소 루�
 python3.12 -m venv sim/aur_overtake/.venv            # .venv는 .gitignore에 있다
 source sim/aur_overtake/.venv/bin/activate
 pip install -r sim/aur_overtake/requirements.txt      # mujoco 3.12.0, numpy 2.5.4, PyYAML 6.0.3, pytest 9.2.0
-python -m pytest sim/aur_overtake/test_sim.py -q      # 8 통과 + 1 xfail (MERGE 끼어들기, 열린 문제), 약 8초
+python -m pytest sim/aur_overtake/test_sim.py -q      # 10 통과 + 1 xfail (MERGE 끼어들기, 열린 문제), 약 12초
 ```
 
 ## 1회 실행과 뷰어

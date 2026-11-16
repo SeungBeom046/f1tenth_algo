@@ -12,8 +12,9 @@
 |---|---|---|
 | `my_algo/aur/` | 쓴다 | 추월 판단 로직 (ego 상태 기계, 선행차 양보 로직, 인지·추적). 실차 노드가 import한다 |
 | `my_algo/baseline/` | 쓴다 | 기본 주행 노드, AEB(`aeb.py`), ERPM·서보 변환(`vehicle_utils.py`), VESC로 명령을 보내는 `autonomous_drive` |
-| `launch/` | 쓴다 | `lidar_drive.launch.py` 등 |
-| `config/exp_common.yaml` | 쓴다 (추월 실험부터) | 추월 실험 파라미터 |
+| `launch/` | 쓴다 | `lidar_drive.launch.py`(기본 주행), `exp_overtake.launch.py`(추월 실험) |
+| `config/exp_common.yaml` | 쓴다 (추월 실험) | 추월 실험 파라미터. 빌드하면 `share/my_algo/config/`에 설치되고 `exp_planner`가 읽는다 |
+| `my_algo/exp_planner.py` | 쓴다 (추월 실험) | 추월 실험 ROS 노드 (지금은 leader 역할만) |
 | `sim/` | 안 쓴다 | Mac 전용 MuJoCo 시뮬 |
 | `occlusion_archive/`, `archive/` | 안 쓴다 | 보관용 (`COLCON_IGNORE`로 빌드 제외) |
 | `test/`, `scripts/` | 안 쓴다 | Mac 단위 테스트와 분석 도구 |
@@ -29,7 +30,8 @@
 | `pointcloud_to_laserscan` | 점군 → `/scan` (launch가 띄운다) | 확인 필요 | 확인 필요 |
 | `realsense2_camera` | 카메라 | 확인 필요 | 확인 필요 |
 
-- **`realsense2_camera`는 카메라를 쓰지 않아도 설치돼 있어야 한다.** `lidar_drive.launch.py`는 `use_camera:=false`일 때도 시작하면서 이 패키지 경로부터 찾는다(13~17행). 없으면 launch가 바로 실패한다.
+- 추월 실험 launch(`exp_overtake.launch.py`)는 카메라를 찾지 않는다. `vesc_msgs`(VESC 워크스페이스)가 source돼 있으면 앞차가 자기 속도를 `/sensors/core`에서 읽는다.
+- **`lidar_drive.launch.py`를 쓸 때 `realsense2_camera`는 카메라를 쓰지 않아도 설치돼 있어야 한다.** `lidar_drive.launch.py`는 `use_camera:=false`일 때도 시작하면서 이 패키지 경로부터 찾는다(13~17행). 없으면 launch가 바로 실패한다.
 - 위 4개는 이 저장소에서 확인할 수 없어서, 차에서 `ros2 pkg prefix <패키지>`로 확인한다.
 
 ## 3. 지금 (기본 주행·보정 실험)
@@ -44,32 +46,42 @@
 
 지금 차가 옆으로 피하는 동작은 모두 gap follow(`lidar_reactive_drive`)에서 나온다. 추월 판단 코드는 아직 차에서 돌지 않는다.
 
-## 4. 추월 실험 (계획: 아직 없는 코드)
+## 4. 추월 실험: 역할별로 뜨는 노드
 
-추월 실험에서는 두 차가 실행하는 노드가 역할에 따라 달라진다. 이 절의 노드·launch 이름(`exp_planner`, `exp_overtake.launch.py`, `role`, `method`)은 계획이고 아직 저장소에 없다.
+`launch/exp_overtake.launch.py`가 `role`에 따라 노드를 띄운다. **leader(검정이)는 구현됐고, ego(파랑이)는 아직 없다.** 실행 명령은 [CAR_TERMINALS.md](CAR_TERMINALS.md) "추월 실험" 절에 있다.
 
 | | ego = **파랑이** (뒤차, 추월하는 쪽) | leader = **검정이** (앞차, 실험 조건) |
 |---|---|---|
-| 실행 (예정) | `ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d` | `ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y` (또는 `NY`) |
-| 판단 | `exp_planner`가 `my_algo/aur/ego_fsm.py`(EgoFSM)를 돌린다. 접근 → belief로 Y/NY 판단 → 추월 또는 추종 | `exp_planner`가 `my_algo/aur/leader_logic.py`(Leader)를 돌린다. Y면 뒤차가 d_y 안으로 오면 오른쪽으로 비키고, NY면 비키지 않고 급정지 |
+| 실행 | 아직 없음 (`role:=ego`는 "아직 없다"를 찍고 끝난다) | `ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=dY1 W:=1.0` |
+| 판단 | (예정) `exp_planner`가 `EgoFSM`을 돌린다. 접근 → belief로 Y/NY 판단 → 추월 또는 추종 | `exp_planner`(`my_algo/exp_planner.py`) → `LeaderRunner`(`my_algo/aur/leader_runner.py`) → `Leader`(`leader_logic.py`). Y면 뒤차가 d_y 안으로 오면 오른쪽으로 비키고, NY면 비키지 않고 급정지 |
 | 횡 제어 | `my_algo/aur/lateral.py` | 같음 |
-| AEB·VESC 출력 | `autonomous_drive` (`geometric` AEB 모드 추가 예정) | 같음 |
+| AEB·VESC 출력 | `autonomous_drive` | `autonomous_drive` (`aeb_model:=geometric`, 휜 띠 ±0.16 m, TTC 0.35 s: 시뮬과 같은 값) |
 | gap follow (`lidar_reactive_drive`) | **띄우지 않는다** | **띄우지 않는다** |
-| 터미널 로그 (예정) | 상태 전이, belief 확정, 추월 중단, AEB (시뮬 `run.py` 출력과 같은 형식) | 양보 시작·끝, 급정지, AEB |
+| 터미널 로그 | (예정) 상태 전이, belief 확정, 추월 중단 | `[EXP leader]` 줄: 시작(d_y, brake_delay), 출발 감지, 양보 시작, 급정지 무장·발동. AEB는 `[Drive] mode=AEB` |
+| 상태 토픽 | (예정) `/exp/state` | `/exp/state` (JSON: 모드, 뒤차 거리, d_y, 양보·급정지 시각) |
 
 - **추월 실험에서는 두 차 모두 gap follow를 끈다.** 그래야 앞차가 비킨 것이 양보 로직 때문이고 뒤차가 옆으로 간 것이 추월 판단 때문이라고 확실히 말할 수 있다. gap follow는 지금처럼 기본 주행·보정 실험에서만 쓴다.
-- 앞차는 조이스틱 없이 `leader_logic`으로 자동 주행한다. 비키는 거리 d_y는 회차마다 정해진 범위(0.6~1.2 m)에서 무작위로 뽑고 로그에 남긴다.
+- 앞차는 조이스틱 없이 자동 주행한다. 비키는 거리 d_y는 `run_id`로 정해지는 0.6~1.2 m 값이고 시작할 때 터미널과 `/exp/state`에 남는다.
 - 차 사이 통신은 쓰지 않는다. 두 차가 모두 라이다로만 상대 차를 본다.
+- `LeaderRunner`가 시뮬 선행차와 같은 명령을 내는지는 `sim/aur_overtake/test_sim.py`의 `test_leader_runner_matches_sim_leader`가 매 scan 비교한다 (Y·NY).
 
-이 계획대로 하려면 아래 코드가 더 필요하다 (지시서 단계 기준).
+### leader 쪽 한계
+
+| 무엇 | 영향 |
+|---|---|
+| 차에서 실행해 보지 않았다 (Mac에서 단위·시뮬 테스트만) | 처음에는 바퀴를 띄우고 시작 줄과 토픽부터 본다 |
+| `/sensors/core` 속도를 ERPM으로 가정 (미확인) | 틀리면 출발 감지(t0, 0.3 m/s)가 늦거나 이르다. 양보·급정지 판단 자체는 뒤차 거리로 한다 |
+| `autonomous_drive`의 AEB 속도는 여전히 0 (`/vesc/odom` 없음) | geometric AEB 한계가 고정 0.25 m. 시뮬은 실제 속도 × 0.35 s |
+| 앞차 속도 0.9 m/s, 차선 오프셋은 `config/exp_common.yaml` 값 | 바꾸려면 그 파일을 고치고 다시 빌드 |
+
+### 남은 코드
 
 | 필요한 코드 | 단계 |
 |---|---|
-| `exp_planner` 노드 (ego/leader 역할, `/exp/state` 발행, 이벤트 로그) | 3 |
-| `/sensors/core` 속도 소스 (AEB와 판단에 실제 속도) | 4 |
-| `autonomous_drive`에서 AEB 모드(`geometric`) 선택 | 5 |
+| `exp_planner` ego 역할 (EgoFSM, 이벤트 로그) | 3 |
+| `/sensors/core` 속도를 `autonomous_drive` AEB에도 | 4 |
 | 비상정지 heartbeat | 6 |
-| `exp_overtake.launch.py`, 차별 환경 스크립트 | 7 |
+| 차별 환경 스크립트 | 7 |
 | bag 분석 스크립트 | 8 |
 
 ## 5. 받는 명령 (두 차 공통, 경로만 다름)

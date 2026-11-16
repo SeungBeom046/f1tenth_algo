@@ -4,7 +4,7 @@
 1/10 F1TENTH 2대, LiDAR(Livox Mid-360 → `/scan`)만 쓰고 지도·TF·차량 간 통신·IMU는 쓰지 않는다.
 ego는 가까이 붙어 선행차가 비키는지(Y/NY)를 belief로 판단하고, 비키면 왼쪽으로 추월, 아니면 안전 거리로 따라간다.
 
-- **현재 상태**: 판단 로직 순수 모듈(`my_algo/aur/`)과 MuJoCo 시뮬(`sim/aur_overtake/`)까지. 실차 노드(`exp_planner`), 실험 launch, 속도 소스(`/sensors/core`), 비상정지 heartbeat는 아직 없다. 열린 문제는 [docs/PROGRESS.md](docs/PROGRESS.md).
+- **현재 상태**: 판단 로직 순수 모듈(`my_algo/aur/`), MuJoCo 시뮬(`sim/aur_overtake/`), 실차 노드 `exp_planner`의 **앞차(leader) 역할**과 실험 launch(`exp_overtake.launch.py`)까지. 추월하는 차(ego) 역할, `autonomous_drive` AEB의 실제 속도, 비상정지 heartbeat는 아직 없다. 열린 문제는 [docs/PROGRESS.md](docs/PROGRESS.md).
 - 기본 주행(main의 LiDAR 주행)은 `my_algo/baseline/`에 그대로 있고 동작을 바꾸지 않는다 (`scripts/verify_refactor_offline.py`가 main `b054758`과 비교).
 - 이전 연구(틈 인지 관측 공백 속도 계획, phantom)는 [occlusion_archive/](occlusion_archive/README.md) (보관용, 실행 대상 아님).
 

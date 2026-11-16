@@ -205,6 +205,8 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 |---|---|
 | 터미널 5에서 `package 'realsense2_camera' not found` | 이 launch는 카메라를 꺼도 이 패키지 경로를 먼저 찾는다. 차에 RealSense 패키지를 설치하거나 그 환경을 source한다 |
 | `package 'my_algo' not found` | 터미널 0의 빌드가 실패했거나, 터미널 5에서 워크스페이스 `install/setup.bash`를 source하지 않았다 |
+| `package 'pointcloud_to_laserscan' not found` | `sudo apt install ros-<foxy|jazzy>-pointcloud-to-laserscan` (패키지 이름 미확인) |
+| `executable 'exp_planner' not found` | 빌드가 예전 것. 터미널 0의 `git pull` → `colcon build`를 다시 |
 | `/scan`, `/aeb/status`가 없다 (터미널 5 전) | 정상. 둘 다 터미널 5(`lidar_drive.launch.py`)가 만든다 |
 | `ros2 topic list`에 방금 띄운 토픽이 없다 | ros2 daemon이 늦게 갱신한다. `ros2 daemon stop` 후 `ros2 topic list --no-daemon --spin-time 5` |
 | `No module named 'vesc_msgs'` | 그 터미널에서 VESC 워크스페이스를 source하지 않았다 (파랑이 `source ~/vesc_ws/install/setup.bash`) |
@@ -213,30 +215,60 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 | 바퀴가 안 돈다 | 터미널 2 VESC 오류, 또는 차 앞 0.25 m 안에 무언가가 있어 AEB가 걸렸다 (`/aeb/status`) |
 | 다른 차가 같이 움직인다 / 토픽이 섞인다 | 두 차 `ROS_DOMAIN_ID`가 같다. 37·38로 나눈다 |
 
-## 추월 실험 때 바뀌는 것 (아직 코드 없음)
+## 추월 실험: 터미널 5만 바뀐다
 
-터미널 1~4는 그대로이고 **터미널 5 명령만 바뀐다.** 이 노드와 launch는 아직 없다 ([CAR_CODE.md](CAR_CODE.md) 4절).
+터미널 1~4는 그대로이고 **터미널 5 명령만 바뀐다.** 이 launch는 gap follow와 카메라를 띄우지 않는다.
 
-파랑이 터미널 5 (추월하는 차):
+### 검정이 터미널 5: 앞차 시나리오 (지금 가능)
 
-```bash
-export ROS_DOMAIN_ID=38
-source /opt/ros/foxy/setup.bash
-source ~/vesc_ws/install/setup.bash
-source ~/f1tenth_ws/install/setup.bash
-ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d          # method: a b c d (회차표대로)
-```
-
-검정이 터미널 5 (앞차):
+`lidar_drive.launch.py` 대신 이것을 띄운다. **실행하면 바로 출발한다** (출발 게이트로 대기).
 
 ```bash
 export ROS_DOMAIN_ID=37
 source /opt/ros/jazzy/setup.bash
 source ~/f1_tenth_ws/install/setup.bash
 source ~/ros2_ws/install/setup.bash
-ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y       # 또는 intent:=NY (회차표대로)
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=<run_id> W:=<실측 통로 폭>
 ```
 
-출발 순서: 검정이 터미널 5 → 1 s 뒤 파랑이 터미널 5 (또는 출발 게이트를 그 순서로 치운다).
+| 인자 | 값 | 뜻 |
+|---|---|---|
+| `intent` | `Y` | 뒤차가 `d_y` 안으로 오면 오른쪽 차선으로 비킨다. 속도 0.9 m/s 유지 |
+| | `NY` | 비키지 않는다. 뒤차가 1.0 m 안으로 온 뒤 0.5~2.0 s 지나 급정지하고 그대로 선다 |
+| `run_id` | 회차표 이름 (예: `dY1`) | 이 이름으로 `d_y`(0.6~1.2 m)와 급정지 지연이 정해진다. 같은 이름이면 같은 값 |
+| `W` | 줄자로 잰 통로 폭 [m] (예: `1.0`) | 비키는 차선 위치와 횡위치 계산에 쓴다. 안 주면 벽으로 추정 |
+| `d_y` | m (선택) | 주면 `run_id` 대신 이 반응 거리로 고정 |
+| `speed_source` | `sensors_core`(기본) / `command` | 출발 감지에 쓰는 자기 속도. `vesc_msgs`가 없으면 자동으로 `command` |
 
-기록(터미널 4)에는 `/exp/state`, `/aeb/events`, `/estop/heartbeat`가 추가된다.
+시작하면 터미널에 이렇게 찍힌다. 이 줄을 회차표에 옮겨 적는다 (`d_y`, `brake_delay`).
+
+```text
+[EXP leader] 시작 role=leader intent=Y d_y=0.87 m brake_delay=1.32 s W=1.0 v_B=0.90 m/s speed_source=sensors_core
+[EXP leader] 출발 감지 (t0), 후행차 거리 1.62
+[EXP leader] 양보 시작: 오른쪽 차선 y_ref=-0.27, 후행차 0.85 m
+```
+
+NY면 `급정지 무장: 1.32 s 뒤 정지` → `급정지 (NY)`가 찍힌다.
+AEB가 걸리면 `autonomous_drive`가 `[Drive] mode=AEB ...` 줄을 낸다. 그래서 차가 선 이유가 시나리오 급정지인지 AEB인지 구분된다.
+
+**처음에는 검정이 혼자 확인한다.**
+1. 바퀴를 띄우고 실행해 위의 "시작" 줄을 본다.
+2. 차를 내려 통로를 달리게 한다.
+3. 뒤에서 사람이 상자를 들고 다가가 양보·급정지 줄이 뜨는지 본다.
+
+상자는 차 크기와 비슷해야 차로 잡힌다.
+
+기록(터미널 4)에 `/exp/state`를 더한다. 그 scan의 모드, 뒤차 거리, `d_y`, 양보·급정지 시각이 JSON으로 들어 있다.
+
+```bash
+ros2 bag record -o $(date +%m%d_%H%M)_<run_id>_black \
+  /scan /sensors/core /commands/motor/speed /commands/servo/position \
+  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state
+```
+
+### 파랑이 터미널 5: 추월하는 차 (아직 없음)
+
+`role:=ego`는 아직 구현되지 않았다. 지금 실행하면 "아직 없다"는 메시지와 함께 노드가 끝난다.
+그때까지 파랑이는 앞차 시나리오 확인용으로 쓰지 않는다.
+
+출발 순서 (ego가 생긴 뒤): 검정이 게이트를 먼저 치우고 1 s 뒤 파랑이 게이트를 치운다.

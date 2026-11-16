@@ -1,6 +1,6 @@
 # my_algo/aur — 추월 판단 로직
 
-rclpy 없는 순수 파이썬. 실차 노드(`exp_planner`, 아직 없음)와 시뮬(`sim/aur_overtake/sim.py`)이 같은 코드를 import한다.
+rclpy 없는 순수 파이썬. 실차 노드(`my_algo/exp_planner.py`, 지금은 leader 역할만)와 시뮬(`sim/aur_overtake/sim.py`)이 같은 코드를 import한다.
 흐름·식·상태 전이 조건은 [docs/PIPELINE.md](../../docs/PIPELINE.md). 파라미터는 `config/exp_common.yaml` (→ [docs/TUNING.md](../../docs/TUNING.md)).
 
 scan 한 프레임의 처리 순서대로:
@@ -15,6 +15,7 @@ scan 한 프레임의 처리 순서대로:
 | [4 판단] | `safety.py` | 식 6~11: d_safe, h, v_lim, d*, 횡 여유, 차선 오프셋 δ |
 | [4 판단] | `ego_fsm.py` | 후행차 상태 기계 WAIT → APPROACH → PROBE → PASS → MERGE → DONE / FOLLOW / RETREAT, 방법 a·b·c·d의 속도 명령 |
 | [4 판단] | `leader_logic.py` | 선행차 행동 Y(양보) / NY(급정지 이벤트) / 양보 후 복귀(시뮬용) |
+| [1~5] | `leader_runner.py` | 선행차 한 scan: 인지 → 후방 추적 → `leader_logic` → 횡 제어. 실차 `exp_planner`(role=leader)가 부른다 |
 | [5 제어] | `lateral.py` | 횡: y_ref를 따라가는 조향 (오차 필터, P + 헤딩 감쇠, deadband, rate limit) |
 | [5 제어] | `speed.py` | 종: m/s ↔ ERPM, 최소 속도 규칙 (0 < v < v_min 처리) |
 | [6 AEB] | `../baseline/aeb.py` | AEB 판정 (실차에서는 `autonomous_drive`가 적용). 추월 실험은 `geometric` 모드 |
