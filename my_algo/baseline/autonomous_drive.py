@@ -96,6 +96,10 @@ class AutonomousDriveNode(Node):
         self.declare_parameter('aeb_model', 'legacy')
         self.declare_parameter('aeb_curved_band', False)
 
+        # 직진 서보 값 (조향 0 rad일 때 VESC 서보 위치). 차마다 트림이 다르면 보정 실험으로 정한다.
+        # 차가 왼쪽으로 흐르면 값을 키우고(오른쪽으로 꺾임), 오른쪽으로 흐르면 줄인다. 기본 0.5 = 기존 동작.
+        self.declare_parameter('servo_center', 0.5)
+
         # 자율주행 최대 조향 [rad]
         # 증가: 더 급회전 가능, 감소: 조향 안정성 증가.
         self.declare_parameter('max_steering', 0.78)
@@ -104,6 +108,7 @@ class AutonomousDriveNode(Node):
         self.command_timeout_sec = float(
             self.get_parameter('command_timeout_sec').value)
         self.max_steering = float(self.get_parameter('max_steering').value)
+        self.servo_center = float(self.get_parameter('servo_center').value)
 
         self.aeb = AEBSafetyModel(
             ttc_threshold=float(self.get_parameter('aeb_ttc_threshold').value),
@@ -272,7 +277,7 @@ class AutonomousDriveNode(Node):
         servo_msg = Float64()
         # center_steering이면 조향을 강제로 0 rad로 보내고,
         # 아니면 planner/AEB가 넘긴 조향각을 VESC 서보 위치로 변환한다.
-        servo_msg.data = steering_to_servo(0.0 if center_steering else steering_rad)
+        servo_msg.data = steering_to_servo(0.0 if center_steering else steering_rad, self.servo_center)
         self.servo_pub.publish(servo_msg)
 
     def publish_aeb_state(self, active, status):

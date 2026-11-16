@@ -126,11 +126,11 @@ def apply_min_drive_speed(speed_ms, deadband=0.0):
     return erpm_to_speed(limited_rpm)
 
 
-def steering_to_servo(steering_rad):
-    """조향각(rad)을 VESC 서보 위치로 변환한다."""
+def steering_to_servo(steering_rad, center=SERVO_CENTER):
+    """조향각(rad)을 VESC 서보 위치로 변환한다. center: 차마다 보정한 직진 서보 값 (기본 0.5)."""
     # 서보 변환식: servo = center - steering_rad * gain.
     # 부호는 현재 차량 조향 방향에 맞춘 값이며, 마지막에 서보 허용 범위로 제한한다.
-    servo_pos = SERVO_CENTER - steering_rad * SERVO_GAIN
+    servo_pos = center - steering_rad * SERVO_GAIN
     return clamp(servo_pos, SERVO_MIN, SERVO_MAX)
 
 

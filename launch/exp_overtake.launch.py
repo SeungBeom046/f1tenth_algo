@@ -27,6 +27,8 @@ def generate_launch_description():
         DeclareLaunchArgument('run_id', default_value='0', description='회차 이름. d_y·급정지 지연 seed'),
         DeclareLaunchArgument('d_y', default_value='0.0', description='> 0이면 양보 반응 거리 고정 [m]'),
         DeclareLaunchArgument('W', default_value='0.0', description='실측 통로 폭 [m]. 0이면 벽으로 추정'),
+        DeclareLaunchArgument('servo_center', default_value='0.5',
+                              description='직진 서보 값 (차마다 보정, docs/CAR_TERMINALS.md 서보 중심 보정)'),
         DeclareLaunchArgument('speed_source', default_value='sensors_core', description='sensors_core | command'),
         Node(
             package='pointcloud_to_laserscan',
@@ -68,6 +70,7 @@ def generate_launch_description():
                 'aeb_bumper_overlap_tolerance': 0.10,
                 'lidar_to_bumper_dist': 0.30,
                 'max_steering': 0.78,
+                'servo_center': arg('servo_center', float),
             }],
         ),
     ])
