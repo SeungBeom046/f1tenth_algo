@@ -13,6 +13,11 @@ import math
 import mujoco
 import numpy as np
 
+from world import SENSE_GROUP
+
+# 판정용 geom 그룹만 맞힌다 (도로·가드레일·바퀴 같은 보기용 모양은 scan에 안 들어간다)
+RAY_GROUPS = np.array([1 if g == SENSE_GROUP else 0 for g in range(6)], np.uint8)
+
 
 def rot_rpy(roll, pitch, yaw):
     cr, sr, cp, sp, cy, sy = (math.cos(roll), math.sin(roll), math.cos(pitch), math.sin(pitch),
@@ -63,7 +68,7 @@ class Lidar:
         R = R_base @ self.R_mount
         d_lidar = self.directions()
         d_world = d_lidar @ R.T
-        mujoco.mj_multiRay(self.m, data, origin, np.ascontiguousarray(d_world).ravel(), None, 1,
+        mujoco.mj_multiRay(self.m, data, origin, np.ascontiguousarray(d_world).ravel(), RAY_GROUPS, 1,
                            self.exclude, self.geomid, self.dist, None, self.n, float(self.c['range_max']))
         dist = self.dist.copy()
         hit = (dist >= self.c['range_min']) & (dist <= self.c['range_max']) & (self.geomid >= 0)
