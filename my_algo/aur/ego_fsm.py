@@ -58,6 +58,7 @@ class EgoFSM:
         self._cleared = False       # PASS에서 선행차와 횡으로 완전히 어긋났는가
         self._overlapped = False    # PASS에서 앞뒤로 겹쳤는가 (d ≤ 0). 그 뒤에는 중단하지 않는다
         self._y_b_most_yielded = None   # PASS 중 선행차가 가장 많이 비킨 횡위치 (복귀 판정 기준)
+        self._yb_hist = []              # PASS 중 최근 y_B (abort_yb_window)
 
     # ------------------------------------------------------------ 방법별 종방향
     def _d_ref(self, v_b):
@@ -159,6 +160,7 @@ class EgoFSM:
         if go:
             self.state, reason = 'PASS', 'pass_start'
             self._y_b_most_yielded = trk.y_b
+            self._yb_hist = [trk.y_b]
         elif give_up or waited >= p.T_max:
             self.state, reason = 'FOLLOW', ('belief_NY' if give_up else 'T_max')
             self.follow_reason = reason
@@ -168,11 +170,14 @@ class EgoFSM:
         """PASS, 앞뒤로 겹치기 전: 선행차가 돌아오거나 횡 여유가 사라지면 추월 중단 → FOLLOW. 반환: 중단했는가."""
         p = self.p
         # 선행차가 아직 비키는 중에 PASS에 들어올 수 있으므로 기준은 진입 값이 아니라 지금까지의 최소 y_B
-        self._y_b_most_yielded = min(self._y_b_most_yielded, obs.y_b)
+        # abort_yb_window > 1: 최근 n개 중앙값. 라이다 잡음으로 튄 y_B 하나가 최솟값이 되면 다음 정상값이 '복귀'로 보인다
+        self._yb_hist = (self._yb_hist + [obs.y_b])[-p.abort_yb_window:]
+        y_b = sorted(self._yb_hist)[len(self._yb_hist) // 2]
+        self._y_b_most_yielded = min(self._y_b_most_yielded, y_b)
         if obs.d <= 0.0:
             self._overlapped = True     # 겹친 뒤 감속하면 나란히 있는 시간만 길어진다: 차선 유지, v_pass
             return False
-        if obs.y_b > self._y_b_most_yielded + p.y_yield_thr \
+        if y_b > self._y_b_most_yielded + p.y_yield_thr \
                 or not self._lateral_ok(W, obs):
             self.state = 'RETREAT' if p.abort_mode == 'retreat' else 'FOLLOW'
             self.follow_reason = 'pass_abort'
