@@ -1,0 +1,7 @@
+[  0.00 s] ego    - → WAIT (d)
+[  0.30 s] ego    WAIT → APPROACH (d)
+[  2.50 s] ego    APPROACH → PROBE (d)
+[  3.40 s] leader 급정지 (NY)
+[  3.60 s] ego    PROBE → FOLLOW (belief_NY)
+[  3.60 s] ego    belief 확정 NY (b=0.06)
+[  4.30 s] ego    AEB 작동 (ttc=11.73s closest=0.25m aeb_limit=0.25m model=geometric) [정지 중]

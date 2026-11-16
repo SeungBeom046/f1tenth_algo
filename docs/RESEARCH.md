@@ -104,7 +104,7 @@ PASS ─(겹치기 전 앞차가 다시 들어옴)→ RETREAT → FOLLOW (추월
 
 ## 9. 지금까지 결과 (시뮬)
 
-MuJoCo 시뮬, W = 1.0 m. 상세 표는 [PROGRESS.md](PROGRESS.md).
+MuJoCo 시뮬, W = 1.0 m. 상세 표는 [PROGRESS.md](PROGRESS.md). 발표용 영상·캡처·그래프는 [research_record/2026-11-16_sim/](../research_record/2026-11-16_sim/README.md) (방법 a~d 비교: d 추월 17/20·NY 추돌 0, c 추월 17/20·NY 추돌 11/20).
 
 | 항목 | 결과 |
 |---|---|
