@@ -47,8 +47,8 @@
 | config/exp_common.yaml | 47 | `probe_tol` | 0.05 | m | PROBE 진입 허용 오차 (d ≤ d_ref + 이 값) | 기획안 | 키우면 PROBE에 일찍 들어간다 (T_max·T_wait_a 시작 시점) | 0.03~0.10 |
 | config/exp_common.yaml | 48 | `lane_change_tol` | 0.05 | m | PASS에서 추월 차선(+δ) 도착 판정 횡오차, 도착 전에는 v_pass 대신 추종 속도 | 임시 | 줄이면 v_pass 가속이 늦어져 추월이 길어지고, 키우면 차선 변경 중 가속해 벽이 AEB 띠에 들어온다 | 0.03~0.08 |
 | config/exp_common.yaml | 49 | `merge_tol` | 0.05 | m | MERGE 완료 판정 횡오차 | 임시 | 키우면 DONE 판정이 빨라진다 | 0.03~0.08 |
-| config/exp_common.yaml | 50 | `merge_gap` | null | m | 선행차 앞면이 ego 뒤범퍼보다 이만큼 뒤면 MERGE 시작, null이면 m_stop | 임시 | - | - |
-| config/exp_common.yaml | 51 | `merge_v` | null | m/s | MERGE 중 속도, null이면 v_B_nominal | 임시 | - | - |
+| config/exp_common.yaml | 50 | `merge_gap` | 0.35 | m | 선행차 앞면이 ego 뒤범퍼보다 이만큼 뒤면 MERGE 시작, null이면 m_stop | 임시 (2026-11-16 시뮬: 0.15는 선행차 AEB 0.88/회, 0.35·0.5는 0) | - | - |
+| config/exp_common.yaml | 51 | `merge_v` | 1.5 | m/s | MERGE 중 속도 (= v_pass, 들어가며 간격을 벌린다), null이면 v_B_nominal | 임시 | - | - |
 | config/exp_common.yaml | 52 | `track_hold` | 0.5 | s | 추적이 끊겨도 직전 값을 쓰는 시간 | 임시 | 키우면 추적 끊김에 둔해지지만 오래된 d로 속도를 낸다 | 0.2~0.8 |
 | config/exp_common.yaml | 54 | `lidar_to_front` | 0.30 | m | 라이다 → 앞범퍼 (AEB lidar_to_bumper_dist와 같게) | 측정 (실측 0.28, 코드 0.30) | d 전체에 더해지는 오프셋. AEB와 다르면 d와 closest가 어긋난다 | 측정값 고정 |
 | config/exp_common.yaml | 55 | `lidar_to_rear` | 0.22 | m | 라이다 → 뒤범퍼 | 측정 | d_rear와 MERGE 판정 | 측정값 고정 |

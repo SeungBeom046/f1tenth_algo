@@ -79,9 +79,8 @@ def test_geometric_aeb_does_not_stop_leader_on_wall():
     assert not fired and r['collision'] == ''
 
 
-@pytest.mark.xfail(strict=True, reason='열린 문제 (docs/PROGRESS.md): MERGE가 m = 0.15 m 간격으로 끼어들고 v_B_nominal로 가서 '
-                   '선행차 AEB(0.9 × 0.35 = 0.31 m)가 0.27 m에서 걸린다. 고치면 이 표시를 지운다')
 def test_merge_does_not_trigger_leader_aeb():
+    # merge_gap 0.35 + merge_v 1.5 전에는 0.15 m 간격·v_B_nominal로 끼어들어 선행차 AEB(0.31 m)가 0.27 m에서 걸렸다
     r = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0})).run()
     assert r['success'] and r['N_AEB_leader'] == 0
 

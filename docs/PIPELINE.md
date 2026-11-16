@@ -70,7 +70,7 @@ stateDiagram-v2
     PROBE --> FOLLOW: belief NY 확정 / PROBE 후 T_max
     PASS --> RETREAT: 추월 중단 (겹치기 전, abort_mode = retreat)
     RETREAT --> FOLLOW: 선행차 뒷면이 앞범퍼보다 retreat_clear_gap 앞
-    PASS --> MERGE: front_rel ≤ −m
+    PASS --> MERGE: front_rel ≤ −merge_gap (0.35 m)
     MERGE --> DONE: |ego_lat + δ| < merge_tol
 ```
 
@@ -91,7 +91,7 @@ stateDiagram-v2
 | WAIT·APPROACH·PROBE·FOLLOW | 0 | 방법별 추종: d는 min(v_pass, v_lim(d, v_B)) (식 8), c는 d_probe_c까지 v_pass 후 P 제어, a·b는 v_B + k_d(d − d_ref). 선행차가 안 보이면 v_B_nominal |
 | PASS | +δ (δ = W/2 − w/2 − c) | 선행차와 중심 간격이 w + c가 되고 추월 차선에 도착(`lane_change_tol`)하기 전에는 추종 속도, 그 뒤 v_pass (이미 옆에 겹쳤으면 바로 v_pass) |
 | RETREAT | +δ | `retreat_speed_ratio` × v_B |
-| MERGE | −δ | v_B_nominal (차선 변경 중 추종 속도) |
+| MERGE | −δ | `merge_v` 1.5 m/s (= v_pass, 들어가며 앞차와 간격을 벌린다. null이면 v_B_nominal) |
 | DONE | −δ | v_B_nominal |
 
 모든 상태에서 마지막에 `min_speed_rule`을 적용한다 (hold 히스테리시스: v_E > 0.35에서 켜짐, < 0.25에서 꺼짐).
