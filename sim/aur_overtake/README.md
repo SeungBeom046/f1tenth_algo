@@ -12,7 +12,7 @@ Python 3.12 (Homebrew, arm64 Mac에서 확인). 명령은 모두 저장소 루�
 python3.12 -m venv sim/aur_overtake/.venv            # .venv는 .gitignore에 있다
 source sim/aur_overtake/.venv/bin/activate
 pip install -r sim/aur_overtake/requirements.txt      # mujoco 3.12.0, numpy 2.5.4, PyYAML 6.0.3, pytest 9.2.0
-python -m pytest sim/aur_overtake/test_sim.py -q      # 7 통과 + 1 xfail (MERGE 끼어들기, 열린 문제), 약 7초
+python -m pytest sim/aur_overtake/test_sim.py -q      # 8 통과 + 1 xfail (MERGE 끼어들기, 열린 문제), 약 8초
 ```
 
 ## 1회 실행과 뷰어
@@ -22,6 +22,17 @@ python sim/aur_overtake/run.py --method d --leader Y                            
 mjpython sim/aur_overtake/run.py --method d --leader Y --viewer --start-paused       # 뷰어 (macOS는 mjpython), Enter로 시작
 python sim/aur_overtake/run.py --method c --leader NY --aeb off --set start.gap0=2.0 eta=0.95
 ```
+
+실행 중 터미널(stderr)에 바뀐 것만 한 줄씩 찍힌다. 끄려면 `--quiet`. 마지막 결과 JSON은 stdout이라 `2>/dev/null`로 따로 받을 수 있다.
+
+```text
+[  1.50 s] leader 양보 시작: 오른쪽 차선 y_ref=-0.27 (후행차 거리 ≤ d_y=1.00)
+[  3.10 s] ego    belief 확정 Y (b=0.99)
+[  3.20 s] ego    PROBE → PASS (pass_start)
+[ 10.90 s] leader AEB 작동 (ttc=0.31s closest=0.27m aeb_limit=0.31m model=geometric)
+```
+
+ego 상태 전이(괄호는 FSM reason), belief 확정, 추월 중단, 선행차 양보 시작·끝·급정지(NY), 두 차의 AEB 작동(상승 에지 = `N_AEB`).
 
 | 옵션 | 값 | 설명 |
 |---|---|---|

@@ -6,6 +6,7 @@
 """
 import argparse
 import json
+import sys
 
 from batch import AEB
 from sim import Sim, load_cfg
@@ -25,6 +26,7 @@ def parse(argv=None):
     ap.add_argument('--set', nargs='*', default=[], metavar='K=V', help="덮어쓰기: 'start.gap0=2.0'(scenario) 또는 'eta=0.95'(AurParams)")
     ap.add_argument('--viewer', action='store_true')
     ap.add_argument('--start-paused', action='store_true')
+    ap.add_argument('--quiet', action='store_true', help='상태 전이·양보·AEB 이벤트 줄을 찍지 않는다')
     return ap.parse_args(argv)
 
 
@@ -42,7 +44,10 @@ def make_sim(args, reuse=None):
             over[key] = v
     if args.belief:
         params['belief_model'] = args.belief
-    return Sim(args.method, load_cfg(args.scenario, **over), seed=args.seed, reuse=reuse, **params)
+    sim = Sim(args.method, load_cfg(args.scenario, **over), seed=args.seed, reuse=reuse, **params)
+    if not args.quiet:      # stderr: 마지막 결과 JSON 한 줄(stdout)은 그대로 파싱할 수 있게
+        sim.on_event = lambda line: print(line, file=sys.stderr, flush=True)
+    return sim
 
 
 def main(argv=None):

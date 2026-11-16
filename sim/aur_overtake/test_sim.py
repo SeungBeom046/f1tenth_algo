@@ -12,6 +12,15 @@ def run(method, behavior, **over):
     return Sim(method, load_cfg(**dict(base, **over))).run()
 
 
+def test_events_show_leader_yield_before_ego_pass():
+    sim = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0, 'aeb.enabled': False}))
+    sim.run()
+    ev = sim.events
+    yield_i = next(i for i, e in enumerate(ev) if '양보 시작' in e)
+    pass_i = next(i for i, e in enumerate(ev) if '→ PASS' in e)
+    assert yield_i < pass_i and any('belief 확정 Y' in e for e in ev)
+
+
 def test_legacy_aeb_stops_on_wall_in_yield_lane():
     # 기존 주행 AEB(띠 ±0.30 m)는 양보 차선 벽(여유 0.235 m)에서 선다. 그래서 실험은 geometric(±0.16)을 쓴다.
     r = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0, 'sim.max_time': 8.0, 'aeb.model': 'legacy',

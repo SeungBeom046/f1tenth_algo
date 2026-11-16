@@ -144,6 +144,7 @@ class Car:
             emergency = self.aeb.check_emergency_braking(self.scan_ns, speed, ReactiveDriveCommand(steer, rpm))
         if emergency and not self.aeb_active:
             self.n_aeb += 1
+            sim.event(self.name, 'AEB 작동 (%s)' % self.aeb.last_reason)
         self.aeb_active = emergency
         self.kin.command(sim.t, 0.0 if emergency else sanitize_rpm(rpm), steering_to_servo(steer))
 
@@ -181,7 +182,17 @@ class Sim:
         self.frame_dt = 1.0 / self.cfg['lidar']['hz']
         self.collision = None       # 'cars' | 'ego_wall' | 'leader_wall'
         self.log = []
+        self.on_event = None        # 함수(str)를 넣으면 상태 전이·양보·AEB를 한 줄씩 받는다 (run.py가 터미널에 출력)
+        self.events = []
+        self._lead_yielding = False
+        self._aborts = 0
         self.place_bodies()
+
+    def event(self, who, msg):
+        line = '[%6.2f s] %-6s %s' % (self.t, who, msg)
+        self.events.append(line)
+        if self.on_event:
+            self.on_event(line)
 
     # ------------------------------------------------------------ 참값
     def true_gap(self):
@@ -256,7 +267,27 @@ class Sim:
         lead.v_cmd, lead.y_ref = lv, ly_ref
         lead.cmd = (lv * self.p.erpm_gain, 0.0)
 
+    def _frame_events(self, state, reason):
+        """이전 scan과 비교해 바뀐 것만 event로 낸다 (판단 로직이 낸 행동인지 터미널에서 보이게)."""
+        prev = self.log[-1] if self.log else None
+        fsm, logic = self.fsm, self.logic
+        if fsm.abort_count != self._aborts:     # 중단과 RETREAT 끝이 한 scan에 겹치면 상태 줄에는 retreat_done만 보인다
+            self._aborts = fsm.abort_count
+            self.event('ego', '추월 중단 (선행차가 다시 들어오거나 왼쪽 여유 부족)')
+        if prev is None or prev['state'] != state:
+            self.event('ego', '%s → %s (%s)' % (prev['state'] if prev else '-', state, reason))
+        if fsm.decided and fsm.t_decided == self.t:
+            self.event('ego', 'belief 확정 %s (b=%.2f)' % (fsm.decided, fsm.belief.prob_yield()))
+        yielding = self.leader.y_ref != 0.0
+        if yielding != self._lead_yielding:
+            self.event('leader', '양보 시작: 오른쪽 차선 y_ref=%.2f (후행차 거리 ≤ d_y=%.2f)' % (self.leader.y_ref, logic.d_y)
+                       if yielding else '양보 끝: 중앙 복귀')
+            self._lead_yielding = yielding
+        if logic.brake_fired and not (prev and prev['brake_fired']):
+            self.event('leader', '급정지 (NY)')
+
     def _log_frame(self, v_cmd, y_ref, state, reason):
+        self._frame_events(state, reason)
         ego, lead, trk = self.ego, self.leader, self.ego.track
         self.log.append(dict(
             t=self.t, state=state, reason=reason, gap=self.true_gap(), d=trk.d, valid=trk.valid,
