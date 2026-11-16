@@ -1,0 +1,5 @@
+# make_media.py 전용 (시뮬 실행에는 필요 없음). sim/aur_overtake/requirements.txt 위에 추가로 설치
+pillow==13.0.0
+matplotlib==3.11.2
+imageio==2.38.2
+imageio-ffmpeg==0.8.1

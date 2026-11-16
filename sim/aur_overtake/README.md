@@ -101,6 +101,15 @@ python sim/aur_overtake/analysis/yb_bias.py report runs.json
 | `fix_W` | 선행차에 실측 W(= `track.W`)를 준다 (기본 켜짐) |
 | `yield_yaw_deg` | `null`: 선행차 자신의 횡 제어기. 숫자: 횡위치를 `yield_lat_speed`로 옮기면서 yaw 고정 (선행차-벽 충돌 판정은 뺀다) |
 
+## 발표·기록 자료 (`media/make_media.py`)
+
+```bash
+pip install -r sim/aur_overtake/media/requirements.txt
+python sim/aur_overtake/media/make_media.py --out research_record/2026-11-16_sim   # 영상 3개, 장면 캡처, 그래프 6개 (약 3분)
+```
+
+1920×1080 오프스크린 렌더 + 한국어 화면 글자(macOS Apple SD Gothic Neo) + 미니맵. 결과물 설명은 [research_record/2026-11-16_sim/README.md](../../research_record/2026-11-16_sim/README.md).
+
 ## 뷰어 키
 
 | 키 | 동작 |
@@ -108,8 +117,9 @@ python sim/aur_overtake/analysis/yb_bias.py report runs.json
 | Enter | 일시정지 / 재개 |
 | `.` | 일시정지 중 scan 1프레임(0.1 s) 진행 |
 | 9 | 배속 1× ↔ 0.25× |
+| 5 | 라이다가 맞히는 판정용 모양 (벽 판, 차 상자) 보기. 화면의 차 모양·가드레일·차선은 보기용이라 scan에 안 들어간다 |
 | 6 | 라이다 점 (초록) |
-| 7 | 추적 중인 선행차 표시 (주황) |
+| 7 | ego가 인식한 선행차 영역 (주황 반투명, `d` 표시) + ego AEB 검사 영역 (빨강, 작동하면 진해짐) |
 | 8 | 차선 ±δ (보라)·y_ref (노랑) |
 | End (fn + →) | 글자 패널 |
 | Home (fn + ←) | 재시작: 같은 설정·시드로 처음부터 |
