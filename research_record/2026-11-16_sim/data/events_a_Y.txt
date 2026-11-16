@@ -1,0 +1,8 @@
+[  0.00 s] ego    - → WAIT (a)
+[  0.30 s] ego    WAIT → APPROACH (a)
+[  1.50 s] leader 양보 시작: 오른쪽 차선 y_ref=-0.27 (후행차 거리 ≤ d_y=1.00)
+[  1.90 s] ego    APPROACH → PROBE (a)
+[  3.10 s] ego    belief 확정 Y (b=0.99)
+[  4.90 s] ego    PROBE → PASS (pass_start)
+[ 11.80 s] ego    PASS → MERGE (merging)
+[ 14.50 s] ego    MERGE → DONE (done)

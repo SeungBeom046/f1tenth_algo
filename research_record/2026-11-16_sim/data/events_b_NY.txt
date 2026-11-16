@@ -1,0 +1,4 @@
+[  0.00 s] ego    - → WAIT (b)
+[  1.00 s] ego    WAIT → APPROACH (b)
+[  2.50 s] ego    APPROACH → PROBE (b)
+[ 10.50 s] ego    PROBE → FOLLOW (T_max)

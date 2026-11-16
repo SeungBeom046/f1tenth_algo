@@ -1,0 +1,9 @@
+[  0.00 s] ego    - → WAIT (d)
+[  0.30 s] ego    WAIT → APPROACH (d)
+[  1.50 s] leader 양보 시작: 오른쪽 차선 y_ref=-0.27 (후행차 거리 ≤ d_y=1.00)
+[  2.50 s] ego    APPROACH → PROBE (d)
+[  3.00 s] leader 양보 끝: 중앙 복귀
+[  3.10 s] ego    belief 확정 Y (b=0.99)
+[  3.30 s] ego    PROBE → PASS (pass_start)
+[  5.00 s] ego    추월 중단 (선행차가 다시 들어오거나 왼쪽 여유 부족)
+[  5.00 s] ego    PASS → FOLLOW (retreat_done)

@@ -1,0 +1,6 @@
+[  0.00 s] ego    - → WAIT (a)
+[  0.30 s] ego    WAIT → APPROACH (a)
+[  1.90 s] ego    APPROACH → PROBE (a)
+[  3.40 s] leader 급정지 (NY)
+[  5.40 s] ego    belief 확정 NY (b=0.04)
+[  9.90 s] ego    PROBE → FOLLOW (T_max)
