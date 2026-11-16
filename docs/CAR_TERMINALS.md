@@ -92,10 +92,24 @@ source /opt/ros/jazzy/setup.bash
 mkdir -p ~/runs && cd ~/runs
 ros2 bag record -o $(date +%m%d_%H%M)_<run_id>_black \
   /scan /sensors/core /commands/motor/speed /commands/servo/position \
-  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode
+  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state
 ```
 
 ### 터미널 5: 주행 알고리즘 (실행하면 바로 출발)
+
+**둘 중 하나만** 띄운다.
+
+(가) 앞차 시나리오: 추월 실험용. 비키기(Y) 또는 급정지(NY). 인자 설명은 아래 "추월 실험" 절.
+
+```bash
+export ROS_DOMAIN_ID=37
+source /opt/ros/jazzy/setup.bash
+source ~/f1_tenth_ws/install/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=<run_id> W:=<실측 통로 폭>
+```
+
+(나) 기본 주행 (gap follow): 보정 실험용.
 
 ```bash
 export ROS_DOMAIN_ID=37
