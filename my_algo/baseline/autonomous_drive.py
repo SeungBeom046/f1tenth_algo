@@ -309,7 +309,8 @@ def main(args=None):
     finally:
         node.publish_drive_command(0.0, 0.0, center_steering=True)
         node.destroy_node()
-    rclpy.shutdown()
+    if rclpy.ok():      # jazzy는 Ctrl+C 때 먼저 shutdown한다 (Foxy는 그대로 여기서)
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
