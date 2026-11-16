@@ -135,8 +135,8 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 ros2 topic info /livox/lidar          # sensor_msgs/msg/PointCloud2
 ros2 topic hz /scan                   # 약 10 Hz
 ros2 topic hz /sensors/core           # VESC 상태가 나오는지 (속도 소스로 쓸 예정)
-ros2 topic echo /aeb/status --once    # 'clear' 또는 closest 거리
-ros2 topic echo /reactive/lidar_command --once
+ros2 topic echo /aeb/status           # 'clear' 또는 closest 거리. 한두 줄 보고 Ctrl+C (Foxy echo에는 --once 없음)
+ros2 topic echo /reactive/lidar_command
 ```
 
 ### 정지
