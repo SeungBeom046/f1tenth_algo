@@ -91,6 +91,11 @@ class AutonomousDriveNode(Node):
         self.declare_parameter('aeb_comfortable_decel', 2.8)
         self.declare_parameter('aeb_stopping_margin', 0.20)
 
+        # AEB 모델: legacy(기본 주행) / geometric(추월 실험: 좁은 띠 + 속도×TTC, docs/PIPELINE.md AEB 절).
+        # curved_band: geometric 검사 띠를 조향 원호를 따라 휜다. 기본값은 기본 주행 동작 그대로.
+        self.declare_parameter('aeb_model', 'legacy')
+        self.declare_parameter('aeb_curved_band', False)
+
         # 자율주행 최대 조향 [rad]
         # 증가: 더 급회전 가능, 감소: 조향 안정성 증가.
         self.declare_parameter('max_steering', 0.78)
@@ -113,6 +118,8 @@ class AutonomousDriveNode(Node):
                 self.get_parameter('aeb_bumper_overlap_tolerance').value),
             comfortable_decel=float(self.get_parameter('aeb_comfortable_decel').value),
             stopping_margin=float(self.get_parameter('aeb_stopping_margin').value),
+            model=self.get_parameter('aeb_model').value,
+            curved_band=bool(self.get_parameter('aeb_curved_band').value),
         )
 
         # 초기 상태 안정화
