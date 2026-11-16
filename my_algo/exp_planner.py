@@ -1,12 +1,14 @@
-"""추월 실험 planner 노드. 지금은 role=leader(선행차 시나리오)만 있다. ego(추월하는 차)는 아직 없다.
+"""추월 실험 planner 노드. role=leader(검정이, 앞차 시나리오) / role=ego(파랑이, 추월하는 차).
 
-/scan → LeaderRunner(my_algo/aur, 시뮬과 같은 코드) → /reactive/lidar_command (JSON)
+/scan → LeaderRunner 또는 EgoRunner(my_algo/aur, 시뮬과 같은 코드) → /reactive/lidar_command (JSON)
 → autonomous_drive(AEB → VESC). gap follow(lidar_reactive_drive)는 띄우지 않는다 (launch/exp_overtake.launch.py).
 
-시나리오 (intent):
+leader 시나리오 (intent):
   Y : 후행차가 d_y 안으로 오면 오른쪽 차선(−δ)으로 비킨다. 속도 v_B_nominal 유지
   NY: 비키지 않는다. 후행차가 d_brake_trigger 안으로 온 뒤 brake_delay초 지나 급정지 (rpm 0 유지)
-d_y·brake_delay는 run_id로 정해지고 시작할 때 터미널에 찍힌다.
+  d_y·brake_delay는 run_id로 정해지고 시작할 때 터미널에 찍힌다.
+ego (method a|b|c|d): 접근 → belief로 Y/NY 판단 → 추월(PASS → MERGE → DONE) 또는 추종(FOLLOW).
+  상태 전이·belief 확정·추월 중단이 터미널에 [EXP ego] 줄로 찍힌다.
 """
 import json
 import os
@@ -19,6 +21,7 @@ from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 
+from my_algo.aur.ego_runner import EgoRunner
 from my_algo.aur.leader_runner import LeaderRunner
 from my_algo.aur.params import load_params
 from my_algo.baseline.vehicle_utils import ReactiveDriveCommand, command_to_json, print_event_line
@@ -37,29 +40,43 @@ def parse_intent(value):
 class ExpPlanner(Node):
     def __init__(self):
         super().__init__('exp_planner')
-        self.declare_parameter('role', 'leader')
+        self.declare_parameter('role', 'leader')        # leader | ego
         # ROS 파라미터 YAML은 Y를 bool true로 읽는다 (intent:=Y → True). 타입을 열어 두고 아래에서 'Y'로 되돌린다.
         # dynamic_typing은 Galactic 이후에만 있다 (Foxy는 타입 검사를 안 해서 없어도 된다)
         intent_desc = ParameterDescriptor()
         if hasattr(intent_desc, 'dynamic_typing'):
             intent_desc.dynamic_typing = True
-        self.declare_parameter('intent', 'Y', intent_desc)     # Y | NY
-        self.declare_parameter('run_id', '0')           # d_y·급정지 지연 seed (회차표 run_id를 그대로)
-        self.declare_parameter('d_y', 0.0)              # > 0이면 run_id 대신 이 양보 반응 거리 [m]
-        self.declare_parameter('W', 0.0)                # > 0이면 실측 통로 폭 [m] (W_leader). 0이면 벽으로 추정
+        self.declare_parameter('intent', 'Y', intent_desc)     # (leader) Y | NY
+        self.declare_parameter('run_id', '0')           # (leader) d_y·급정지 지연 seed (회차표 run_id를 그대로)
+        self.declare_parameter('d_y', 0.0)              # (leader) > 0이면 run_id 대신 이 양보 반응 거리 [m]
+        self.declare_parameter('method', 'd')           # (ego) a | b | c | d
+        self.declare_parameter('t_d', 0.0)              # (ego) > 0이면 제동 지연 t_d [s] 덮어쓰기 (보정 실험 값)
+        self.declare_parameter('W', 0.0)                # > 0이면 실측 통로 폭 [m]. 0이면 벽으로 추정
         self.declare_parameter('speed_source', 'sensors_core')    # sensors_core | command
         self.declare_parameter('params_file', os.path.join(
             get_package_share_directory('my_algo'), 'config', 'exp_common.yaml'))
 
-        role = self.get_parameter('role').value
-        if role != 'leader':
-            raise SystemExit('exp_planner: role=%r는 아직 없다 (leader만 구현)' % role)
+        self.role = self.get_parameter('role').value
+        if self.role not in ('leader', 'ego'):
+            raise SystemExit('exp_planner: role은 leader 또는 ego: %r' % self.role)
         W = float(self.get_parameter('W').value)
-        self.p = load_params(self.get_parameter('params_file').value, **({'W_leader': W} if W > 0 else {}))
-        d_y = float(self.get_parameter('d_y').value)
-        self.intent = parse_intent(self.get_parameter('intent').value)
-        self.runner = LeaderRunner(self.p, self.intent, str(self.get_parameter('run_id').value),
-                                   d_y=d_y if d_y > 0 else None)
+        t_d = float(self.get_parameter('t_d').value)
+        over = {}
+        if W > 0:
+            over['W_leader' if self.role == 'leader' else 'W'] = W
+        if t_d > 0:
+            over['t_d'] = t_d
+        self.p = load_params(self.get_parameter('params_file').value, **over)
+        if self.role == 'leader':
+            d_y = float(self.get_parameter('d_y').value)
+            self.intent = parse_intent(self.get_parameter('intent').value)
+            self.runner = LeaderRunner(self.p, self.intent, str(self.get_parameter('run_id').value),
+                                       d_y=d_y if d_y > 0 else None)
+        else:
+            self.method = str(self.get_parameter('method').value).strip().lower()
+            if self.method not in ('a', 'b', 'c', 'd'):
+                raise SystemExit('exp_planner: method는 a|b|c|d: %r' % self.method)
+            self.runner = EgoRunner(self.p, self.method)
         self.v = 0.0
         self.v_cmd = 0.0
         self.speed_source = self.get_parameter('speed_source').value
@@ -68,7 +85,8 @@ class ExpPlanner(Node):
                 from vesc_msgs.msg import VescStateStamped
                 self.create_subscription(VescStateStamped, '/sensors/core', self.core_callback, 10)
             except ImportError:
-                self.get_logger().warn('vesc_msgs 없음 (VESC 워크스페이스 source?) → speed_source=command')
+                self.get_logger().warn('vesc_msgs 없음 (VESC 워크스페이스 source?) → speed_source=command '
+                                       '(명령 속도를 실제 속도로 쓴다. ego는 안전 거리 계산이 낙관적이 된다)')
                 self.speed_source = 'command'
 
         qos = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT, history=QoSHistoryPolicy.KEEP_LAST, depth=1)
@@ -77,12 +95,17 @@ class ExpPlanner(Node):
         self.state_pub = self.create_publisher(String, '/exp/state', 10)
         self.prev = {}
 
-        lg = self.runner.logic
-        self.event('시작 role=leader intent=%s d_y=%.2f m brake_delay=%.2f s W=%s v_B=%.2f m/s speed_source=%s' % (
-            self.intent, lg.d_y, lg.brake_delay, W if W > 0 else '벽 추정', self.p.v_B_nominal, self.speed_source))
+        Wtxt = W if W > 0 else '벽 추정'
+        if self.role == 'leader':
+            lg = self.runner.logic
+            self.event('시작 role=leader intent=%s d_y=%.2f m brake_delay=%.2f s W=%s v_B=%.2f m/s speed_source=%s' % (
+                self.intent, lg.d_y, lg.brake_delay, Wtxt, self.p.v_B_nominal, self.speed_source))
+        else:
+            self.event('시작 role=ego method=%s W=%s t_d=%.2f s (+scan %.2f s) v_pass=%.2f m/s eta=%.2f speed_source=%s' % (
+                self.method, Wtxt, self.p.t_d, self.p.scan_period, self.p.v_pass, self.p.eta, self.speed_source))
 
     def event(self, msg):
-        print_event_line('[EXP leader] %s' % msg)
+        print_event_line('[EXP %s] %s' % (self.role, msg))
 
     def core_callback(self, msg):
         # shortcut: /sensors/core speed를 ERPM으로 가정 (미확인, 보정 실험에서 확인)
@@ -91,32 +114,54 @@ class ExpPlanner(Node):
     def scan_callback(self, msg):
         t = self.get_clock().now().nanoseconds / 1e9
         v = self.v if self.speed_source == 'sensors_core' else self.v_cmd
+        if self.role == 'leader':
+            state, mode, steer, reason = self.leader_step(t, msg, v)
+        else:
+            state, mode, steer, reason = self.ego_step(t, msg, v)
+        self.cmd_pub.publish(String(data=command_to_json(ReactiveDriveCommand(
+            steering_rad=steer, rpm=self.v_cmd * self.p.erpm_gain, mode=mode, confidence=1.0, reason=reason))))
+        self.state_pub.publish(String(data=json.dumps(state)))
+
+    def leader_step(self, t, msg, v):
         self.v_cmd, steer, y_ref = self.runner.step(t, msg, v)
         lg, trk = self.runner.logic, self.runner.track
         mode = 'LEADER_BRAKE' if lg.brake_fired else ('LEADER_YIELD' if y_ref != 0.0 else 'LEADER_CRUISE')
-        self.cmd_pub.publish(String(data=command_to_json(ReactiveDriveCommand(
-            steering_rad=steer, rpm=self.v_cmd * self.p.erpm_gain, mode=mode, confidence=1.0,
-            reason='intent=%s d_rear=%s' % (self.intent, 'none' if not trk.valid else '%.2f' % trk.d)))))
-        state = dict(t=t, intent=self.intent, mode=mode, v=v, v_cmd=self.v_cmd, steer=steer, y_ref=y_ref,
-                     d_rear=trk.d if trk.valid else None, ego_lateral=self.runner.corridor.ego_lateral,
-                     t0=lg.t0, d_y=lg.d_y, yield_triggered=lg.yield_triggered, t_yield=lg.t_yield,
-                     brake_armed=lg.t_armed is not None, brake_fired=lg.brake_fired, t_brake=lg.t_brake,
-                     start_too_close=lg.start_too_close)
-        self.state_pub.publish(String(data=json.dumps(state)))
-        self.log_changes(state)
-
-    def log_changes(self, s):
+        s = dict(t=t, role='leader', intent=self.intent, mode=mode, v=v, v_cmd=self.v_cmd, steer=steer, y_ref=y_ref,
+                 d_rear=trk.d if trk.valid else None, ego_lateral=self.runner.corridor.ego_lateral,
+                 t0=lg.t0, d_y=lg.d_y, yield_triggered=lg.yield_triggered, t_yield=lg.t_yield,
+                 brake_armed=lg.t_armed is not None, brake_fired=lg.brake_fired, t_brake=lg.t_brake,
+                 start_too_close=lg.start_too_close)
         prev, self.prev = self.prev, s
+        d_txt = '안 보임' if s['d_rear'] is None else '%.2f m' % s['d_rear']
         if s['t0'] is not None and prev.get('t0') is None:
-            self.event('출발 감지 (t0), 후행차 거리 %s' % s['d_rear'])
+            self.event('출발 감지 (t0), 후행차 %s' % d_txt)
             if s['start_too_close']:
                 self.event('경고: 출발 때 후행차가 너무 가깝다 (d_y_max + %.1f m 안) → 회차 무효' % self.p.start_gap_margin)
-        if s['mode'] != prev.get('mode'):
-            text = {'LEADER_CRUISE': '주행 (중앙)', 'LEADER_YIELD': '양보 시작: 오른쪽 차선 y_ref=%.2f, 후행차 %s m'
-                    % (s['y_ref'], s['d_rear']), 'LEADER_BRAKE': '급정지 (NY)'}[s['mode']]
-            self.event(text)
+        if mode != prev.get('mode'):
+            self.event({'LEADER_CRUISE': '주행 (중앙)',
+                        'LEADER_YIELD': '양보 시작: 오른쪽 차선 y_ref=%.2f, 후행차 %s' % (y_ref, d_txt),
+                        'LEADER_BRAKE': '급정지 (NY)'}[mode])
         if s['brake_armed'] and not prev.get('brake_armed'):
-            self.event('급정지 무장: %.2f s 뒤 정지' % self.runner.logic.brake_delay)
+            self.event('급정지 무장: %.2f s 뒤 정지' % lg.brake_delay)
+        return s, mode, steer, 'intent=%s d_rear=%s' % (self.intent, 'none' if s['d_rear'] is None else '%.2f' % s['d_rear'])
+
+    def ego_step(self, t, msg, v):
+        self.v_cmd, steer, y_ref, st, reason = self.runner.step(t, msg, v)
+        fsm, trk, cor = self.runner.fsm, self.runner.track, self.runner.corridor
+        s = dict(t=t, role='ego', method=self.method, state=st, reason=reason, v=v, v_cmd=self.v_cmd, steer=steer,
+                 y_ref=y_ref, valid=trk.valid, d=trk.d, y_b=trk.y_b, v_b=trk.v_b, ego_lateral=cor.ego_lateral,
+                 heading=cor.heading, W=cor.W_est, h=fsm.h if fsm.h != float('inf') else None,
+                 b=fsm.belief.prob_yield(), decided=fsm.decided,
+                 t0=fsm.t0, t_decided=fsm.t_decided, n_abort=fsm.abort_count)
+        prev, self.prev = self.prev, s
+        if prev.get('n_abort', 0) != s['n_abort']:
+            self.event('추월 중단 (선행차가 다시 들어오거나 왼쪽 여유 부족)')
+        if st != prev.get('state'):
+            self.event('%s → %s (%s), 선행차 %s m' % (prev.get('state', '-'), st, reason,
+                                                     '%.2f' % trk.d if trk.valid else '안 보임'))
+        if s['decided'] and not prev.get('decided'):
+            self.event('belief 확정 %s (b=%.2f)' % (s['decided'], s['b']))
+        return s, 'EGO_' + st, steer, reason
 
 
 def main(args=None):

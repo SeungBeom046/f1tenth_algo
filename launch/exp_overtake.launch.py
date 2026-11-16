@@ -1,7 +1,8 @@
-"""추월 실험 launch. 지금은 role:=leader(검정이, 선행차 시나리오)만 있다.
+"""추월 실험 launch. role:=leader(검정이, 앞차 시나리오) / role:=ego(파랑이, 추월하는 차).
 
-    ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=dY1 W:=1.0
-    ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=NY run_id:=dNY1 W:=1.0
+    ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=Y run_id:=dY1 W:=1.0     # 검정이
+    ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=NY run_id:=dNY1 W:=1.0   # 검정이
+    ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0                     # 파랑이
 
 pointcloud_to_laserscan(lidar_drive와 같은 값) + exp_planner + autonomous_drive(geometric AEB).
 gap follow(lidar_reactive_drive)와 카메라는 띄우지 않는다. 실행하면 바로 출발한다 (출발 게이트로 대기).
@@ -18,7 +19,10 @@ def generate_launch_description():
         return ParameterValue(LaunchConfiguration(name), value_type=typ)
 
     return LaunchDescription([
-        DeclareLaunchArgument('role', default_value='leader', description='leader (ego는 아직 없음)'),
+        DeclareLaunchArgument('role', default_value='leader', description='leader(앞차) | ego(추월하는 차)'),
+        DeclareLaunchArgument('method', default_value='d', description='(ego) a 고정 규칙 | b 소극적 | c 공격적 | d 제안'),
+        # 시뮬 차량과 같은 값(구동 0.15 + 1차 지연 0.10). 기획안 0.15로는 시뮬에서 NY 급정지 때 추돌했다. 보정 실험 값으로 바꾼다
+        DeclareLaunchArgument('t_d', default_value='0.25', description='(ego) 제동 지연 [s], scan 주기 0.1 s는 따로 더해진다'),
         DeclareLaunchArgument('intent', default_value='Y', description='Y: 비킨다 / NY: 안 비키고 급정지'),
         DeclareLaunchArgument('run_id', default_value='0', description='회차 이름. d_y·급정지 지연 seed'),
         DeclareLaunchArgument('d_y', default_value='0.0', description='> 0이면 양보 반응 거리 고정 [m]'),
@@ -43,6 +47,7 @@ def generate_launch_description():
             parameters=[{
                 'role': arg('role', str), 'intent': arg('intent', str), 'run_id': arg('run_id', str),
                 'd_y': arg('d_y', float), 'W': arg('W', float), 'speed_source': arg('speed_source', str),
+                'method': arg('method', str), 't_d': arg('t_d', float),
             }],
         ),
         Node(

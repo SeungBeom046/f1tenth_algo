@@ -40,6 +40,26 @@ def test_leader_runner_matches_sim_leader(behavior):
     assert runner.logic.yield_triggered == (behavior == 'Y') and runner.logic.brake_fired == (behavior == 'NY')
 
 
+@pytest.mark.parametrize('behavior', ['Y', 'NY'])
+def test_ego_runner_matches_sim_ego(behavior):
+    # 실차 노드가 쓰는 EgoRunner에 시뮬 ego와 같은 scan·속도를 넣으면 같은 명령·상태가 나와야 한다
+    from my_algo.aur.ego_runner import EgoRunner
+    sim = Sim('d', load_cfg(**{'leader.behavior': behavior, 'leader.d_y': 1.0}))
+    runner = EgoRunner(sim.p, 'd')
+    frame, out = sim._ego_frame, []
+
+    def checked():
+        t, v = sim.t, sim.ego.kin.v
+        res = frame()
+        rv, steer, y_ref, state, reason = runner.step(t, sim.ego.scan_ns, v)
+        out.append((rv, y_ref, state, reason) == res and (rv * sim.p.erpm_gain, steer) == sim.ego.cmd)
+        return res
+    sim._ego_frame = checked
+    r = sim.run()
+    assert len(out) > 50 and all(out)
+    assert runner.fsm.state == r['final_state'] and runner.fsm.decided == behavior
+
+
 def test_legacy_aeb_stops_on_wall_in_yield_lane():
     # 기존 주행 AEB(띠 ±0.30 m)는 양보 차선 벽(여유 0.235 m)에서 선다. 그래서 실험은 geometric(±0.16)을 쓴다.
     r = Sim('d', load_cfg(**{'leader.behavior': 'Y', 'leader.d_y': 1.0, 'sim.max_time': 8.0, 'aeb.model': 'legacy',
