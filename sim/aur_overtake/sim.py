@@ -30,7 +30,8 @@ from my_algo.aur.lateral import Lateral                        # noqa: E402
 from my_algo.aur.leader_logic import Leader                    # noqa: E402
 from my_algo.aur.params import load_params                     # noqa: E402
 from my_algo.aur.tracker import VehicleTracker, scan_to_points  # noqa: E402
-from my_algo.baseline.vehicle_utils import ReactiveDriveCommand, sanitize_rpm, steering_to_servo  # noqa: E402
+from my_algo.baseline.vehicle_utils import (ReactiveDriveCommand, SERVO_CENTER, SERVO_GAIN,  # noqa: E402
+                                           sanitize_rpm, steering_to_servo)
 
 from lidar import Lidar, cloud_to_scan                         # noqa: E402
 from vehicle import Kinematic                                  # noqa: E402
@@ -85,8 +86,10 @@ class Car:
     def __init__(self, sim, name, x_rear_axle, view):
         cfg, p, v = sim.cfg, sim.p, sim.cfg['vehicle']
         self.name = name
+        # steer_offset: 서보 중심이 어긋나 명령 0 rad에도 바퀴가 이만큼 꺾인 차 (실차 트림 오차 모사)
         self.kin = Kinematic(x_rear_axle, 0.0, 0.0, v['wheelbase'], v['t_r'], v['tau'], v['a_max'], v['a_b'],
-                             v['steer_rate'], erpm_gain=p.erpm_gain, max_steer=p.max_steering)
+                             v['steer_rate'], erpm_gain=p.erpm_gain, max_steer=p.max_steering,
+                             servo_center=SERVO_CENTER + v.get('steer_offset', 0.0) * SERVO_GAIN)
         self.body = mujoco.mj_name2id(sim.m, mujoco.mjtObj.mjOBJ_BODY, name)
         mount = {'lidar_xyz': cfg['lidar']['mount_xyz'], 'lidar_rpy': [0.0, 0.0, 0.0]}
         self.lidar = Lidar(sim.m, cfg['lidar'], mount, self.body, seed=sim.seed + (1 if name == 'leader' else 0))

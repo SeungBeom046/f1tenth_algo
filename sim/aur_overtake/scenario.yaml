@@ -32,6 +32,7 @@ vehicle:                    # 두 차 공통 (하드웨어 동일)
   a_max: 2.5                # TUNE: 최대 가속 | m/s^2 | 임시 (예전 시뮬 가정값)
   a_b: 3.0                  # TUNE: 최대 감속 (AurParams.a_brake와 같은 가정) | m/s^2 | 기획안
   steer_rate: 6.0           # TUNE: 조향각 변화율 한계 | rad/s | 임시 (예전 시뮬 가정값)
+  steer_offset: 0.0         # TUNE: 서보 중심 오차 (명령 0 rad일 때 실제 조향, 왼쪽 +) — 실차 트림 오차 모사 | rad | 임시 (0 = 이상적 차량)
 aeb:                        # 실차 autonomous_drive의 AEBSafetyModel을 두 차의 명령 경로에 넣는다
   enabled: true             # TUNE: AEB 켜기 | - | 측정 (실차 구성)
   model: geometric          # TUNE: legacy(기존 주행) / geometric(추월 실험 1층: 좁은 띠 + 속도 TTC, tracker 무관) | - | 임시 (2026-11-15 결정)
