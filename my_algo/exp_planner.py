@@ -14,6 +14,7 @@ import os
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
@@ -23,11 +24,26 @@ from my_algo.aur.params import load_params
 from my_algo.baseline.vehicle_utils import ReactiveDriveCommand, command_to_json, print_event_line
 
 
+def parse_intent(value):
+    """launch 인자 intent → 'Y' | 'NY'. YAML이 Y를 True로 바꿔 넘기는 경우를 되돌린다."""
+    if value is True:
+        return 'Y'
+    intent = str(value).strip().upper()
+    if intent not in ('Y', 'NY'):
+        raise SystemExit('exp_planner: intent는 Y 또는 NY: %r' % (value,))
+    return intent
+
+
 class ExpPlanner(Node):
     def __init__(self):
         super().__init__('exp_planner')
         self.declare_parameter('role', 'leader')
-        self.declare_parameter('intent', 'Y')           # Y | NY
+        # ROS 파라미터 YAML은 Y를 bool true로 읽는다 (intent:=Y → True). 타입을 열어 두고 아래에서 'Y'로 되돌린다.
+        # dynamic_typing은 Galactic 이후에만 있다 (Foxy는 타입 검사를 안 해서 없어도 된다)
+        intent_desc = ParameterDescriptor()
+        if hasattr(intent_desc, 'dynamic_typing'):
+            intent_desc.dynamic_typing = True
+        self.declare_parameter('intent', 'Y', intent_desc)     # Y | NY
         self.declare_parameter('run_id', '0')           # d_y·급정지 지연 seed (회차표 run_id를 그대로)
         self.declare_parameter('d_y', 0.0)              # > 0이면 run_id 대신 이 양보 반응 거리 [m]
         self.declare_parameter('W', 0.0)                # > 0이면 실측 통로 폭 [m] (W_leader). 0이면 벽으로 추정
@@ -41,7 +57,7 @@ class ExpPlanner(Node):
         W = float(self.get_parameter('W').value)
         self.p = load_params(self.get_parameter('params_file').value, **({'W_leader': W} if W > 0 else {}))
         d_y = float(self.get_parameter('d_y').value)
-        self.intent = self.get_parameter('intent').value
+        self.intent = parse_intent(self.get_parameter('intent').value)
         self.runner = LeaderRunner(self.p, self.intent, str(self.get_parameter('run_id').value),
                                    d_y=d_y if d_y > 0 else None)
         self.v = 0.0
@@ -113,4 +129,5 @@ def main(args=None):
     finally:
         node.cmd_pub.publish(String(data=command_to_json(ReactiveDriveCommand(mode='STOP', reason='exp_planner_exit'))))
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():      # jazzy는 Ctrl+C 때 먼저 shutdown한다
+            rclpy.shutdown()
