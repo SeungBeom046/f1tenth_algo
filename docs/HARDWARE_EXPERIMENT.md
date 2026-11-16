@@ -223,7 +223,7 @@ ros2 topic echo /reactive/lidar_command
 | `/reactive/lidar_command` | planner 명령 JSON: `mode`(WALL_FOLLOW/OBSTACLE_AVOIDANCE/OPEN_SPACE/STOP), `rpm`, `steering_rad`, `reason` | 모드가 자주 바뀌면 벽 인식 문제. 추월 실험에서는 `mode`에 상태 기계 상태가 들어갈 예정 |
 | `/commands/motor/speed` | 최종 ERPM (0 또는 ±4000~12000) | 0으로 떨어진 시각 = 정지 명령 (AEB 또는 planner) |
 | `/commands/servo/position` | 서보 0.03~0.97 (0.5 중앙) | 조향 떨림 |
-| `/aeb/active` | AEB 작동 여부 | **false → true로 바뀐 횟수 = N_AEB** (정상 추종에서는 0이어야 한다) |
+| `/aeb/active` | AEB 작동 여부 | **false → true로 바뀐 횟수 = N_AEB**. 그중 그 순간 `/exp/state`의 `v` > 0.1 m/s인 것만 `N_AEB_moving` (정상 추종에서는 0이어야 한다) |
 | `/aeb/status` | `closest`(앞범퍼 → 가장 가까운 점), `aeb_limit`(그때 한계), `ttc` | AEB가 걸린 이유. closest가 벽이면 검사 띠 문제 |
 | `/sensors/core` | VESC 상태 (속도, 전압, 전류) | 실제 속도. 명령 대비 지연 (t_d) |
 | `/scan` | 360° 2D scan | 오프라인으로 tracker·corridor를 다시 돌려 볼 수 있다 |
@@ -242,7 +242,7 @@ ros2 topic echo /reactive/lidar_command
 | `T_pass` | t₀ → DONE | 시뮬 방법 d 약 10~12 s |
 | `h_min` | 급정지 전 최소 안전 여유 (식 7) | ≥ 0 (시뮬 방법 d −0.11 m, 열린 문제) |
 | `stop_gap` | 선행차 급정지 후 최소 간격 | **≥ m = 0.15 m** (시뮬 방법 d 0.19 m) |
-| `N_AEB` | ego AEB 작동 횟수 | 0이 목표. 걸렸으면 `/aeb/status`로 이유 |
+| `N_AEB_moving` | ego가 움직이는 중(v > 0.1 m/s) AEB 작동 횟수. 서 있는 동안 잡음으로 켜졌다 꺼지는 것은 뺀다 (`N_AEB`는 전체) | 0이 목표. 걸렸으면 `/aeb/status`로 이유 |
 | `d_probe_err` | PROBE 중 평균 거리 − d* | 0에 가까울수록 (d*(0.9) = 0.425 m) |
 | `hold_count` | 최소 속도 규칙(0 < v < 0.867 m/s) 분기 횟수 | 많으면 선행차가 너무 느림 |
 | `n_abort` | 추월 중단 횟수 | Y에서 0이어야 (오판 중단) |

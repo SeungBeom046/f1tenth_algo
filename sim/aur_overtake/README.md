@@ -85,6 +85,7 @@ python sim/aur_overtake/analysis/yb_bias.py report runs.json
 | `stop_gap`, `stop_gap_ok` | 급정지 후 최소 간격, 그 간격 ≥ m인가 |
 | `gap_min` | x 방향 최소 간격 (옆으로 나란하면 음수. 충돌은 `collision`으로 판정) |
 | `N_AEB`, `N_AEB_leader` | AEB 상승 에지 수 (ego, 선행차) |
+| `N_AEB_moving`, `N_AEB_leader_moving` | 그중 차 속도 > 0.1 m/s일 때 걸린 것 (서 있는 동안 잡음 깜빡임 제외). 지표는 이것을 본다 |
 | `deadlock` | 회차 끝까지 ego가 APPROACH~MERGE에서 정지 |
 | `n_abort`, `return_after_overlap` | 추월 중단 횟수, (YR) 후행차가 옆에 온 뒤 복귀했는가 (시뮬 전용 시나리오) |
 | `track_lost`, `track_lost_longest_s`, `width_max` | 정면 추적이 끊긴 scan 수, 최장 끊김, 클러스터 폭 최대 |

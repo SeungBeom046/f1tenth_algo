@@ -53,7 +53,8 @@ def run_one(job):
                 and not any(q[1] in ('PASS', 'RETREAT') for q in trace if q[0] <= r[0])]
     out = dict(W=W, behavior=behavior, seed=seed, success=res['success'], final=res['final_state'],
                cause=res['cause'], collision=res['collision'], deadlock=res['deadlock'], N_AEB=res['N_AEB'],
-               N_AEB_leader=res['N_AEB_leader'], pass_entered=res['pass_entered'], T_pass=res['T_pass'],
+               N_AEB_leader=res['N_AEB_leader'], N_AEB_moving=res['N_AEB_moving'],
+               N_AEB_leader_moving=res['N_AEB_leader_moving'], pass_entered=res['pass_entered'], T_pass=res['T_pass'],
                n_abort=res['n_abort'])
     out['lead_y_rms'], out['lead_yaw_std'], out['lead_steer_tv'] = stats(lead_rows, 2, 3, 4)
     out['ego_y_rms'], out['ego_yaw_std'], out['ego_steer_tv'] = stats(ego_rows, 5, 6, 7)
@@ -81,7 +82,7 @@ def main(argv=None):
     with ProcessPoolExecutor(args.jobs) as ex:
         rows = list(ex.map(run_one, jobs))
     print('설정:', params or '(기본)', '| noise', args.noise, '| offset ±', args.offset, '| method', args.method)
-    print('| W | 선행차 | 성공 | 충돌 | 교착 | ego AEB/회 | 선행차 AEB/회 | NY 추월시작 | 추월중단 | T_pass | '
+    print('| W | 선행차 | 성공 | 충돌 | 교착 | ego AEB/회 (주행 중) | 선행차 AEB/회 (주행 중) | NY 추월시작 | 추월중단 | T_pass | '
           'leader y_rms | leader yaw_std | leader 조향떨림 | ego y_rms | ego yaw_std | ego 조향떨림 |')
     print('|' + '---|' * 16)
     for W in args.Ws:
@@ -91,7 +92,7 @@ def main(argv=None):
             ok = sum(r['success'] for r in g) if b == 'Y' else sum(r['final'] == 'FOLLOW' and not r['collision'] for r in g)
             print('| %.1f | %s | %d/%d | %d | %d | %.2f | %.2f | %d | %d | %s | %.3f | %.2f | %.4f | %.3f | %.2f | %.4f |' % (
                 W, b, ok, n, sum(bool(r['collision']) for r in g), sum(r['deadlock'] for r in g),
-                mean(r['N_AEB'] for r in g), mean(r['N_AEB_leader'] for r in g),
+                mean(r['N_AEB_moving'] for r in g), mean(r['N_AEB_leader_moving'] for r in g),
                 sum(r['pass_entered'] for r in g) if b == 'NY' else 0, sum(r['n_abort'] for r in g),
                 '%.1f' % mean(r['T_pass'] for r in g) if b == 'Y' else '-',
                 mean(r['lead_y_rms'] for r in g), mean(r['lead_yaw_std'] for r in g), mean(r['lead_steer_tv'] for r in g),

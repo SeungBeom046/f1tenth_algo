@@ -97,6 +97,12 @@ def test_proposed_follows_and_survives_brake():
     assert r['gap_min'] > 0.15
 
 
+def test_aeb_flicker_while_stopped_not_counted_as_moving():
+    # NY 급정지 뒤 앞차 바로 뒤에 서 있는 동안 라이다 잡음으로 AEB가 깜빡인다: N_AEB에는 들어가고 N_AEB_moving에는 안 들어간다
+    r = Sim('d', load_cfg(**{'leader.behavior': 'NY', 'leader.d_y': 1.0, 'lidar.range_noise_std': 0.02})).run()
+    assert r['N_AEB'] >= 3 and r['N_AEB_moving'] <= 1 and not r['collision']
+
+
 def test_passive_times_out():
     r = run('b', 'Y')
     assert r['cause'] == 'T_max' and r['decided'] == ''

@@ -38,6 +38,7 @@ from vehicle import Kinematic                                  # noqa: E402
 from world import build_xml                                    # noqa: E402
 
 COMMON_YAML = os.path.join(REPO, 'config', 'exp_common.yaml')
+AEB_MOVING_SPEED = 0.1      # [m/s] 이 속도 이하에서 걸린 AEB는 N_AEB_moving에 넣지 않는다 (정지 중 잡음 깜빡임)
 
 
 def load_cfg(path=None, **overrides):
@@ -113,6 +114,7 @@ class Car:
         self.cmd = (0.0, 0.0)       # planner가 낸 (rpm, 조향) = /reactive/lidar_command
         self.aeb_active = False
         self.n_aeb = 0
+        self.n_aeb_moving = 0
 
     def perceive(self, sim, side):
         """scan 한 프레임: 레이캐스트 → scan → corridor(벽) + tracker(상대 차). side = 측면 추적(PASS·MERGE). 반환: W."""
@@ -147,7 +149,10 @@ class Car:
             emergency = self.aeb.check_emergency_braking(self.scan_ns, speed, ReactiveDriveCommand(steer, rpm))
         if emergency and not self.aeb_active:
             self.n_aeb += 1
-            sim.event(self.name, 'AEB 작동 (%s)' % self.aeb.last_reason)
+            # 서 있는 동안 잡음으로 AEB 경계를 오가는 것은 제동이 아니므로 따로 센다
+            moving = self.kin.v > AEB_MOVING_SPEED
+            self.n_aeb_moving += moving
+            sim.event(self.name, 'AEB 작동 (%s)%s' % (self.aeb.last_reason, '' if moving else ' [정지 중]'))
         self.aeb_active = emergency
         self.kin.command(sim.t, 0.0 if emergency else sanitize_rpm(rpm), steering_to_servo(steer))
 
@@ -395,6 +400,7 @@ class Sim:
             return_after_overlap=self._return_after_overlap(),
             gap_min=rmin(r['gap'] for r in post if r['state'] in ('APPROACH', 'PROBE', 'FOLLOW')),
             hold_count=fsm.hold_count, N_AEB=self.ego.n_aeb, N_AEB_leader=self.leader.n_aeb,
+            N_AEB_moving=self.ego.n_aeb_moving, N_AEB_leader_moving=self.leader.n_aeb_moving,
             aeb_speed_source=self.cfg['aeb']['speed_source'] if self.cfg['aeb']['enabled'] else 'off',
             n_abort=fsm.abort_count, track_need=len(need), track_lost=len(lost),
             track_lost_longest_s=round(longest * self.frame_dt, 2),
