@@ -30,6 +30,8 @@ from my_algo.aur.params import load_params
 from my_algo.aur.tracker import scan_to_points
 from my_algo.baseline.vehicle_utils import ReactiveDriveCommand, command_to_json, print_event_line
 
+WHEELBASE = 0.33     # [m] 실측 (sim scenario.yaml vehicle.wheelbase)
+
 
 def parse_intent(value):
     """launch 인자 intent → 'Y' | 'NY'. YAML이 Y를 True로 바꿔 넘기는 경우를 되돌린다."""
@@ -57,6 +59,7 @@ class ExpPlanner(Node):
         self.declare_parameter('t_d', 0.0)              # (ego) > 0이면 제동 지연 t_d [s] 덮어쓰기 (보정 실험 값)
         self.declare_parameter('W', 0.0)                # > 0이면 실측 통로 폭 [m]. 0이면 벽으로 추정
         self.declare_parameter('speed_source', 'sensors_core')    # sensors_core | command
+        self.declare_parameter('steer', 0.0)            # (straight) 고정 조향 [rad]. 0이 아니면 원을 그려 실제 바퀴 각을 잰다
         self.declare_parameter('params_file', os.path.join(
             get_package_share_directory('my_algo'), 'config', 'exp_common.yaml'))
 
@@ -78,6 +81,7 @@ class ExpPlanner(Node):
                                        d_y=d_y if d_y > 0 else None)
         elif self.role == 'straight':
             self.runner = Corridor(self.p)
+            self.straight_steer = float(self.get_parameter('steer').value)
             self.t_print = None
         else:
             self.method = str(self.get_parameter('method').value).strip().lower()
@@ -108,7 +112,11 @@ class ExpPlanner(Node):
             self.event('시작 role=leader intent=%s d_y=%.2f m brake_delay=%.2f s W=%s v_B=%.2f m/s speed_source=%s' % (
                 self.intent, lg.d_y, lg.brake_delay, Wtxt, self.p.v_B_nominal, self.speed_source))
         elif self.role == 'straight':
-            self.event('시작 role=straight: 조향 0, %.2f m/s 직진 (서보 중심 보정). 횡위치 + = 왼쪽' % self.p.v_B_nominal)
+            if self.straight_steer:
+                self.event('시작 role=straight steer=%+.3f rad: %.2f m/s로 원 주행 (조향 확인). 지름 D를 재면 실제 바퀴 각 = atan(2·%.2f/D) (D는 뒤축 중심 원)' % (
+                    self.straight_steer, self.p.v_B_nominal, WHEELBASE))
+            else:
+                self.event('시작 role=straight: 조향 0, %.2f m/s 직진 (서보 중심 보정). 횡위치 + = 왼쪽' % self.p.v_B_nominal)
         else:
             self.event('시작 role=ego method=%s W=%s t_d=%.2f s (+scan %.2f s) v_pass=%.2f m/s eta=%.2f speed_source=%s' % (
                 self.method, Wtxt, self.p.t_d, self.p.scan_period, self.p.v_pass, self.p.eta, self.speed_source))
@@ -166,7 +174,7 @@ class ExpPlanner(Node):
                 cor.ego_lateral, math.degrees(cor.heading), '보임' if cor.valid else '안 보임'))
         s = dict(t=t, role='straight', v=v, v_cmd=self.v_cmd, ego_lateral=cor.ego_lateral, heading=cor.heading,
                  W=cor.W_est, valid=cor.valid)
-        return s, 'STRAIGHT', 0.0, 'servo_center_check'
+        return s, 'STRAIGHT', self.straight_steer, 'servo_center_check' if not self.straight_steer else 'steer_check'
 
     def ego_step(self, t, msg, v):
         self.v_cmd, steer, y_ref, st, reason = self.runner.step(t, msg, v)

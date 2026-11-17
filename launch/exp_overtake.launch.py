@@ -29,6 +29,10 @@ def generate_launch_description():
         DeclareLaunchArgument('W', default_value='0.0', description='실측 통로 폭 [m]. 0이면 벽으로 추정'),
         DeclareLaunchArgument('servo_center', default_value='0.5',
                               description='직진 서보 값 (차마다 보정, docs/CAR_TERMINALS.md 서보 중심 보정)'),
+        DeclareLaunchArgument('servo_gain', default_value='0.6',
+                              description='서보 변환 게인 [서보/rad]. 0.6 = 기본 주행, 바퀴 최대 20°면 1.35 (docs/CAR_TERMINALS.md 조향 확인)'),
+        DeclareLaunchArgument('max_steering', default_value='0.78', description='최대 조향 명령 [rad]'),
+        DeclareLaunchArgument('steer', default_value='0.0', description='(straight) 고정 조향 [rad], 원 주행으로 실제 바퀴 각 확인'),
         DeclareLaunchArgument('speed_source', default_value='sensors_core', description='sensors_core | command'),
         Node(
             package='pointcloud_to_laserscan',
@@ -49,7 +53,7 @@ def generate_launch_description():
             parameters=[{
                 'role': arg('role', str), 'intent': arg('intent', str), 'run_id': arg('run_id', str),
                 'd_y': arg('d_y', float), 'W': arg('W', float), 'speed_source': arg('speed_source', str),
-                'method': arg('method', str), 't_d': arg('t_d', float),
+                'method': arg('method', str), 't_d': arg('t_d', float), 'steer': arg('steer', float),
             }],
         ),
         Node(
@@ -72,8 +76,9 @@ def generate_launch_description():
                 'aeb_bumper_emergency_distance': 0.25,
                 'aeb_bumper_overlap_tolerance': 0.10,
                 'lidar_to_bumper_dist': 0.30,
-                'max_steering': 0.78,
+                'max_steering': arg('max_steering', float),
                 'servo_center': arg('servo_center', float),
+                'servo_gain': arg('servo_gain', float),
             }],
         ),
     ])
