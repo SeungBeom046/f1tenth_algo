@@ -63,6 +63,9 @@ def generate_launch_description():
                 # 시뮬 scenario.yaml aeb와 같은 값: 띠 ±0.16 m(양보 차선 벽 여유 0.235 m보다 좁게), TTC 0.35 s
                 'aeb_model': 'geometric',
                 'aeb_curved_band': True,
+                # 휜 띠가 조향을 크게 꺾을 때 옆에 나란한 벽을 앞 장애물로 잡지 않게 (실차 2026-11-17, scenario.yaml aeb와 같은 값)
+                'aeb_curve_max_steering': 0.3,
+                'aeb_band_intersect': True,
                 'aeb_ttc_threshold': 0.35,
                 'aeb_vehicle_half_width': 0.15,
                 'aeb_path_margin': 0.01,

@@ -125,8 +125,8 @@
 | sim/aur_overtake/scenario.yaml | 38 | `model` | geometric | - | legacy(기존 주행) / geometric(추월 실험 1층: 좁은 띠 + 속도 TTC, tracker 무관) | 임시 (2026-11-15 결정) | - | - |
 | sim/aur_overtake/scenario.yaml | 39 | `speed_source` | measured | - | AEB 속도 입력 measured(4단계 /sensors/core) / unknown(속도 없음 → geometric은 고정 거리) / zero(legacy에 0) | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 40 | `curved_band` | true | - | geometric AEB 검사 띠를 조향 명령 원호를 따라 휜다 (false = 직선 띠) | 임시 (2026-11-15 B1) | - | - |
-| sim/aur_overtake/scenario.yaml | 41 | `curve_max_steering` | 0.0 | rad | 휜 띠에 쓰는 조향 상한, 0이면 상한 없음 (launch aeb_curve_max_steering과 같게) | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 42 | `band_intersect` | false | - | 휜 띠와 직선 띠 둘 다에 든 점만 AEB (옆에 나란한 벽 무시) (launch aeb_band_intersect와 같게) | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 41 | `curve_max_steering` | 0.3 | rad | 휜 띠에 쓰는 조향 상한, 0이면 상한 없음 (launch aeb_curve_max_steering과 같게) | 임시 (2026-11-17 실차: 조향 0.78에서 옆 벽에 섬) | - | - |
+| sim/aur_overtake/scenario.yaml | 42 | `band_intersect` | true | - | 휜 띠와 직선 띠 둘 다에 든 점만 AEB (옆에 나란한 벽 무시) (launch aeb_band_intersect와 같게) | 임시 (2026-11-17 실차) | - | - |
 | sim/aur_overtake/scenario.yaml | 43 | `ttc_threshold` | 0.35 | s | TTC 임계 (한계 = 속도 × 이 값). d* = 0.425 m(v 0.9)보다 작아야 정상 추종에서 안 걸린다: < 0.47 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 44 | `hz` | 50.0 | Hz | autonomous_drive 제어 주기 | 측정 | - | - |
 | sim/aur_overtake/scenario.yaml | 45 | `path_margin` | 0.01 | m | AEB 검사 띠 = 차 중심 ±(0.15 + 이 값) = ±0.16. 추월 차선 벽 여유 0.235 m보다 작아야 한다 (launch 값 0.15) | 임시 (2026-11-15 결정) | - | - |

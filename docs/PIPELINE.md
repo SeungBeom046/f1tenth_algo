@@ -128,7 +128,7 @@ t_d' = t_d + Δ (Δ = `scan_period`, 기획안 변경):
 
 | 층 | 상태 | 대상 | 판정 |
 |---|---|---|---|
-| (a) 독립 기하 AEB `model='geometric'` | 구현, 시뮬에서만 사용 (`autonomous_drive`에는 아직 model 파라미터가 없다) | scan 전체, 차 중심 ±(vehicle_half_width + path_margin) 띠 (실험값 ±0.16 m). `curved_band`면 조향 명령의 원호를 따라 휜다 | closest ≤ max(0.25 m, v·TTC). 속도를 모르면 0.25 m. tracker와 무관 |
+| (a) 독립 기하 AEB `model='geometric'` | 구현, 시뮬에서만 사용 (`autonomous_drive`에는 아직 model 파라미터가 없다) | scan 전체, 차 중심 ±(vehicle_half_width + path_margin) 띠 (실험값 ±0.16 m). `curved_band`면 조향 명령의 원호를 따라 휜다. 실험은 휜 띠의 조향을 ±0.3 rad로 자르고(`curve_max_steering`) 직선 띠에도 든 점만 본다(`band_intersect`): 옆에 나란한 벽 무시 | closest ≤ max(0.25 m, v·TTC). 속도를 모르면 0.25 m. tracker와 무관 |
 | (b) relative AEB | 미구현 (5단계) | tracker 차량 클러스터 | 상대속도 기반 |
 | `legacy` | 기본 주행 기본값, 변경 없음 | 띠 ±0.30 m | closest ≤ max(0.25, v²/(2·2.8) + 0.20, 0.55·v) |
 

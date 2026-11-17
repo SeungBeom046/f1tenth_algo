@@ -38,8 +38,8 @@ aeb:                        # 실차 autonomous_drive의 AEBSafetyModel을 두 �
   model: geometric          # TUNE: legacy(기존 주행) / geometric(추월 실험 1층: 좁은 띠 + 속도 TTC, tracker 무관) | - | 임시 (2026-11-15 결정)
   speed_source: measured    # TUNE: AEB 속도 입력 measured(4단계 /sensors/core) / unknown(속도 없음 → geometric은 고정 거리) / zero(legacy에 0) | - | 임시
   curved_band: true         # TUNE: geometric AEB 검사 띠를 조향 명령 원호를 따라 휜다 (false = 직선 띠) | - | 임시 (2026-11-15 B1)
-  curve_max_steering: 0.0   # TUNE: 휜 띠에 쓰는 조향 상한, 0이면 상한 없음 (launch aeb_curve_max_steering과 같게) | rad | 임시
-  band_intersect: false     # TUNE: 휜 띠와 직선 띠 둘 다에 든 점만 AEB (옆에 나란한 벽 무시) (launch aeb_band_intersect와 같게) | - | 임시
+  curve_max_steering: 0.3   # TUNE: 휜 띠에 쓰는 조향 상한, 0이면 상한 없음 (launch aeb_curve_max_steering과 같게) | rad | 임시 (2026-11-17 실차: 조향 0.78에서 옆 벽에 섬)
+  band_intersect: true      # TUNE: 휜 띠와 직선 띠 둘 다에 든 점만 AEB (옆에 나란한 벽 무시) (launch aeb_band_intersect와 같게) | - | 임시 (2026-11-17 실차)
   ttc_threshold: 0.35       # TUNE: TTC 임계 (한계 = 속도 × 이 값). d* = 0.425 m(v 0.9)보다 작아야 정상 추종에서 안 걸린다: < 0.47 | s | 임시
   hz: 50.0                  # TUNE: autonomous_drive 제어 주기 | Hz | 측정
   path_margin: 0.01         # TUNE: AEB 검사 띠 = 차 중심 ±(0.15 + 이 값) = ±0.16. 추월 차선 벽 여유 0.235 m보다 작아야 한다 (launch 값 0.15) | m | 임시 (2026-11-15 결정)
