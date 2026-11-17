@@ -57,6 +57,8 @@ class AEBSafetyModel:
         comfortable_decel=2.8,
         model='legacy',
         curved_band=False,
+        curve_max_steering=0.0,
+        band_intersect=False,
         wheelbase=0.33,
         lidar_x_from_rear_axle=0.13,
     ):
@@ -64,6 +66,12 @@ class AEBSafetyModel:
             raise ValueError('AEB model은 legacy|geometric: %r' % (model,))
         self.model = model
         self.curved_band = curved_band and model == 'geometric'
+        # > 0이면 휜 띠에 쓰는 조향을 ±이 값으로 자른다. 0 = 자르지 않음 (기존 동작).
+        # 조향 명령이 크게 꺾이면(최대 0.78 rad, 회전 반지름 0.34 m) 휜 띠가 옆 벽을 '앞 장애물'로 잡아 서 버린다 (실차 2026-11-17).
+        self.curve_max_steering = float(curve_max_steering)
+        # True면 휜 띠와 직선 띠에 둘 다 든 점만 본다: 옆으로 나란한 벽은 차가 그쪽을 향해 정면 띠에 들어올 때만 걸린다.
+        # False = 휜 띠만 (기존). 조향을 피하는 쪽으로 꺾으면 정면 점을 빼는 B1 동작은 둘 다 같다.
+        self.band_intersect = bool(band_intersect)
         self.wheelbase = wheelbase
         self.lidar_x_from_rear_axle = lidar_x_from_rear_axle
         self.ttc_threshold = ttc_threshold
@@ -99,7 +107,10 @@ class AEBSafetyModel:
         # 검사 반폭 = 차량 반폭 + 경로 여유거리.
         # 예: 0.15 + 0.10 = 중심선 좌우 0.25 m 안 장애물만 긴급제동 후보.
         corridor_half_width = self.vehicle_half_width + self.path_margin
-        curvature = math.tan(requested_command.steering_rad) / self.wheelbase if self.curved_band else 0.0
+        steer = requested_command.steering_rad
+        if self.curve_max_steering > 0.0:
+            steer = max(-self.curve_max_steering, min(self.curve_max_steering, steer))
+        curvature = math.tan(steer) / self.wheelbase if self.curved_band else 0.0
         closest_x = None
         angle = scan_msg.angle_min
         for raw_range in scan_msg.ranges:
@@ -112,7 +123,10 @@ class AEBSafetyModel:
                 x = raw_range * math.cos(vehicle_angle) - self.lidar_to_bumper_dist
                 y = raw_range * math.sin(vehicle_angle)
                 if abs(curvature) > 1e-6:
+                    in_straight = x >= -self.bumper_overlap_tolerance and abs(y) <= corridor_half_width
                     x, y = self._along_arc(raw_range, vehicle_angle, curvature)
+                    if self.band_intersect and not in_straight:
+                        x = -math.inf
                 # 앞범퍼보다 살짝 뒤로 계산되는 근접점도 0 m 충돌 후보로 취급한다.
                 # 이렇게 해야 라이다 장착 오차/손 테스트/범퍼 근처 장애물에서 AEB가 빠지지 않는다.
                 if x >= -self.bumper_overlap_tolerance and abs(y) <= corridor_half_width:

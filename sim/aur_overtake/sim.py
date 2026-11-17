@@ -108,6 +108,8 @@ class Car:
         a = cfg['aeb']      # 나머지 기본값 = launch/lidar_drive.launch.py 값
         self.aeb = AEBSafetyModel(path_margin=a['path_margin'], bumper_emergency_distance=a['bumper_emergency_distance'],
                                   model=a['model'], ttc_threshold=a['ttc_threshold'], curved_band=a['curved_band'],
+                                  curve_max_steering=a.get('curve_max_steering', 0.0),
+                                  band_intersect=a.get('band_intersect', False),
                                   wheelbase=v['wheelbase'], lidar_x_from_rear_axle=cfg['lidar']['mount_xyz'][0])
         self.W_fixed = p.W_leader if name == 'leader' else None
         self.scan_ns = None         # AEB 입력 (LaserScan 필드)

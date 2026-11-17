@@ -95,6 +95,10 @@ class AutonomousDriveNode(Node):
         # curved_band: geometric 검사 띠를 조향 원호를 따라 휜다. 기본값은 기본 주행 동작 그대로.
         self.declare_parameter('aeb_model', 'legacy')
         self.declare_parameter('aeb_curved_band', False)
+        # 휜 띠에 쓰는 조향 상한 [rad]. 0 = 상한 없음 (기존 동작). 크게 꺾일 때 옆 벽을 앞 장애물로 보는 것을 막는다.
+        self.declare_parameter('aeb_curve_max_steering', 0.0)
+        # True면 휜 띠와 직선 띠 둘 다에 든 점만 AEB 대상 (옆에 나란한 벽 무시). False = 기존 동작.
+        self.declare_parameter('aeb_band_intersect', False)
 
         # 직진 서보 값 (조향 0 rad일 때 VESC 서보 위치). 차마다 트림이 다르면 보정 실험으로 정한다.
         # 차가 왼쪽으로 흐르면 값을 키우고(오른쪽으로 꺾임), 오른쪽으로 흐르면 줄인다. 기본 0.5 = 기존 동작.
@@ -125,6 +129,8 @@ class AutonomousDriveNode(Node):
             stopping_margin=float(self.get_parameter('aeb_stopping_margin').value),
             model=self.get_parameter('aeb_model').value,
             curved_band=bool(self.get_parameter('aeb_curved_band').value),
+            curve_max_steering=float(self.get_parameter('aeb_curve_max_steering').value),
+            band_intersect=bool(self.get_parameter('aeb_band_intersect').value),
         )
 
         # 초기 상태 안정화
