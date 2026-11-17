@@ -84,7 +84,7 @@
 | config/exp_common.yaml | 87 | `wall_error_filter_alpha` | 0.25 | - | 횡 오차 저역 필터 계수 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 반응이 빠르고 잡음에 민감하다 | 0.15~0.5 |
 | config/exp_common.yaml | 88 | `steer_rate_limit` | 0.08 | rad/scan | 조향 변화 한계 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 차선 변경이 빠르고 덜그럭거린다 | 0.05~0.15 |
 | config/exp_common.yaml | 89 | `steering_deadband` | 0.0 | rad | 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | 임시 (2026-11-16 시뮬) | 0.055 rad는 횡오차 약 0.09 m에 해당한다. 추월 차선 벽 여유(c = 0.10)와 merge_tol보다 크면 줄여야 한다 | 0.01~0.055 |
-| config/exp_common.yaml | 90 | `max_steering` | 0.78 | rad | 최대 조향각 | 측정 (lidar_reactive_drive와 같은 값) | 조향 포화 | 기존 값 유지 |
+| config/exp_common.yaml | 90 | `max_steering` | 0.349 | rad | 최대 조향각 (실차 앞바퀴 물리 한계 ±20°, 기본 주행은 0.78) | 측정 (2026-11-17 사용자 측정) | 조향 포화 | 기존 값 유지 |
 | config/exp_common.yaml | 91 | `heading_gain` | 1.0 | rad/rad | 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°) | 감쇠비 ζ = heading_gain / (2·sqrt(2·wall_follow_gain·L)), 속도와 무관. 0.7이면 ζ ≈ 0.8 | 0.5~1.0 |
 | config/exp_common.yaml | 92 | `y_ref_rate` | 0.4 | m/s | 차선 변경 시 y_ref 기울기 제한 | 기획안 | 키우면 차선 변경이 빠르고 yaw가 커진다 (tracker 폭 게이트) | 0.2~0.5 |
 | config/exp_common.yaml | 93 | `lateral_ki` | 0.3 | rad/(m·s) | 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m) | - | - |

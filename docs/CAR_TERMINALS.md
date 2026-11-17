@@ -281,6 +281,24 @@ ros2 launch my_algo exp_overtake.launch.py role:=straight servo_center:=0.50
 
 `lidar_drive.launch.py`(기본 주행)는 main과 같게 두기 위해 이 값을 쓰지 않는다.
 
+## 조향 확인 (차마다 처음 한 번, 서보 중심 보정 다음)
+
+앞바퀴의 물리 최대 조향은 **±20° (0.349 rad)**다. 기본 주행 코드는 서보 끝(0.5 ± 0.47)을 0.78 rad로 가정해(게인 0.60) 바퀴가 명령의 45%만 꺾였다 → 조향이 둔하고 명령이 끝까지 쌓였다.
+`exp_overtake.launch.py`는 2026-11-17부터 **`servo_gain:=1.35`(= 0.47 / 0.349), `max_steering:=0.349`**가 기본이다. "서보 끝 = 바퀴 20°"라는 가정이 맞는지 한 번 확인한다.
+
+**방법 A (바퀴 띄우고, 1분)**: 차를 받침대에 올리고 터미널 1~4는 평소대로.
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=straight steer:=0.2 servo_center:=0.50   # 0.50 자리에 보정한 값
+```
+앞바퀴가 왼쪽으로 꺾인 각을 각도기(또는 휴대폰 각도 앱)로 잰다. **약 11.5°면 맞다.** (바퀴가 돌아가니 손 조심. 끝나면 Ctrl+C)
+
+**방법 B (원 주행, 공간 4 m)**: 같은 명령을 바닥에 놓고 실행하면 0.9 m/s로 왼쪽 원을 돈다. 뒤축 중심이 그리는 원의 지름 D를 잰다 (바닥 테이프 두 점).
+- **D ≈ 3.3 m면 맞다.**
+- D ≈ 1.4 m면 서보가 게인 0.60대로 움직이는 차다 → 모든 명령에 `servo_gain:=0.6` (최대 조향은 0.349 그대로).
+- 그 밖이면 실제 각 δ = atan(2 × 0.33 / D), **`servo_gain` = 1.35 × 0.2 / δ**로 고쳐 쓴다.
+
+정해진 `servo_gain`은 `servo_center`처럼 회차표 맨 위에 적고, 다른 값이면 모든 `exp_overtake.launch.py` 명령에 붙인다.
+
 ## 추월 실험
 
 터미널 1~4는 그대로이고 **터미널 5 명령만 바뀐다.** `exp_overtake.launch.py`는 라이다 변환 + 추월 실험 노드(`exp_planner`) + AEB·VESC 노드(`autonomous_drive`, 좁은 검사 띠)를 띄운다. gap follow와 카메라는 띄우지 않는다.

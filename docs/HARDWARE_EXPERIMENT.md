@@ -197,6 +197,7 @@ ros2 topic echo /reactive/lidar_command
 
 | 무엇 | 방법 | 기록 | 구하는 값 | 지금 가정값 |
 |---|---|---|---|---|
+| **조향 게인 (바퀴 최대 ±20°)** | `role:=straight steer:=0.2`로 바퀴 각(띄워서 각도기) 또는 원 지름 D 측정 ([CAR_TERMINALS.md](CAR_TERMINALS.md) "조향 확인") | 손 기록 | `servo_gain` (11.5° 또는 D ≈ 3.3 m면 1.35 그대로) | 1.35 (서보 끝 = 20° 가정) |
 | **서보 중심 (직진성)** | `exp_overtake.launch.py role:=straight`로 조향 0 직진, 찍히는 횡위치·헤딩 변화를 보며 `servo_center`를 0.01씩 조정 ([CAR_TERMINALS.md](CAR_TERMINALS.md) "서보 중심 보정") | 터미널 로그 | 차마다 `servo_center` (3 m에 ±0.05 m, ±1° 안) | 0.50 |
 | 제동 지연 t_d, 최대 감속 a | 한 차씩 기본 주행으로 직선을 달리다 앞에 장애물을 두어 AEB로 세운다 (차마다 3회). 또는 `/autonomous_mode` false | bag (`/commands/motor/speed`, `/sensors/core`, `/aeb/active`) + 옆에서 영상 | 0 명령 시각 → 속도가 줄기 시작한 시각 = t_d, 감속 구간 기울기 = a | t_d 0.15 s, a 3.0 m/s² |
 | ERPM → m/s 환산 | 테이프로 5 m 구간 표시, 일정 속도로 통과하는 시간을 잰다 | bag (`/sensors/core` 속도) + 스톱워치/영상 | ERPM_GAIN = 평균 ERPM / 실제 m/s | 4614 |

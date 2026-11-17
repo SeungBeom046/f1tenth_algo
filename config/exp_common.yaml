@@ -87,7 +87,7 @@ aur:
   wall_error_filter_alpha: 0.25   # TUNE: 횡 오차 저역 필터 계수 | - | 측정 (lidar_reactive_drive와 같은 값)
   steer_rate_limit: 0.08    # TUNE: 조향 변화 한계 | rad/scan | 측정 (lidar_reactive_drive와 같은 값)
   steering_deadband: 0.0    # TUNE: 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | rad | 임시 (2026-11-16 시뮬)
-  max_steering: 0.78        # TUNE: 최대 조향각 | rad | 측정 (lidar_reactive_drive와 같은 값)
+  max_steering: 0.349       # TUNE: 최대 조향각 (실차 앞바퀴 물리 한계 ±20°, 기본 주행은 0.78) | rad | 측정 (2026-11-17 사용자 측정)
   heading_gain: 1.0         # TUNE: 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | rad/rad | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°)
   y_ref_rate: 0.4           # TUNE: 차선 변경 시 y_ref 기울기 제한 | m/s | 기획안
   lateral_ki: 0.3           # TUNE: 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | rad/(m·s) | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m)
