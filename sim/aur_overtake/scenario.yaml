@@ -42,8 +42,9 @@ aeb:                        # 실차 autonomous_drive의 AEBSafetyModel을 두 �
   band_intersect: true      # TUNE: 휜 띠와 직선 띠 둘 다에 든 점만 AEB (옆에 나란한 벽 무시) (launch aeb_band_intersect와 같게) | - | 임시 (2026-11-17 실차)
   ttc_threshold: 0.35       # TUNE: TTC 임계 (한계 = 속도 × 이 값). d* = 0.425 m(v 0.9)보다 작아야 정상 추종에서 안 걸린다: < 0.47 | s | 임시
   hz: 50.0                  # TUNE: autonomous_drive 제어 주기 | Hz | 측정
-  path_margin: 0.01         # TUNE: AEB 검사 띠 = 차 중심 ±(0.15 + 이 값) = ±0.16. 추월 차선 벽 여유 0.235 m보다 작아야 한다 (launch 값 0.15) | m | 임시 (2026-11-15 결정)
-  bumper_emergency_distance: 0.25   # TUNE: AEB 고정 정지 거리 | m | 측정 (launch 값)
+  vehicle_half_width: 0.135 # TUNE: AEB 검사 띠 반폭 = 실측 차 반폭 (launch aeb_vehicle_half_width와 같게) | m | 측정 (2026-11-17, 이전 0.15)
+  path_margin: 0.0          # TUNE: AEB 검사 띠 = 차 중심 ±(반폭 + 이 값) = ±0.135. 실차는 추월 때 차체-벽 약 5 cm (launch 값과 같게) | m | 임시 (2026-11-17, 이전 0.01)
+  bumper_emergency_distance: 0.20   # TUNE: AEB 고정 정지 거리, 정지 여유 m 0.15 이상 (launch 값과 같게) | m | 임시 (2026-11-17, 이전 0.25)
 lidar:                      # Livox Mid-360을 수평 한 줄로 근사 → pointcloud_to_laserscan과 같은 규칙으로 /scan
   hz: 10.0                  # TUNE: scan 주기 | Hz | 측정
   rays_per_frame: 11520     # TUNE: 광선 수 = 방위 1440 × 고도 8줄 | 개 | 임시

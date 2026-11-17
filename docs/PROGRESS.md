@@ -96,6 +96,13 @@ belief 배치 (`batch.py belief --n 200 --methods d`, 잡음 없음, W 1.0): sur
 
 판단: 선행차 조향을 없애고 직진만 시키는 안은 쓰지 않는다. 비키는 동작(Y)이 없어지고, 트림 0.03 rad면 0.9 m/s에서 횡편차 ≈ ½·(v²·δ/L)·t² = 0.037·t² m라 약 2.5 s(2.3 m)에 벽 여유 0.235 m를 다 쓴다. 후행차가 선행차를 인지해 계획하는 것은 이미 EgoFSM이 한다.
 
+## 실차: 추월 때 벽 5 cm에서 AEB 정지 → AEB 띠·정지 거리 좁힘 (2026-11-17)
+- 사용자 실측: 추월 때 차체-벽이 약 5 cm까지 붙는다. 그때 AEB가 서 버렸다.
+- 원인: 띠 ±0.16 m (반폭 0.15 + 여유 0.01)와 정지 거리 0.25 m. 벽이 차 중심에서 0.185 m면 띠까지 0.025 m라 벽 쪽으로 3°만 틀어져도 섰다.
+- 변경 (launch, 시뮬 scenario.yaml): 띠 = 실측 차 반폭 0.135 (여유 0), 정지 거리 0.25 → 0.20 m (정지 여유 m 0.15 이상). 같은 조건에서 6°까지 안 서고 8°부터 선다 (`test_tight_band_allows_5cm_side_clearance`).
+- 정지 간격(약 0.27 m)이 정지 거리 밖이 되어 NY 정지 중 AEB 깜빡임이 사라졌다 (`test_aeb_flicker_while_stopped_not_counted_as_moving`은 0.25 m로 고정).
+- 시도 후 버림: `lane_balance` (벽-차·차-차·차-벽 간격 균등, ac00c54 옵션만 남김, 기본 off). 기준선 252회 중 belief Y 9회가 DONE → belief_NY (선행차 양보 폭 0.265 → 0.212로 줄어 판단이 늦어짐), 실차 요구(벽 5 cm)와도 반대.
+
 ## 라이다 실측값 반영 (2026-11-17)
 - 실측 (2026-11-03·11-06, occlusion_archive의 vehicle_geometry.yaml·tf_static.launch.py): 뒤축→라이다 앞 0.13 / 오른쪽 0.005 m, 바닥→장착면 0.21 + 원점 0.03(임시) = 0.24 m, pitch 0.0557 rad (3.2° 앞 숙임), roll 0.0023 rad, 라이다→앞범퍼 0.28 m.
 - 실차 (플래그 off 17197cb → on): `level_scan` (정적 TF livox_level → livox_frame, pointcloud_to_laserscan target_frame livox_level). 숙인 라이다는 앞 약 4.3 m(수평 광선 기준) 바닥을 /scan 장애물로 본다 → 수평 프레임에서 높이 띠를 자른다. `lidar_to_front`·AEB `lidar_to_bumper_dist` 0.30 → 0.28 (기본 주행은 0.30 그대로).

@@ -95,9 +95,10 @@ def generate_launch_description():
                 'aeb_curve_max_steering': 0.3,
                 'aeb_band_intersect': True,
                 'aeb_ttc_threshold': 0.35,
-                'aeb_vehicle_half_width': 0.15,
-                'aeb_path_margin': 0.01,
-                'aeb_bumper_emergency_distance': 0.25,
+                # 띠 = 실측 차 반폭 0.135 (여유 0): 실차는 추월 때 차체-벽 약 5 cm까지 붙는다 (2026-11-17). 정지 거리 0.25 → 0.20 (≥ m 0.15)
+                'aeb_vehicle_half_width': 0.135,
+                'aeb_path_margin': 0.0,
+                'aeb_bumper_emergency_distance': 0.20,
                 'aeb_bumper_overlap_tolerance': 0.10,
                 'lidar_to_bumper_dist': arg('lidar_to_bumper', float),
                 'max_steering': arg('max_steering', float),

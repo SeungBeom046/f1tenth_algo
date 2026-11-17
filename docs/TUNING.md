@@ -130,10 +130,11 @@
 | sim/aur_overtake/scenario.yaml | 42 | `band_intersect` | true | - | 휜 띠와 직선 띠 둘 다에 든 점만 AEB (옆에 나란한 벽 무시) (launch aeb_band_intersect와 같게) | 임시 (2026-11-17 실차) | - | - |
 | sim/aur_overtake/scenario.yaml | 43 | `ttc_threshold` | 0.35 | s | TTC 임계 (한계 = 속도 × 이 값). d* = 0.425 m(v 0.9)보다 작아야 정상 추종에서 안 걸린다: < 0.47 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 44 | `hz` | 50.0 | Hz | autonomous_drive 제어 주기 | 측정 | - | - |
-| sim/aur_overtake/scenario.yaml | 45 | `path_margin` | 0.01 | m | AEB 검사 띠 = 차 중심 ±(0.15 + 이 값) = ±0.16. 추월 차선 벽 여유 0.235 m보다 작아야 한다 (launch 값 0.15) | 임시 (2026-11-15 결정) | - | - |
-| sim/aur_overtake/scenario.yaml | 46 | `bumper_emergency_distance` | 0.25 | m | AEB 고정 정지 거리 | 측정 (launch 값) | - | - |
-| sim/aur_overtake/scenario.yaml | 48 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
-| sim/aur_overtake/scenario.yaml | 49 | `rays_per_frame` | 11520 | 개 | 광선 수 = 방위 1440 × 고도 8줄 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 51 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 56 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
-| sim/aur_overtake/scenario.yaml | 63 | `level` | true | - | 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | 임시 (2026-11-17 실측 반영) | - | - |
+| sim/aur_overtake/scenario.yaml | 45 | `vehicle_half_width` | 0.135 | m | AEB 검사 띠 반폭 = 실측 차 반폭 (launch aeb_vehicle_half_width와 같게) | 측정 (2026-11-17, 이전 0.15) | - | - |
+| sim/aur_overtake/scenario.yaml | 46 | `path_margin` | 0.0 | m | AEB 검사 띠 = 차 중심 ±(반폭 + 이 값) = ±0.135. 실차는 추월 때 차체-벽 약 5 cm (launch 값과 같게) | 임시 (2026-11-17, 이전 0.01) | - | - |
+| sim/aur_overtake/scenario.yaml | 47 | `bumper_emergency_distance` | 0.20 | m | AEB 고정 정지 거리, 정지 여유 m 0.15 이상 (launch 값과 같게) | 임시 (2026-11-17, 이전 0.25) | - | - |
+| sim/aur_overtake/scenario.yaml | 49 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 50 | `rays_per_frame` | 11520 | 개 | 광선 수 = 방위 1440 × 고도 8줄 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 52 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 57 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
+| sim/aur_overtake/scenario.yaml | 64 | `level` | true | - | 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | 임시 (2026-11-17 실측 반영) | - | - |

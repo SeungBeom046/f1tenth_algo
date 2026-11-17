@@ -102,3 +102,17 @@ def test_band_intersect_and_curve_cap_ignore_parallel_wall():
     # 기본값은 기존 동작
     d = AEBSafetyModel(**kw)
     assert d.curve_max_steering == 0.0 and not d.band_intersect
+
+
+def test_tight_band_allows_5cm_side_clearance():
+    # 실차 2026-11-17: 추월 때 차체-벽 약 5 cm (벽 = 차 중심에서 0.135 + 0.05). 벽 쪽으로 3° 틀어져도 서지 않아야 한다
+    cmd = ReactiveDriveCommand(0.0, 5000.0, 'X')
+    kw = dict(model='geometric', ttc_threshold=0.35, curved_band=True, curve_max_steering=0.3, band_intersect=True)
+    old = AEBSafetyModel(vehicle_half_width=0.15, path_margin=0.01, bumper_emergency_distance=0.25, lidar_to_bumper_dist=0.28, **kw)
+    new = AEBSafetyModel(vehicle_half_width=0.135, path_margin=0.0, bumper_emergency_distance=0.20, lidar_to_bumper_dist=0.28, **kw)
+    sc = scan_wall(0.185, yaw=math.radians(3))
+    assert old.check_emergency_braking(sc, 0.0, cmd)
+    assert not new.check_emergency_braking(sc, 0.0, cmd)
+    assert not new.check_emergency_braking(scan_wall(0.185, yaw=math.radians(6)), 0.0, cmd)
+    # 정면 차 (scan_wall은 앞범퍼 0.30 기준이라 0.28 모델에서는 0.02 m 멀다): 0.19 m면 선다
+    assert new.check_emergency_braking(scan_wall(None, front=0.17), 0.0, cmd)

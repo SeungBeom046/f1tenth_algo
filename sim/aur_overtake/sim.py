@@ -107,6 +107,7 @@ class Car:
         self.scripted = None        # (y, yaw): 선행차 yaw 고정 양보 중일 때의 자세
         a = cfg['aeb']      # 나머지 기본값 = launch/lidar_drive.launch.py 값
         self.aeb = AEBSafetyModel(path_margin=a['path_margin'], bumper_emergency_distance=a['bumper_emergency_distance'],
+                                  vehicle_half_width=a.get('vehicle_half_width', 0.15),
                                   lidar_to_bumper_dist=p.lidar_to_front,
                                   model=a['model'], ttc_threshold=a['ttc_threshold'], curved_band=a['curved_band'],
                                   curve_max_steering=a.get('curve_max_steering', 0.0),
