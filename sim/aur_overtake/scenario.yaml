@@ -46,21 +46,21 @@ aeb:                        # 실차 autonomous_drive의 AEBSafetyModel을 두 �
   bumper_emergency_distance: 0.25   # TUNE: AEB 고정 정지 거리 | m | 측정 (launch 값)
 lidar:                      # Livox Mid-360을 수평 한 줄로 근사 → pointcloud_to_laserscan과 같은 규칙으로 /scan
   hz: 10.0                  # TUNE: scan 주기 | Hz | 측정
-  rays_per_frame: 1440      # TUNE: 광선 수 | 개 | 임시
+  rays_per_frame: 11520     # TUNE: 광선 수 = 방위 1440 × 고도 8줄 | 개 | 임시
   pattern: grid
   grid_azimuth: 1440        # TUNE: 방위 개수 | 개 | 임시
-  vfov_min_deg: 0.0
-  vfov_max_deg: 0.0
+  vfov_min_deg: -7.0        # Mid-360 수직 시야 −7° ~ 52° 중 아래쪽만 2° 간격 8줄 (−7 ~ +7°). 숙인 라이다에서도 수평 띠가 남게
+  vfov_max_deg: 7.0
   range_min: 0.1
   range_max: 40.0
   range_noise_std: 0.0      # TUNE: 거리 노이즈 | m | 임시 (0 = 무잡음 기준선)
-  mount_xyz: [0.13, 0.0, 0.12]   # 뒤축 → 라이다 (0.13 m 측정), 높이는 임시
-  mount_rpy: [0.0, 0.0, 0.0]     # 라이다 장착 기울기 roll, pitch, yaw [rad] (pitch + = 앞이 숙여짐)
+  mount_xyz: [0.13, -0.005, 0.24]   # 뒤축 → 라이다 (실측 2026-11-03: 앞 0.13, 오른쪽 0.5 cm, 바닥에서 장착면 0.21 + 원점 0.03(임시))
+  mount_rpy: [0.0023, 0.0557, 0.0]  # 라이다 장착 기울기 roll, pitch, yaw [rad] (실측 2026-11-06 정지 IMU, pitch 3.2° 앞 숙임)
 scan:                       # launch/lidar_drive.launch.py의 pointcloud_to_laserscan과 같은 값
   angle_min: -3.14159
   angle_max: 3.14159
   angle_increment: 0.00436
-  level: false              # TUNE: 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | - | 임시
+  level: true               # TUNE: 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | - | 임시 (2026-11-17 실측 반영)
   min_height: -0.1
   max_height: 0.5
   range_min: 0.05

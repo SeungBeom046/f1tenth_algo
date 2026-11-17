@@ -64,10 +64,10 @@ def generate_launch_description():
         DeclareLaunchArgument('max_steering', default_value='0.349', description='최대 조향 명령 [rad] (앞바퀴 물리 한계 20°)'),
         DeclareLaunchArgument('steer', default_value='0.0', description='(straight) 고정 조향 [rad], 원 주행으로 실제 바퀴 각 확인'),
         # 라이다 장착 기울기 (실측 2026-11-06 세션 1, 정지 IMU: pitch 3.2° 앞이 숙여짐, roll 0.13°)
-        DeclareLaunchArgument('level_scan', default_value='false', description='true면 기울기를 되돌린 수평 프레임에서 /scan을 만든다'),
+        DeclareLaunchArgument('level_scan', default_value='true', description='true면 기울기를 되돌린 수평 프레임에서 /scan을 만든다'),
         DeclareLaunchArgument('lidar_pitch', default_value='0.0557', description='라이다 pitch [rad], + = 앞이 숙여짐'),
         DeclareLaunchArgument('lidar_roll', default_value='0.0023', description='라이다 roll [rad]'),
-        DeclareLaunchArgument('lidar_to_bumper', default_value='0.30', description='라이다 → 앞범퍼 [m] (AEB)'),
+        DeclareLaunchArgument('lidar_to_bumper', default_value='0.28', description='라이다 → 앞범퍼 [m] (AEB, 실측 2026-11-03; config lidar_to_front와 같게)'),
         DeclareLaunchArgument('speed_source', default_value='sensors_core', description='sensors_core | command'),
         OpaqueFunction(function=_scan_nodes),
         Node(

@@ -179,7 +179,8 @@ def test_level_scan_removes_floor_seen_by_pitched_lidar():
     # 실측 라이다: 바닥에서 0.24 m, 앞으로 3.2° 숙임. 그대로 자르면 앞 약 4.3 m 바닥이 /scan에 장애물로 들어온다
     import math
     import numpy as np
-    over = {'lidar.mount_xyz': [0.13, 0.0, 0.24], 'lidar.mount_rpy': [0.0, 0.0557, 0.0], 'start.gap0': 12.0}
+    over = {'lidar.mount_xyz': [0.13, 0.0, 0.24], 'lidar.mount_rpy': [0.0, 0.0557, 0.0], 'start.gap0': 12.0,
+            'lidar.rays_per_frame': 1440, 'lidar.vfov_min_deg': 0.0, 'lidar.vfov_max_deg': 0.0}     # 수평 1줄
 
     def ahead(level):
         sim = Sim('d', load_cfg(**dict(over, **{'scan.level': level})))

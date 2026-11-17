@@ -51,7 +51,7 @@ aur:
   merge_v: 1.5              # TUNE: MERGE 중 속도 (= v_pass, 들어가며 간격을 벌린다), null이면 v_B_nominal | m/s | 임시
   track_hold: 0.5           # TUNE: 추적이 끊겨도 직전 값을 쓰는 시간 | s | 임시
   # --- tracker ---
-  lidar_to_front: 0.30      # TUNE: 라이다 → 앞범퍼 (AEB lidar_to_bumper_dist와 같게) | m | 측정 (실측 0.28, 코드 0.30)
+  lidar_to_front: 0.28      # TUNE: 라이다 → 앞범퍼 (AEB lidar_to_bumper_dist와 같게, 기본 주행은 0.30) | m | 측정 (2026-11-03 실측)
   lidar_to_rear: 0.22       # TUNE: 라이다 → 뒤범퍼 | m | 측정
   cluster_jump: 0.15        # TUNE: 연속 점 사이 거리가 이보다 크면 클러스터 분할 | m | 임시
   cluster_min_points: 3     # TUNE: 클러스터 최소 점 수 | 개 | 임시
