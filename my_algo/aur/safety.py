@@ -59,6 +59,9 @@ def lane_offset(W, p):
     """차선 횡 오프셋 δ = W/2 − w/2 − c (파라미터로 고정했으면 그 값)."""
     if p.lane_offset is not None:
         return p.lane_offset
-    delta = max(0.0, W / 2.0 - p.w_car / 2.0 - p.c_lat)
+    # lane_balance: 남는 폭 W − 2w를 벽-차, 차-차, 차-벽 세 간격에 똑같이 나눈다 (W 1.0이면 각 0.153 m, δ 0.212).
+    # 기본(c 방식)은 벽 쪽만 c = 0.10 m라 실차 횡 오차(±5~10 cm)에 가드레일에 닿았다 (2026-11-17)
+    gap = (W - 2.0 * p.w_car) / 3.0 if p.lane_balance else p.c_lat
+    delta = max(0.0, W / 2.0 - p.w_car / 2.0 - gap)
     # 넓은 통로: 벽까지 붙으면 차선 변경이 길고 크게 틀어진다 (W 2 m에서 0.77 m, 23°)
     return delta if p.lane_offset_max is None else min(delta, p.lane_offset_max)

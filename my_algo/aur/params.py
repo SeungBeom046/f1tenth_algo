@@ -36,6 +36,7 @@ class AurParams:
     W: Optional[float] = None       # 통로 폭 측정값 [m]. None이면 corridor.W_est를 쓴다
     W_leader: Optional[float] = None    # 선행차 전용 실측 통로 폭 [m]. 주면 선행차는 오른쪽 벽만으로 횡위치를 구한다
     lane_offset: Optional[float] = None   # None이면 δ = W/2 − w/2 − c
+    lane_balance: bool = False      # True면 δ = W/2 − w/2 − (W − 2w)/3 (벽·차 간격 균등), False면 W/2 − w/2 − c
     lane_offset_max: Optional[float] = 0.3    # δ 상한 [m]. 넓은 통로에서 벽까지 붙지 않게 (None = 상한 없음). W 1.0의 δ 0.265보다 커서 W ≤ 1.27은 그대로
     # --- 속도 ---
     v_B_nominal: float = 0.9

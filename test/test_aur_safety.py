@@ -82,3 +82,17 @@ def test_load_params_yaml():
         open(b, 'w').write('aur:\n  t_dd: 0.25\n')
         with pytest.raises(ValueError):
             load_params(b)
+
+
+def test_lane_balance_splits_free_width_equally():
+    from dataclasses import replace
+    p = replace(AurParams(), lane_balance=True)
+    w = p.w_car
+    for W in (1.0, 1.2):
+        d = safety.lane_offset(W, p)
+        wall = W / 2.0 - d - w / 2.0           # 차선의 차체 → 벽
+        between = 2.0 * d - w                  # 추월 차선 ego ↔ 양보 차선 선행차
+        assert abs(wall - between) < 1e-9 and abs(wall - (W - 2 * w) / 3.0) < 1e-9
+        # 비킨 선행차(−δ) 왼쪽으로 추월 가능 조건은 그대로 성립
+        assert safety.lateral_pass_ok(W, -d, w, p.c_lat)
+    assert abs(safety.lane_offset(1.0, p) - 0.2117) < 1e-3

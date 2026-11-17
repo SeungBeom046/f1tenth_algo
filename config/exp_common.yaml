@@ -29,6 +29,7 @@ aur:
   W: null                   # TUNE: 통로 폭 W, null이면 scan 추정값 사용 | m | 임시 (실험 장소에서 측정)
   W_leader: null            # TUNE: 선행차 전용 실측 통로 폭, 주면 오른쪽 벽만으로 횡위치 (옆에 온 후행차를 벽으로 안 봄) | m | 임시 (실험 장소에서 측정해 leader yaml에)
   lane_offset: null         # TUNE: 차선 횡 오프셋 δ, null이면 W/2 − w/2 − c | m | 기획안
+  lane_balance: false       # TUNE: 차선 오프셋을 벽-차·차-차·차-벽 간격이 같게 (W 1.0: 간격 0.153, δ 0.212), false면 벽 쪽 c만 | - | 임시
   lane_offset_max: 0.3      # TUNE: 차선 오프셋 δ 상한 (넓은 통로에서 벽까지 붙지 않게), null이면 상한 없음. W ≤ 1.27 m는 영향 없음 | m | 임시 (2026-11-16 시뮬 W 2·3 m: 0.3/0.4/0.5 성공 같고 추월 시간 13.8/14.8/15.7 s)
   # --- 속도 ---
   v_B_nominal: 0.9          # TUNE: 선행차 목표 속도 | m/s | 기획안
