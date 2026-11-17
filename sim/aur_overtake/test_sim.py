@@ -173,3 +173,19 @@ def test_viewer_draws_at_render_rate_and_cycles_speed():
     ui.on_key(KEY_0)
     ui._apply_keys()
     assert ui.speed == 1.0
+
+
+def test_level_scan_removes_floor_seen_by_pitched_lidar():
+    # 실측 라이다: 바닥에서 0.24 m, 앞으로 3.2° 숙임. 그대로 자르면 앞 약 4.3 m 바닥이 /scan에 장애물로 들어온다
+    import math
+    import numpy as np
+    over = {'lidar.mount_xyz': [0.13, 0.0, 0.24], 'lidar.mount_rpy': [0.0, 0.0557, 0.0], 'start.gap0': 12.0}
+
+    def ahead(level):
+        sim = Sim('d', load_cfg(**dict(over, **{'scan.level': level})))
+        sim.ego.perceive(sim, False)
+        r = np.array(sim.ego.scan_ns.ranges)
+        i = int(round((0.0 - sim.ego.scan_ns.angle_min) / sim.ego.scan_ns.angle_increment))
+        return float(np.min(r[i - 5:i + 6]))
+    assert abs(ahead(False) - 0.24 / math.tan(0.0557)) < 0.2       # 바닥 (약 4.3 m)
+    assert ahead(True) > 8.0                                         # 앞차(12 m)까지 비어 있음

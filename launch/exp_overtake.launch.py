@@ -8,10 +8,38 @@ pointcloud_to_laserscan(lidar_drive와 같은 값) + exp_planner + autonomous_dr
 gap follow(lidar_reactive_drive)와 카메라는 띄우지 않는다. 실행하면 바로 출발한다 (출발 게이트로 대기).
 """
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+
+
+def _scan_nodes(context):
+    """pointcloud_to_laserscan (lidar_drive와 같은 값). level_scan이면 라이다 장착 기울기를 되돌린 livox_level 프레임에서 자른다.
+
+    정적 TF livox_level → livox_frame = 장착 회전 (roll, pitch). static_transform_publisher 인자 순서는 x y z yaw pitch roll
+    (Foxy는 --x 같은 이름 인자를 지원하지 않는다).
+    """
+    level = LaunchConfiguration('level_scan').perform(context).lower() in ('true', '1', 'yes')
+    pitch = LaunchConfiguration('lidar_pitch').perform(context)
+    roll = LaunchConfiguration('lidar_roll').perform(context)
+    nodes = []
+    if level:
+        nodes.append(Node(package='tf2_ros', executable='static_transform_publisher', name='tf_livox_level',
+                          arguments=['0', '0', '0', '0', pitch, roll, 'livox_level', 'livox_frame']))
+    nodes.append(Node(
+        package='pointcloud_to_laserscan',
+        executable='pointcloud_to_laserscan_node',
+        name='pointcloud_to_laserscan',
+        parameters=[{
+            'min_height': -0.1, 'max_height': 0.5,
+            'angle_min': -3.14159, 'angle_max': 3.14159, 'angle_increment': 0.00436,
+            'scan_time': 0.1, 'range_min': 0.05, 'range_max': 20.0,
+            'use_inf': True, 'inf_epsilon': 1.0, 'target_frame': 'livox_level' if level else 'livox_frame',
+        }],
+        remappings=[('cloud_in', '/livox/lidar'), ('scan', '/scan')],
+    ))
+    return nodes
 
 
 def generate_launch_description():
@@ -35,19 +63,13 @@ def generate_launch_description():
                               description='서보 변환 게인 [서보/rad]. 0.6 = 기본 주행, 바퀴 최대 20°면 1.35 (docs/CAR_TERMINALS.md 조향 확인)'),
         DeclareLaunchArgument('max_steering', default_value='0.349', description='최대 조향 명령 [rad] (앞바퀴 물리 한계 20°)'),
         DeclareLaunchArgument('steer', default_value='0.0', description='(straight) 고정 조향 [rad], 원 주행으로 실제 바퀴 각 확인'),
+        # 라이다 장착 기울기 (실측 2026-11-06 세션 1, 정지 IMU: pitch 3.2° 앞이 숙여짐, roll 0.13°)
+        DeclareLaunchArgument('level_scan', default_value='false', description='true면 기울기를 되돌린 수평 프레임에서 /scan을 만든다'),
+        DeclareLaunchArgument('lidar_pitch', default_value='0.0557', description='라이다 pitch [rad], + = 앞이 숙여짐'),
+        DeclareLaunchArgument('lidar_roll', default_value='0.0023', description='라이다 roll [rad]'),
+        DeclareLaunchArgument('lidar_to_bumper', default_value='0.30', description='라이다 → 앞범퍼 [m] (AEB)'),
         DeclareLaunchArgument('speed_source', default_value='sensors_core', description='sensors_core | command'),
-        Node(
-            package='pointcloud_to_laserscan',
-            executable='pointcloud_to_laserscan_node',
-            name='pointcloud_to_laserscan',
-            parameters=[{
-                'min_height': -0.1, 'max_height': 0.5,
-                'angle_min': -3.14159, 'angle_max': 3.14159, 'angle_increment': 0.00436,
-                'scan_time': 0.1, 'range_min': 0.05, 'range_max': 20.0,
-                'use_inf': True, 'inf_epsilon': 1.0, 'target_frame': 'livox_frame',
-            }],
-            remappings=[('cloud_in', '/livox/lidar'), ('scan', '/scan')],
-        ),
+        OpaqueFunction(function=_scan_nodes),
         Node(
             package='my_algo',
             executable='exp_planner',
@@ -77,7 +99,7 @@ def generate_launch_description():
                 'aeb_path_margin': 0.01,
                 'aeb_bumper_emergency_distance': 0.25,
                 'aeb_bumper_overlap_tolerance': 0.10,
-                'lidar_to_bumper_dist': 0.30,
+                'lidar_to_bumper_dist': arg('lidar_to_bumper', float),
                 'max_steering': arg('max_steering', float),
                 'servo_center': arg('servo_center', float),
                 'servo_gain': arg('servo_gain', float),

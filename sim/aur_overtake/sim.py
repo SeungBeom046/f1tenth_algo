@@ -92,7 +92,7 @@ class Car:
                              v['steer_rate'], erpm_gain=p.erpm_gain, max_steer=p.max_steering,
                              servo_center=SERVO_CENTER + v.get('steer_offset', 0.0) * SERVO_GAIN)
         self.body = mujoco.mj_name2id(sim.m, mujoco.mjtObj.mjOBJ_BODY, name)
-        mount = {'lidar_xyz': cfg['lidar']['mount_xyz'], 'lidar_rpy': [0.0, 0.0, 0.0]}
+        mount = {'lidar_xyz': cfg['lidar']['mount_xyz'], 'lidar_rpy': cfg['lidar'].get('mount_rpy', [0.0, 0.0, 0.0])}
         self.lidar = Lidar(sim.m, cfg['lidar'], mount, self.body, seed=sim.seed + (1 if name == 'leader' else 0))
         self.tracker = VehicleTracker(p, view=view)
         self.shadow = VehicleTracker(p, view=view)   # 기록용: FSM 상태와 무관하게 매 scan 정면 규칙만 돌린다
@@ -121,6 +121,9 @@ class Car:
     def perceive(self, sim, side):
         """scan 한 프레임: 레이캐스트 → scan → corridor(벽) + tracker(상대 차). side = 측면 추적(PASS·MERGE). 반환: W."""
         cloud, self.points_world, _ = self.lidar.scan(sim.d, self.kin.pose())
+        if sim.cfg['scan'].get('level', False):
+            # 실차 launch level_scan과 같다: 라이다 장착 기울기를 되돌린 수평 프레임(livox_level)에서 높이 띠를 자른다
+            cloud = cloud @ self.lidar.R_mount.T
         scan = cloud_to_scan(cloud, sim.cfg['scan'])
         self.scan_ns = SimpleNamespace(**dict(scan, ranges=scan['ranges'].tolist()))
         self.points = scan_to_points(scan['ranges'].tolist(), scan['angle_min'], scan['angle_increment'],

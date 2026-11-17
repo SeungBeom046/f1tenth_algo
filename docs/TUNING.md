@@ -135,3 +135,4 @@
 | sim/aur_overtake/scenario.yaml | 49 | `rays_per_frame` | 1440 | 개 | 광선 수 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 51 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 56 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
+| sim/aur_overtake/scenario.yaml | 63 | `level` | false | - | 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | 임시 | - | - |

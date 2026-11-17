@@ -3,7 +3,7 @@
 좌표: x 전방, y 왼쪽 +, 통로 중심 y = 0, 바닥 z = 0. 차 body 원점 = 뒤축 중심 (base_link).
 
 geom 그룹 두 가지:
-- SENSE_GROUP(4): 라이다가 맞히는 판정용 모양 (벽 판, 차 상자). 예전 월드와 같은 크기·위치라 scan이 그대로다.
+- SENSE_GROUP(4): 라이다가 맞히는 판정용 모양 (벽 판, 차 상자, 바닥 평면). 예전 월드와 같은 크기·위치라 scan이 그대로다.
   뷰어 기본 표시에서는 숨는다 (뷰어 키 5로 보기).
 - 0: 보기용 (도로·가장자리선·가드레일·바퀴·차체). 라이다(Lidar의 geomgroup)와 충돌 판정(sim.check_collision, 기하 계산)에 안 쓴다.
 """
@@ -136,6 +136,7 @@ def build_xml(cfg):
     <geom name="ground" type="plane" pos="{xm:.2f} 0 -0.001" size="{0.5 * (x1 - x0) + 20:.2f} 12 0.1" material="ground" contype="0" conaffinity="0"/>
     <geom name="floor" type="box" pos="{xm:.2f} 0 -0.0005" size="{0.5 * (x1 - x0) + 1:.2f} {0.5 * W + 0.12:.3f} 0.0005" material="asphalt" contype="0" conaffinity="0"/>
 {_corridor_visual(W, x0, x1)}
+    <geom name="floor_sense" type="plane" pos="{xm:.2f} 0 0" size="{0.5 * (x1 - x0) + 20:.2f} 12 0.1" rgba="0.5 0.5 0.5 0.3" {sense}/>
 {wall('left_wall', 0.5 * W + 0.5 * th)}
 {wall('right_wall', -0.5 * W - 0.5 * th)}
 {car('ego', '0.2 0.4 0.9 0.35', '0.08 0.32 0.85 1', '0.95 0.95 0.95 1')}
