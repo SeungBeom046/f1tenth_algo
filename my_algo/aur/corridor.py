@@ -95,8 +95,10 @@ class Corridor:
         local = self.p.guardrail_local_view and self._guardrail_locked
         if local:
             pairs = [(l, r) for l, r in pairs
-                     if abs(l.heading - self.heading) <= math.radians(5)
-                     and abs(r.heading - self.heading) <= math.radians(5)]
+                     if (abs(l.heading - self.heading) <= math.radians(5)
+                         and abs(r.heading - self.heading) <= math.radians(5))
+                     or (min(l.span, r.span) >= 3 * self.p.corridor_min_span
+                         and min(len(l.points), len(r.points)) >= 3 * self.p.corridor_min_points)]
         if pairs:
             l, r = min(pairs, key=lambda pair: (
                 self._continuity_cost(pair[0], W) + self._continuity_cost(pair[1], W) if local else 0.0,

@@ -110,3 +110,12 @@ def test_initial_wall_confirmation_counts_distinct_frames():
     assert not cor.valid
     cor.update([], stamp=.2)
     assert cor.valid
+
+
+def test_well_supported_pair_can_follow_real_vehicle_rotation():
+    cor = Corridor(P)
+    cor._wall_lines = lambda pts, side, width: [line(side, .5, 0.0, 40)]
+    initialize(cor)
+    cor._wall_lines = lambda pts, side, width: [line(side, .5, math.radians(20), 40)]
+    cor._guardrail_update({1: [], -1: []}, None)
+    assert cor.valid and abs(math.degrees(cor.heading) - 20) < .01
