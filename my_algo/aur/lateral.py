@@ -19,10 +19,14 @@ class Lateral:
         self.err = None
         self.steer = 0.0
         self.i_term = 0.0       # 적분항 [rad] (트림 보정)
+        self.heading = None
 
     def step(self, ego_lateral, y_target, dt, heading=0.0):
         """scan마다 한 번 부른다. heading: 통로 기준 차 헤딩 [rad]. 반환: 조향각 [rad] (왼쪽 양수)."""
         p = self.p
+        if p.experiment_safety:
+            self.heading = heading if self.heading is None else 0.5 * (self.heading + heading)
+            heading = self.heading
         self.y_ref += _clamp(y_target - self.y_ref, -p.y_ref_rate * dt, p.y_ref_rate * dt)
         error = 2.0 * (self.y_ref - ego_lateral)
         a = p.wall_error_filter_alpha

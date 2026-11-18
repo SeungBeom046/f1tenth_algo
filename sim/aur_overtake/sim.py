@@ -106,7 +106,11 @@ class Car:
         self.y_ref = 0.0
         self.scripted = None        # (y, yaw): 선행차 yaw 고정 양보 중일 때의 자세
         a = cfg['aeb']      # 나머지 기본값 = launch/lidar_drive.launch.py 값
-        self.aeb = AEBSafetyModel(path_margin=a['path_margin'], bumper_emergency_distance=a['bumper_emergency_distance'],
+        aeb_type = AEBSafetyModel
+        if p.experiment_safety:
+            from my_algo.aur.emergency import ExperimentAEB
+            aeb_type = ExperimentAEB
+        self.aeb = aeb_type(path_margin=a['path_margin'], bumper_emergency_distance=a['bumper_emergency_distance'],
                                   vehicle_half_width=a.get('vehicle_half_width', 0.15),
                                   lidar_to_bumper_dist=p.lidar_to_front,
                                   model=a['model'], ttc_threshold=a['ttc_threshold'], curved_band=a['curved_band'],
@@ -126,7 +130,10 @@ class Car:
         if sim.cfg['scan'].get('level', False):
             # 실차 launch level_scan과 같다: 라이다 장착 기울기를 되돌린 수평 프레임(livox_level)에서 높이 띠를 자른다
             cloud = cloud @ self.lidar.R_mount.T
-        scan = cloud_to_scan(cloud, sim.cfg['scan'])
+        scan_params = sim.cfg['scan']
+        if sim.p.experiment_safety:
+            scan_params = dict(scan_params, min_height=-0.20)
+        scan = cloud_to_scan(cloud, scan_params)
         self.scan_ns = SimpleNamespace(**dict(scan, ranges=scan['ranges'].tolist()))
         self.points = scan_to_points(scan['ranges'].tolist(), scan['angle_min'], scan['angle_increment'],
                                      scan['range_min'], scan['range_max'])

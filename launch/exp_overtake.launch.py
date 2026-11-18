@@ -23,6 +23,7 @@ def _scan_nodes(context):
     level = LaunchConfiguration('level_scan').perform(context).lower() in ('true', '1', 'yes')
     pitch = LaunchConfiguration('lidar_pitch').perform(context)
     roll = LaunchConfiguration('lidar_roll').perform(context)
+    safety = LaunchConfiguration('experiment_safety').perform(context).lower() in ('true', '1', 'yes')
     nodes = []
     if level:
         nodes.append(Node(package='tf2_ros', executable='static_transform_publisher', name='tf_livox_level',
@@ -32,7 +33,7 @@ def _scan_nodes(context):
         executable='pointcloud_to_laserscan_node',
         name='pointcloud_to_laserscan',
         parameters=[{
-            'min_height': -0.1, 'max_height': 0.5,
+            'min_height': -0.20 if safety else -0.1, 'max_height': 0.5,
             'angle_min': -3.14159, 'angle_max': 3.14159, 'angle_increment': 0.00436,
             'scan_time': 0.1, 'range_min': 0.05, 'range_max': 20.0,
             'use_inf': True, 'inf_epsilon': 1.0, 'target_frame': 'livox_level' if level else 'livox_frame',
@@ -69,6 +70,8 @@ def generate_launch_description():
         DeclareLaunchArgument('lidar_roll', default_value='0.0023', description='라이다 roll [rad]'),
         DeclareLaunchArgument('lidar_to_bumper', default_value='0.28', description='라이다 → 앞범퍼 [m] (AEB, 실측 2026-11-03; config lidar_to_front와 같게)'),
         DeclareLaunchArgument('speed_source', default_value='sensors_core', description='sensors_core | command'),
+        DeclareLaunchArgument('experiment_safety', default_value='false', description='추적 소실 정지·AEB 정지 유지·헤딩 필터'),
+        DeclareLaunchArgument('stationary_pass', default_value='false', description='method a 전용 정지차 우회 시험, 앞차 간격 1.5 m 이상'),
         OpaqueFunction(function=_scan_nodes),
         Node(
             package='my_algo',
@@ -78,6 +81,8 @@ def generate_launch_description():
                 'role': arg('role', str), 'intent': arg('intent', str), 'run_id': arg('run_id', str),
                 'd_y': arg('d_y', float), 'W': arg('W', float), 'speed_source': arg('speed_source', str),
                 'method': arg('method', str), 't_d': arg('t_d', float), 'steer': arg('steer', float),
+                'experiment_safety': arg('experiment_safety', bool),
+                'stationary_pass': arg('stationary_pass', bool),
             }],
         ),
         Node(
@@ -90,6 +95,7 @@ def generate_launch_description():
                 'command_timeout_sec': 1.00,
                 # 시뮬 scenario.yaml aeb와 같은 값: 띠 ±0.16 m(양보 차선 벽 여유 0.235 m보다 좁게), TTC 0.35 s
                 'aeb_model': 'geometric',
+                'experiment_safety': arg('experiment_safety', bool),
                 'aeb_curved_band': True,
                 # 휜 띠가 조향을 크게 꺾을 때 옆에 나란한 벽을 앞 장애물로 잡지 않게 (실차 2026-11-17, scenario.yaml aeb와 같은 값)
                 'aeb_curve_max_steering': 0.3,

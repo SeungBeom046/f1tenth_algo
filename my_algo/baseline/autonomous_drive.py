@@ -100,6 +100,7 @@ class AutonomousDriveNode(Node):
         self.declare_parameter('aeb_curve_max_steering', 0.0)
         # True면 휜 띠와 직선 띠 둘 다에 든 점만 AEB 대상 (옆에 나란한 벽 무시). False = 기존 동작.
         self.declare_parameter('aeb_band_intersect', False)
+        self.declare_parameter('experiment_safety', False)
 
         # 직진 서보 값 (조향 0 rad일 때 VESC 서보 위치). 차마다 트림이 다르면 보정 실험으로 정한다.
         # 차가 왼쪽으로 흐르면 값을 키우고(오른쪽으로 꺾임), 오른쪽으로 흐르면 줄인다. 기본 0.5 = 기존 동작.
@@ -118,7 +119,11 @@ class AutonomousDriveNode(Node):
         self.servo_center = float(self.get_parameter('servo_center').value)
         self.servo_gain = float(self.get_parameter('servo_gain').value)
 
-        self.aeb = AEBSafetyModel(
+        aeb_type = AEBSafetyModel
+        if self.get_parameter('experiment_safety').value:
+            from my_algo.aur.emergency import ExperimentAEB
+            aeb_type = ExperimentAEB
+        self.aeb = aeb_type(
             ttc_threshold=float(self.get_parameter('aeb_ttc_threshold').value),
             lidar_to_bumper_dist=float(
                 self.get_parameter('lidar_to_bumper_dist').value),
@@ -197,6 +202,8 @@ class AutonomousDriveNode(Node):
         was_auto = self.auto_mode
         self.auto_mode = msg.data
         if was_auto and not self.auto_mode:
+            if self.get_parameter('experiment_safety').value:
+                self.aeb.reset()
             self.publish_drive_command(0.0, 0.0, center_steering=True)
             self.publish_aeb_state(False, 'auto_off')
             print_event_line('[Drive] AUTO off: stop')

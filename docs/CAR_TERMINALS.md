@@ -321,6 +321,36 @@ ros2 launch my_algo exp_overtake.launch.py role:=straight steer:=0.2 servo_cente
 
 높이 20 cm 가드레일·바깥 복도 벽이 함께 있는 MuJoCo 회귀로 확인한 기능이다. **실차 미확인**.
 
+### 정지차 충돌 방지와 정지차 우회 시험 (2026-11-18)
+
+`experiment_safety:=true`는 앞차 추적 소실 시 정지하고, 가까운 앞차가 먼 점으로 바뀌는 재초기화를 차단한다.
+헤딩 감쇠 입력에 0.5 저역 필터를 적용한다. scan 높이 하한은 라이다 원점 기준 −0.20 m로 내려 낮은 차체를 포함한다.
+장착 높이 0.24 m·수평 프레임 가정에서 지면 약 4 cm 위부터다. 실제 바닥 제거와 직진성은 **실차 미확인**이다.
+
+AEB는 `/vesc/odom` 속도가 0이어도 요청 ERPM으로 환산한 속도 이상을 사용한다.
+긴급 정지 후에는 `/scan` 점이 사라져도 정지를 유지하며 `/aeb/status`에 `latched`가 표시된다.
+해제는 장애물을 치우고 AUTO off → on으로 한다. Foxy·Jazzy 모두 아래 명령을 지원한다.
+
+```bash
+ros2 topic pub --once /autonomous_mode std_msgs/msg/Bool "{data: false}"
+ros2 topic pub --once /autonomous_mode std_msgs/msg/Bool "{data: true}"
+```
+
+터미널의 `선행차 d`는 ego 앞범퍼에서 관측한 앞차 표면까지의 거리다. 라이다→앞범퍼 0.28 m를 뺀 값이다.
+앞차도 같은 라이다 위치라면 뒤범퍼→라이다는 약 0.22 m다. 라이다 본체만 보이는 반환은 실제 차간 거리를 더 크게 보일 수 있다.
+새 모드는 기존 앞차와 이어지는 좁은 반환에 0.22 m를 추가 차감하며, AEB도 정면의 좁은 부분 반환에 0.22 m 여유를 둔다.
+이는 부분 관측에 대한 보수적 처리이며, 앞차 뒷범퍼를 직접 측정했다고 보장하지 않는다.
+
+방법 d는 앞차의 양보 움직임을 확인해야 추월한다. 한쪽에 세워 둔 정지차를 지나는 시험에는 아래의 별도 옵션을 사용한다.
+앞차를 오른쪽에 정지시키고 앞뒤 간격 2.5 m에서 시작한 MuJoCo 조건을 확인했다. 초기 관측 간격이 1.5 m 미만이면 조기 추월에 진입하지 않는다.
+
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=ego method:=a W:=1.0 experiment_safety:=true stationary_pass:=true
+```
+
+두 차가 움직이는 원래 의도 추정 실험은 `method:=d stationary_pass:=false`를 쓴다.
+정지차 우회 모드는 초기 관측에 횡 여유가 있을 때 멀리서 차선을 바꾸며, 양보 의도 추정 비교 결과와 별도로 기록한다.
+
 ### 검정이 (앞차): 시나리오별 명령
 
 환경 설정 (터미널 5를 열 때마다):

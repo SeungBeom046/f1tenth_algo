@@ -8,7 +8,7 @@ from dataclasses import replace
 
 from my_algo.aur.params import EXPERIMENT_OVERRIDES, AurParams
 
-P = replace(AurParams(), **EXPERIMENT_OVERRIDES)     # 실험 설정 (exp_common.yaml과 같음)
+P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, experiment_safety=False))
 
 
 def states(log):

@@ -36,6 +36,8 @@ class EgoFSM:
         if method not in ('a', 'b', 'c', 'd'):
             raise ValueError('method는 a|b|c|d: %r' % (method,))
         self.p = p
+        if p.stationary_pass and (method != 'a' or not p.experiment_safety):
+            raise ValueError('stationary_pass는 method a와 experiment_safety가 필요하다')
         self.method = method
         self.belief = Belief(p)
         self.state = 'WAIT'
@@ -71,6 +73,8 @@ class EgoFSM:
         """방법별 종방향 명령. 선행차가 안 보이면 v_B_nominal."""
         p = self.p
         if trk is None:
+            if p.experiment_safety and self._last is not None:
+                return 0.0
             return p.v_B_nominal
         if self.method == 'd':
             return min(p.v_pass, self.v_lim)
@@ -90,7 +94,7 @@ class EgoFSM:
         reason = self.method
         y_ref = 0.0
         v = self._follow_speed(trk)
-        if self.state in ('APPROACH', 'PROBE'):
+        if self.state in ('APPROACH', 'PROBE') or (p.stationary_pass and self.state == 'WAIT'):
             reason = self._decide(obs, trk, W, reason)
         if self.state == 'PASS' and not self._overlapped and obs.valid:
             if self._check_pass_abort(obs, W):
@@ -114,6 +118,10 @@ class EgoFSM:
             y_ref, v, reason = -delta, p.v_B_nominal, 'done'
 
         v = self._apply_min_speed(obs, v)
+        if p.experiment_safety and self._last is not None and not obs.valid \
+                and (self.state in ('WAIT', 'APPROACH', 'PROBE', 'FOLLOW', 'RETREAT')
+                     or (self.state == 'PASS' and not self._cleared and not self._overlapped)):
+            v, reason = 0.0, 'front_track_lost'
         return v, y_ref, self.state, reason
 
     def _update_track_and_safety(self, obs):
@@ -123,6 +131,9 @@ class EgoFSM:
             self._last = obs
         trk = self._last if self._last is not None and obs.t - self._last.t <= p.track_hold else None
         if trk is not None:
+            if p.experiment_safety and not obs.valid:
+                # 마지막 거리를 그대로 유지하면 주행한 만큼의 접근을 무시하게 된다.
+                trk = trk._replace(d=max(0.0, trk.d - max(0.0, obs.v_e - trk.v_b) * (obs.t - trk.t)))
             self.d_safe = safety.d_safe(obs.v_e, trk.v_b, p)
             self.h = trk.d - self.d_safe
             self.v_lim = safety.v_lim(trk.d, trk.v_b, p)
@@ -133,6 +144,8 @@ class EgoFSM:
     def _start_and_update_belief(self, obs):
         """WAIT에서 t₀를 정하고, APPROACH·PROBE에서 belief를 갱신한다 (식 1~5, z = y_B 변위)."""
         p = self.p
+        if p.stationary_pass and self.t0 is None and obs.v_e > p.t0_speed_threshold:
+            self.t0 = obs.t
         if self.state == 'WAIT':
             self._prev = None
             if obs.v_e > p.t0_speed_threshold:
@@ -157,6 +170,9 @@ class EgoFSM:
         lat_ok = trk is not None and W is not None and self._lateral_ok(W, trk)
         if self.method == 'a':      # belief는 기록만 하고 판단에 쓰지 않는다
             go, give_up = waited >= p.T_wait_a and lat_ok, False
+            if p.stationary_pass:
+                # 정지차 모드는 충분히 멀리서 차선 변경을 시작한다. 가까우면 추종·정지만 한다.
+                go = obs.valid and lat_ok and obs.d >= 1.5
         else:
             go, give_up = self.decided == 'Y' and lat_ok, self.decided == 'NY'
         if go:
@@ -209,12 +225,16 @@ class EgoFSM:
         """PASS 속도: 선행차와 횡으로 완전히 어긋나고 추월 차선(+δ)에 도착하기 전에는 추종 속도, 그 뒤 v_pass.
         차선 변경 중 빠르면 틀어진 차체 앞에 벽이 AEB 한계 안으로 들어온다. 이미 옆에 겹쳤으면 바로 v_pass."""
         p = self.p
+        if p.stationary_pass and not self._cleared:
+            v = min(p.v_B_nominal, self.v_lim) if self.v_lim is not None else 0.0
         if self._overlapped:
             self._cleared = True
         if not self._cleared and self._last is not None:
             # 중심 간격 ≥ w + c 이면 옆으로 나란히 가도 c 이상 떨어진다. 그 전에는 추종 속도를 지킨다.
             self._cleared = obs.ego_lat - self._last.y_b >= p.w_car + p.c_lat
         in_lane = abs(obs.ego_lat - delta) < p.lane_change_tol
+        if p.stationary_pass and self._cleared:
+            return p.v_B_nominal, 'stationary_passing'
         if self._cleared and (in_lane or self._overlapped):
             return p.v_pass, 'passing'
         return v, reason

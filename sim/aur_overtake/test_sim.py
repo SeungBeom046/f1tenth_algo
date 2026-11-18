@@ -101,7 +101,8 @@ def test_aeb_flicker_while_stopped_not_counted_as_moving():
     # 정지 거리 0.25 m (2026-11-17 이전 값): 0.20이면 정지 간격 약 0.27 m 밖이라 깜빡임이 안 생긴다
     # 이 검사는 정지 중 상승 에지 집계용이다. 깜빡임을 재현하는 기존 벽 추정 조건도 고정한다.
     r = Sim('d', load_cfg(**{'leader.behavior': 'NY', 'leader.d_y': 1.0, 'lidar.range_noise_std': 0.02,
-                             'aeb.bumper_emergency_distance': 0.25}), corridor_guardrail=False).run()
+                             'aeb.bumper_emergency_distance': 0.25}), corridor_guardrail=False,
+            experiment_safety=False).run()
     assert r['N_AEB'] >= 3 and r['N_AEB_moving'] <= 1 and not r['collision']
 
 
@@ -242,3 +243,32 @@ def test_guardrail_runners_match_sim_with_hallway_points():
 
     sim._ego_frame, sim._leader_frame = checked_ego, checked_leader
     assert sim.run()['success'] and len(frames) > 100
+
+
+@pytest.mark.parametrize('height', [0.12, 0.25])
+def test_stationary_vehicle_bypass_with_same_lidar_mount(height):
+    # 전후 차량의 라이다 장착은 동일하다. 낮은 차체도 높이 필터 안에 들어와야 한다.
+    cfg = load_cfg(**{'start.gap0': 2.5, 'vehicle.height': height})
+    sim = Sim('a', cfg, experiment_safety=True, stationary_pass=True)
+    sim.leader.kin.y = -0.265
+
+    def stationary():
+        sim.leader.perceive(sim, False)
+        sim.leader.drive(sim, 0.0, -0.265)
+    sim._leader_frame = stationary
+    r = sim.run()
+    assert r['success'] and not r['collision'] and not r['deadlock']
+    assert r['N_AEB_moving'] == 0
+
+
+def test_stationary_vehicle_stops_method_d_with_zero_aeb_speed():
+    sim = Sim('d', load_cfg(**{'aeb.speed_source': 'zero'}), experiment_safety=True)
+    sim.leader.kin.y = -0.265
+
+    def stationary():
+        sim.leader.perceive(sim, False)
+        sim.leader.drive(sim, 0.0, -0.265)
+    sim._leader_frame = stationary
+    r = sim.run()
+    assert not r['collision'] and not r['pass_entered'] and r['gap_min'] >= sim.p.m_stop
+    assert sim.ego.aeb.latched

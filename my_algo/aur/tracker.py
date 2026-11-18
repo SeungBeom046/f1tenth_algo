@@ -111,20 +111,33 @@ class VehicleTracker:
         cands = [] if W is None else [
             c for c in self._clusters(self._aligned(points, heading), ego_lat, W)
             if 0.0 < c.x0 < p.track_x_max
-            and p.veh_width_min <= c.y1 - c.y0 <= p.veh_width_max
+            and (p.veh_width_min <= c.y1 - c.y0 <= p.veh_width_max
+                 or (p.experiment_safety and self._c is not None
+                     and c.y1 - c.y0 <= p.veh_width_max
+                     and abs((c.y0 + c.y1) / 2 - self._c[1]) <= p.wall_margin * 2
+                     and abs(c.x0 - self._d) <= p.track_jump_reset))
             and c.x1 - c.x0 <= p.veh_depth_max]
         if not cands:
             return Track(False, None, None, self._v_b, (), None)
         c = min(cands, key=lambda c: c.x0)
         d = c.x0
+        if p.experiment_safety and not self.rear and c.y1 - c.y0 < p.veh_width_min:
+            # 같은 장착의 라이다 등 차체 안쪽 일부만 보이면 실제 뒷범퍼는 더 가깝다.
+            d = max(0.0, d - p.lidar_to_rear)
         dt = None if self._t is None else t - self._t
+        if p.experiment_safety and self._d is not None and dt is not None:
+            # 가까운 앞차가 사라지고 복도 끝 등의 먼 점이 잡혀도 같은 차로 재초기화하지 않는다.
+            expected = self._d + (-1.0 if self.rear else 1.0) * (self._v_b - v_ego) * dt
+            if d - expected > p.track_jump_reset:
+                return Track(False, None, None, self._v_b, (), None)
         sgn = -1.0 if self.rear else 1.0
         # 거리 변화율 = ±(v_B − v_E). v_E는 아는 값이므로 상태를 v_B로 둔다.
         # (ḋ를 상태로 두면 ego가 가감속할 때 v_B = v_E + ḋ가 크게 튄다: 시뮬에서 급정지 추돌의 원인이었다)
         pred = None if dt is None else self._d + sgn * (self._v_b - v_ego) * dt
         if pred is None or not 0.0 < dt <= p.track_timeout or abs(d - pred) > p.track_jump_reset:
             # 새 물체: 상대속도 0(v_B = v_E)에서 시작한다. 수렴 전에는 AEB(relative)가 마지막 안전망.
-            self._d, self._v_b = d, max(0.0, v_ego)
+            self._d = d
+            self._v_b = 0.0 if p.experiment_safety else max(0.0, v_ego)
         else:
             self._d = pred + p.track_alpha * (d - pred)
             self._v_b = max(0.0, self._v_b + sgn * p.track_beta * (d - pred) / dt)

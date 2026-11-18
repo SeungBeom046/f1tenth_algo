@@ -90,6 +90,8 @@ class AurParams:
     corridor_min_points: int = 8
     corridor_wall_percentile: float = 0.35
     corridor_guardrail: bool = False   # 실측 W에 맞는 가까운 평행 벽 선택. 폭을 주지 않거나 벽이 무효면 정지
+    experiment_safety: bool = False    # 추적 소실·먼 점 점프 정지, 보수적 초기 속도, 헤딩 필터
+    stationary_pass: bool = False      # method a 전용, 정지차 시험임을 명시한 조기 차선 변경
     corridor_line_tol: float = 0.03    # 벽 직선에서 허용하는 점의 수직 오차 [m]
     corridor_width_tol: float = 0.10   # 실측 W와 벽 사이 거리의 허용 차이 [m]
     corridor_min_span: float = 0.20    # 벽 직선의 최소 전후 길이 [m]
