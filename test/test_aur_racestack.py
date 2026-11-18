@@ -1,5 +1,5 @@
-"""race_stack(ForzaETH)에서 옮긴 판단 보조 기능: 선행차 횡위치 예측(leader_pred_time).
-기본 off이며 꺼져 있으면 기존 판단과 같다."""
+"""race_stack(ForzaETH)에서 옮긴 판단 보조 기능: 선행차 횡위치 예측(leader_pred_time), 추월 조건 유지 시간(go_hold_s).
+둘 다 기본 off이며 꺼져 있으면 기존 판단과 같다."""
 from dataclasses import replace
 
 from my_algo.aur.ego_fsm import EgoFSM, Obs
@@ -16,7 +16,7 @@ def obs(t, y_b, d=0.8, ego_lat=0.0):
 
 def test_defaults_are_off():
     p = AurParams()
-    assert p.leader_pred_time == 0.0
+    assert p.leader_pred_time == 0.0 and p.go_hold_s == 0.0
 
 
 def test_leader_vlat_is_least_squares_slope():
@@ -69,3 +69,22 @@ def test_prediction_does_not_abort_a_steady_yielded_leader():
         o = obs(k * DT, -0.25 + (0.01 if k % 2 else -0.01), ego_lat=0.2)     # ±1 cm 잡음
         fsm._update_leader_vlat(o)
         assert not fsm._check_pass_abort(o, W)
+
+
+def _go_scan(p, gap_at=None):
+    """belief Y가 확정된 PROBE에서 횡 여유가 계속 맞을 때 PASS로 바뀐 scan 번호. gap_at scan에서는 여유가 없다."""
+    fsm = EgoFSM(p, 'd')
+    fsm.state, fsm.t_probe, fsm.decided = 'PROBE', 0.0, 'Y'
+    for k in range(1, 30):
+        o = obs(k * DT, 0.10 if k == gap_at else -0.25)
+        fsm._decide(o, o, W, 'd')
+        if fsm.state == 'PASS':
+            return k
+    return None
+
+
+def test_go_hold_delays_and_resets():
+    assert _go_scan(P) == 1
+    on = replace(P, go_hold_s=0.3)
+    assert _go_scan(on) == 4                    # 1에서 시작, 0.3 s 뒤
+    assert _go_scan(on, gap_at=3) == 7          # 3에서 끊겨 4부터 다시 센다

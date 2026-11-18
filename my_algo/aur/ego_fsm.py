@@ -15,9 +15,10 @@
     c 공격적 탐색: v_pass로 d_probe_c까지 접근, 판단은 b와 같음.
     d 제안:        v = min(v_pass, v_lim(d, v_B)) (기획안 식 8)로 d*(식 9)까지 접근, 판단은 b와 같음.
 
-race_stack(ForzaETH)에서 옮긴 보조 기능 (기본 off):
+race_stack(ForzaETH)에서 옮긴 보조 기능 (둘 다 기본 off):
     leader_pred_time: 횡 여유(go·중단)와 복귀 판정에 선행차 횡위치 예측 y_B + max(0, v_lat)·t_pred
                       (spliner의 상대 차 예측을 횡 방향, 왼쪽 움직임만 보수적으로)
+    go_hold_s:        go 조건이 이 시간 동안 끊김 없이 맞아야 PASS (state_machine의 splini_hyst_timer_sec)
 """
 from collections import namedtuple
 
@@ -66,6 +67,7 @@ class EgoFSM:
         self._y_b_most_yielded = None   # PASS 중 선행차가 가장 많이 비킨 횡위치 (복귀 판정 기준)
         self._yb_hist = []              # PASS 중 최근 y_B (abort_yb_window)
         self._yb_track = []             # 최근 유효 (t, y_B): 선행차 횡속도 (leader_vlat_window)
+        self._go_since = None           # go 조건이 끊김 없이 맞기 시작한 시각 (go_hold_s)
         self.leader_vlat = None         # 선행차 횡속도 추정 [m/s] (기록용, 왼쪽 +)
 
     # ------------------------------------------------------------ 방법별 종방향
@@ -207,6 +209,13 @@ class EgoFSM:
                 go = obs.valid and lat_ok and obs.d >= 1.5
         else:
             go, give_up = self.decided == 'Y' and lat_ok, self.decided == 'NY'
+        if p.go_hold_s > 0.0:
+            # race_stack splini_hyst_timer_sec: 조건이 go_hold_s 동안 끊김 없이 맞아야 PASS
+            if not go:
+                self._go_since = None
+            elif self._go_since is None:
+                self._go_since = obs.t
+            go = go and obs.t - self._go_since >= p.go_hold_s
         if go:
             self.state, reason = 'PASS', 'pass_start'
             self._y_b_most_yielded = trk.y_b

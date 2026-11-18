@@ -87,6 +87,7 @@ aur:
   abort_yb_window: 3        # TUNE: 추월 중단 판정 y_B를 최근 n개 중앙값으로 (라이다 튐 제거), 1이면 그 scan 값 | 개 | 임시 (2026-11-16 시뮬, 잡음 0.02 m W 2·3에서 가짜 중단 제거)
   leader_pred_time: 0.0     # TUNE: 선행차 횡위치 예측 시간 (race_stack spliner 상대 차 예측). 횡 여유·복귀 판정에 왼쪽으로 오는 움직임만 더함, 0이면 끔 | s | 임시 (2026-11-19 추가, 기본 off)
   leader_vlat_window: 5     # TUNE: 선행차 횡속도 최소제곱 기울기에 쓰는 최근 유효 y_B 수 | 개 | 임시 (2026-11-19 추가)
+  go_hold_s: 0.0            # TUNE: 추월 조건(go)이 끊김 없이 유지돼야 하는 시간 (race_stack splini_hyst_timer_sec), 0이면 끔 | s | 임시 (2026-11-19 추가, 기본 off)
   side_gate: 0.6            # TUNE: 측면 추적 연관 거리 | m | 임시
   # --- corridor ---
   corridor_sector_min_deg: 45.0     # TUNE: 벽 거리 측면 섹터 시작각 | deg | 측정 (lidar_reactive_drive와 같은 값)
