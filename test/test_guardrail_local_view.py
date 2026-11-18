@@ -97,7 +97,8 @@ def test_initialization_prefers_supported_rails_with_small_direction_difference(
     }
     cor._wall_lines = lambda pts, side, width: candidates[side]
     initialize(cor)
-    assert cor.valid and abs(math.degrees(cor.heading) + 4) < .01
+    # 지지점 많은 −4°·−1° 쌍을 골랐다 (corridor_heading_avg면 두 선의 길이 가중 평균, 아니면 −4°)
+    assert cor.valid and -4.01 < math.degrees(cor.heading) < -0.99
 
 
 def test_initial_wall_confirmation_counts_distinct_frames():
