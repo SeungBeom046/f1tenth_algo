@@ -9,6 +9,7 @@ gap follow(lidar_reactive_drive)와 카메라는 띄우지 않는다. 실행하�
 """
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -71,6 +72,7 @@ def generate_launch_description():
         DeclareLaunchArgument('lidar_to_bumper', default_value='0.28', description='라이다 → 앞범퍼 [m] (AEB, 실측 2026-11-03; config lidar_to_front와 같게)'),
         DeclareLaunchArgument('speed_source', default_value='sensors_core', description='sensors_core | command'),
         DeclareLaunchArgument('experiment_safety', default_value='true', description='추적 소실 정지·AEB 정지 유지·헤딩 필터'),
+        DeclareLaunchArgument('use_metrics_logger', default_value='true', description='종료 때 기본 주행과 같은 주행 요약 (autonomous_metrics_logger)'),
         DeclareLaunchArgument('stationary_pass', default_value='false', description='method a 전용 정지차 우회 시험, 앞차 간격 1.5 m 이상'),
         OpaqueFunction(function=_scan_nodes),
         Node(
@@ -108,6 +110,17 @@ def generate_launch_description():
                 'aeb_bumper_overlap_tolerance': 0.10,
                 'lidar_to_bumper_dist': arg('lidar_to_bumper', float),
                 'max_steering': arg('max_steering', float),
+                'servo_center': arg('servo_center', float),
+                'servo_gain': arg('servo_gain', float),
+            }],
+        ),
+        Node(
+            package='my_algo',
+            executable='autonomous_metrics_logger',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('use_metrics_logger')),
+            parameters=[{
+                'lidar_to_bumper_dist': arg('lidar_to_bumper', float),
                 'servo_center': arg('servo_center', float),
                 'servo_gain': arg('servo_gain', float),
             }],

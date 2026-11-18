@@ -11,9 +11,11 @@ ego (method a|b|c|d): 접근 → belief로 Y/NY 판단 → 추월(PASS → MERGE
   상태 전이·belief 확정·추월 중단이 터미널에 [EXP ego] 줄로 찍힌다.
 straight: 서보 중심 보정용. 조향 0으로 v_B_nominal 직진만 하고, 벽으로 잰 횡위치·헤딩을 0.5 s마다 찍는다.
 """
+import collections
 import json
 import math
 import os
+import time
 
 import rclpy
 from ament_index_python.packages import get_package_share_directory
@@ -21,7 +23,7 @@ from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 from my_algo.aur.corridor import Corridor
 from my_algo.aur.ego_runner import EgoRunner
@@ -108,7 +110,13 @@ class ExpPlanner(Node):
         self.create_subscription(LaserScan, '/scan', self.scan_callback, qos)
         self.cmd_pub = self.create_publisher(String, '/reactive/lidar_command', 10)
         self.state_pub = self.create_publisher(String, '/exp/state', 10)
+        self.create_subscription(Bool, '/aeb/active', self.aeb_callback, 10)
+        self.create_subscription(String, '/aeb/status', self.aeb_status_callback, 10)
         self.prev = {}
+        self.stats = RunStats()
+        self.tags = (None, None)    # 직전 인식 태그 (바뀔 때만 터미널에 찍는다)
+        self.aeb_on = False
+        self.aeb_status = ''
 
         Wtxt = W if W > 0 else '벽 추정'
         if self.role == 'leader':
@@ -132,15 +140,35 @@ class ExpPlanner(Node):
         # shortcut: /sensors/core speed를 ERPM으로 가정 (미확인, 보정 실험에서 확인)
         self.v = abs(msg.state.speed) / self.p.erpm_gain
 
+    def aeb_status_callback(self, msg):
+        self.aeb_status = msg.data
+
+    def aeb_callback(self, msg):
+        if msg.data and not self.aeb_on:
+            self.stats.aeb(self.aeb_status)
+            self.event('AEB 작동: %s' % self.aeb_status)
+        self.aeb_on = msg.data
+
     def scan_callback(self, msg):
         t = self.get_clock().now().nanoseconds / 1e9
         v = self.v if self.speed_source == 'sensors_core' else self.v_cmd
+        t_cpu = time.perf_counter()
         if self.role == 'leader':
             state, mode, steer, reason = self.leader_step(t, msg, v)
         elif self.role == 'straight':
             state, mode, steer, reason = self.straight_step(t, msg, v)
         else:
             state, mode, steer, reason = self.ego_step(t, msg, v)
+        if self.role != 'straight':
+            rail, lead = perception_tags(self.runner)
+            if rail != self.tags[0]:
+                self.event('인식: %s' % rail)
+            if lead.split()[0] != self.tags[1]:
+                self.event('인식: %s' % lead)
+            self.tags = (rail, lead.split()[0])
+            reason = '%s | %s %s' % (reason, rail, lead)
+            self.stats.scan(t, v, self.v_cmd, (time.perf_counter() - t_cpu) * 1e3, state, reason.split(' |')[0],
+                            rail, lead.split()[0])
         self.cmd_pub.publish(String(data=command_to_json(ReactiveDriveCommand(
             steering_rad=steer, rpm=self.v_cmd * self.p.erpm_gain, mode=mode, confidence=1.0, reason=reason))))
         self.state_pub.publish(String(data=json.dumps(state)))
@@ -208,6 +236,95 @@ class ExpPlanner(Node):
         return s, 'EGO_' + st, steer, reason
 
 
+def perception_tags(runner):
+    """터미널·명령 reason에 붙일 인식 상태. rail_ok | rail_hold(직전 추정 유지) | rail_init | rail_lost,
+    lead_detect <d> | lead_pending(최초 3 scan 확인) | lead_jump(먼 점 거부) | lead_lost(보이다 사라짐) | lead_none."""
+    cor, trk, tracker = runner.corridor, runner.track, runner.tracker
+    if cor.valid:
+        rail = 'rail_ok' if cor.left is not None else 'rail_hold'
+    else:
+        rail = 'rail_init' if cor.initializing else 'rail_lost'
+    if trk is not None and trk.valid:
+        lead = 'lead_detect %.2fm' % trk.d
+    elif tracker.pending_d is not None:
+        lead = 'lead_pending %.2fm' % tracker.pending_d
+    elif tracker.status == 'distance_jump':
+        lead = 'lead_jump'
+    else:
+        lead = 'lead_lost' if tracker._d is not None else 'lead_none'
+    return rail, lead
+
+
+class RunStats:
+    """종료(Ctrl+C) 때 찍는 실험 요약. 기본 주행의 autonomous_metrics_logger 요약과 별도로 추월 쪽 인식·판단을 센다."""
+
+    def __init__(self):
+        self.t0 = self.t_last = None
+        self.n = 0
+        self.dist = 0.0
+        self.v_max = self.v_sum = 0.0
+        self.cpu = []
+        self.dt = []
+        self.states = []
+        self.reasons = collections.Counter()
+        self.rail = collections.Counter()
+        self.lead = collections.Counter()
+        self.d_min = None
+        self.aeb_reasons = []
+
+    def aeb(self, status):
+        self.aeb_reasons.append(status)
+
+    def scan(self, t, v, v_cmd, cpu_ms, state, reason, rail, lead):
+        if self.t_last is not None:
+            dt = t - self.t_last
+            self.dt.append(dt)
+            self.dist += v * dt
+        self.t0 = t if self.t0 is None else self.t0
+        self.t_last = t
+        self.n += 1
+        self.v_max = max(self.v_max, v)
+        self.v_sum += v
+        self.cpu.append(cpu_ms)
+        st = state.get('state') or state.get('mode')
+        if st and (not self.states or self.states[-1] != st):
+            self.states.append(st)
+        self.reasons['stop:' + reason if v_cmd <= 0.0 else 'go'] += 1
+        self.rail[rail] += 1
+        self.lead[lead] += 1
+        # 추월 중(PASS 이후)의 측면 추적 거리는 음수가 되므로 뒤따르는 동안만 센다
+        d = state.get('d') if state.get('valid') and st in ('APPROACH', 'PROBE', 'FOLLOW', 'WAIT') else state.get('d_rear')
+        if d is not None:
+            self.d_min = d if self.d_min is None else min(self.d_min, d)
+
+    def summary(self, role):
+        if not self.n:
+            return '[EXP %s] 요약: scan 없음' % role
+
+        def pct(counter):
+            return ', '.join('%s %.0f%%' % (k, 100.0 * c / self.n) for k, c in counter.most_common())
+
+        cpu = sorted(self.cpu)
+        dt = sorted(self.dt) or [0.0]
+        lines = [
+            '',
+            '========== EXP %s 요약 ==========' % role,
+            '주행 시간            : %.1f s (scan %d개, 주기 평균 %.0f ms / 최대 %.0f ms)' % (
+                self.t_last - self.t0, self.n, 1e3 * sum(dt) / len(dt), 1e3 * dt[-1]),
+            '처리 시간            : 평균 %.0f ms / 95%% %.0f ms / 최대 %.0f ms (100 ms 넘으면 scan을 못 따라간다)' % (
+                sum(cpu) / len(cpu), cpu[int(0.95 * (len(cpu) - 1))], cpu[-1]),
+            '거리·속도            : %.2f m, 평균 %.2f m/s, 최대 %.2f m/s' % (self.dist, self.v_sum / self.n, self.v_max),
+            '상태 흐름            : %s' % ' → '.join(self.states),
+            '레일 인식            : %s' % pct(self.rail),
+            '선행차 인식          : %s' % pct(self.lead),
+            '명령                 : %s' % pct(self.reasons),
+            '선행차 최소 거리     : %s' % ('없음' if self.d_min is None else '%.2f m' % self.d_min),
+            'AEB 작동             : %d회%s' % (len(self.aeb_reasons), ''.join('\n  - ' + r for r in self.aeb_reasons[:5])),
+            '=================================',
+        ]
+        return '\n'.join(lines)
+
+
 def main(args=None):
     rclpy.init(args=args)
     node = ExpPlanner()
@@ -216,6 +333,8 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        if node.role != 'straight':
+            print(node.stats.summary(node.role), flush=True)
         node.cmd_pub.publish(String(data=command_to_json(ReactiveDriveCommand(mode='STOP', reason='exp_planner_exit'))))
         node.destroy_node()
         if rclpy.ok():      # jazzy는 Ctrl+C 때 먼저 shutdown한다
