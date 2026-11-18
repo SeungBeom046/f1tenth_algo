@@ -26,12 +26,14 @@ class Corridor:
         self.valid = False          # 이번 scan에서 양쪽 벽이 다 보였는가
         self.heading = 0.0          # 통로 방향 기준 차 헤딩 [rad] (왼쪽 양수). 벽 점 직선 맞춤, 못 구하면 직전 값
         self._guardrail_locked = False
+        self.wall_idx = set()
 
     def update(self, points, exclude_idx=(), W_fixed=None):
         """W_fixed는 선행차용이며 ego_lateral = right − W/2로 계산한다.
         가드레일 모드는 양쪽 벽으로 초기화하고, 한쪽이 가려지면 직전 위치에 맞는 벽을 쓴다.
         기존 모드는 오른쪽 벽만 쓴다."""
         p = self.p
+        self.wall_idx = set()
         ex = set(exclude_idx)
         lo = math.radians(p.corridor_sector_min_deg)
         hi = math.radians(p.corridor_sector_max_deg)
@@ -116,6 +118,7 @@ class Corridor:
         self.ego_lateral = self.right - W / 2 if W_fixed is not None else (self.right - self.left) / 2
         self.W_est = W
         self.valid = self._guardrail_locked = True
+        self.wall_idx = {q.i for line in selected for q in line.points}
         return self
 
     def _wall_lines(self, pts, side, W):

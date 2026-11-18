@@ -41,10 +41,11 @@ def test_leader_runner_matches_sim_leader(behavior):
 
 
 @pytest.mark.parametrize('behavior', ['Y', 'NY'])
-def test_ego_runner_matches_sim_ego(behavior):
+@pytest.mark.parametrize('recovery', [False, True])
+def test_ego_runner_matches_sim_ego(behavior, recovery):
     # 실차 노드가 쓰는 EgoRunner에 시뮬 ego와 같은 scan·속도를 넣으면 같은 명령·상태가 나와야 한다
     from my_algo.aur.ego_runner import EgoRunner
-    sim = Sim('d', load_cfg(**{'leader.behavior': behavior, 'leader.d_y': 1.0}))
+    sim = Sim('d', load_cfg(**{'leader.behavior': behavior, 'leader.d_y': 1.0}), track_recovery=recovery)
     runner = EgoRunner(sim.p, 'd')
     frame, out = sim._ego_frame, []
 
@@ -217,12 +218,13 @@ def test_low_guardrail_wall_collision_is_reproduced_when_disabled():
     assert r['collision'] == 'ego_wall'
 
 
-def test_guardrail_runners_match_sim_with_hallway_points():
+@pytest.mark.parametrize('recovery', [False, True])
+def test_guardrail_runners_match_sim_with_hallway_points(recovery):
     from my_algo.aur.ego_runner import EgoRunner
     from my_algo.aur.leader_runner import LeaderRunner
     cfg = load_cfg(**{'track.wall_height': 0.20, 'leader.d_y': 1.0})
     cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
-    sim = Sim('d', cfg, W=1.0, corridor_guardrail=True)
+    sim = Sim('d', cfg, W=1.0, corridor_guardrail=True, track_recovery=recovery)
     ego = EgoRunner(sim.p, 'd')
     leader = LeaderRunner(sim.p, 'Y', sim.seed, d_y=1.0)
     ego_frame, leader_frame = sim._ego_frame, sim._leader_frame
@@ -275,3 +277,15 @@ def test_stationary_vehicle_stops_method_d_with_zero_aeb_speed(height):
     r = sim.run()
     assert not r['collision'] and not r['pass_entered'] and r['gap_min'] >= sim.p.m_stop
     assert sim.ego.kin.v < 0.01
+
+
+@pytest.mark.parametrize('seed', [0, 1])
+def test_noisy_low_guardrails_do_not_create_permanent_front_loss(seed):
+    cfg = load_cfg(**{'track.wall_height': 0.20, 'start.gap0': 20.0,
+                      'start.leader_delay': 30.0, 'sim.max_time': 6.0,
+                      'lidar.range_noise_std': 0.02})
+    cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
+    sim = Sim('d', cfg, seed=seed, track_recovery=True)
+    r = sim.run()
+    assert not r['collision'] and sim.ego.kin.travel > 3.0
+    assert not any(row['reason'] == 'front_track_lost' for row in sim.log)

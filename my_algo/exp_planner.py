@@ -194,6 +194,7 @@ class ExpPlanner(Node):
                  b=fsm.belief.prob_yield(), decided=fsm.decided,
                  t0=fsm.t0, t_decided=fsm.t_decided, n_abort=fsm.abort_count)
         s.update(corridor_valid=cor.valid, wall_left=cor.left, wall_right=cor.right)
+        s.update(track_status=self.runner.tracker.status, pending_d=self.runner.tracker.pending_d)
         prev, self.prev = self.prev, s
         if prev.get('n_abort', 0) != s['n_abort']:
             self.event('추월 중단 (선행차가 다시 들어오거나 왼쪽 여유 부족)')

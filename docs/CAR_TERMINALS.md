@@ -351,6 +351,17 @@ ros2 launch my_algo exp_overtake.launch.py role:=ego method:=a W:=1.0 experiment
 두 차가 움직이는 원래 의도 추정 실험은 `method:=d stationary_pass:=false`를 쓴다.
 정지차 우회 모드는 초기 관측에 횡 여유가 있을 때 멀리서 차선을 바꾸며, 양보 의도 추정 비교 결과와 별도로 기록한다.
 
+### front_track_lost 확인
+
+`front_track_lost`는 이전에 확인한 앞차를 현재 scan에서 추적하지 못해 정지한 상태다.
+가드레일 유효 여부는 `/exp/state`의 `corridor_valid`로 별도로 확인한다.
+`track_recovery` 모드는 현재 프레임에서 찾은 가드레일 점을 앞차 후보에서 제외하고, 최초 앞차는 연속 3 scan 동안 확인한다.
+확인 중에는 `front_track_pending`·`track_status=confirming`과 속도 명령 0이 나오며, 일시 후보가 사라지면 이전 앞차로 저장하지 않는다.
+확인된 앞차가 끊긴 경우는 정지를 유지한다. 이후 비슷한 거리에 앞차가 다시 나타나면 재인식할 수 있지만 갑자기 먼 점으로 바뀌는 것은 차단한다.
+
+`/exp/state`의 `track_status`는 `no_candidate`(앞차 후보 없음), `confirming`(최초 후보 확인 중), `tracking`(추적), `distance_jump`(먼 거리 점프 차단)이다.
+가드레일이 안 잡히면 `reason=corridor_invalid`다. 이 기능의 실제 환경 효과는 **실차 미확인**이다.
+
 ### 검정이 (앞차): 시나리오별 명령
 
 환경 설정 (터미널 5를 열 때마다):

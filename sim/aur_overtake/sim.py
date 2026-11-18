@@ -141,7 +141,11 @@ class Car:
         if cor.W_est is None:
             cor.update(self.points, W_fixed=self.W_fixed)
         W = self.W_fixed or (p.W if p.W is not None else cor.W_est)
-        args = (self.points, sim.t, self.kin.v, cor.ego_lateral, W, cor.heading)
+        tracking_points = self.points
+        if self.name == 'ego' and p.track_recovery and p.experiment_safety:
+            cor.update(self.points)
+            tracking_points = [q for q in self.points if q.i not in cor.wall_idx]
+        args = (tracking_points, sim.t, self.kin.v, cor.ego_lateral, W, cor.heading)
         self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
         self.front_track = self.shadow.update(*args)
         cor.update(self.points, self.track.idx, W_fixed=self.W_fixed)
@@ -150,7 +154,7 @@ class Car:
     def drive(self, sim, v_cmd, y_ref):
         """종방향 명령 v_cmd와 횡 목표 y_ref → (rpm, 조향) = /reactive/lidar_command."""
         self.v_cmd, self.y_ref = v_cmd, y_ref
-        if sim.p.corridor_guardrail and not self.corridor.valid:
+        if (sim.p.corridor_guardrail and not self.corridor.valid) or self.tracker.pending_d is not None:
             self.v_cmd = v_cmd = 0.0
             steer = self.lateral.steer
         else:
@@ -262,6 +266,9 @@ class Sim:
         if self.p.corridor_guardrail and not ego.corridor.valid:
             ego.drive(self, 0.0, ego.lateral.y_ref)
             return 0.0, ego.lateral.y_ref, self.fsm.state, 'corridor_invalid'
+        if ego.tracker.pending_d is not None:
+            ego.drive(self, 0.0, ego.lateral.y_ref)
+            return 0.0, ego.lateral.y_ref, self.fsm.state, 'front_track_pending'
         v_cmd, y_ref, state, reason = self.fsm.step(Obs(
             self.t, ego.kin.v, trk.valid, trk.d, trk.y_b, trk.v_b, ego.corridor.ego_lateral, W, trk.front_rel, trk.y_l))
         if self.t < self.cfg['start']['ego_delay']:

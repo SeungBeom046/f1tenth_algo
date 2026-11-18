@@ -46,6 +46,11 @@ class VehicleTracker:
         self._v_b = 0.0
         self._c = None          # 직전 클러스터 중심 (view 좌표계)
         self._front = None      # 직전 클러스터 x 최댓값 (view 좌표계)
+        self._candidate = None
+        self._candidate_t = None
+        self._candidate_count = 0
+        self.pending_d = None
+        self.status = 'no_candidate'
 
     def _clusters(self, points, ego_lat, W, fov=True):
         p = self.p
@@ -118,9 +123,26 @@ class VehicleTracker:
                      and abs(c.x0 - self._d) <= p.track_jump_reset))
             and c.x1 - c.x0 <= p.veh_depth_max]
         if not cands:
+            self.pending_d = None
+            self._candidate_count = 0
+            self.status = 'no_candidate'
             return Track(False, None, None, self._v_b, (), None)
         c = min(cands, key=lambda c: c.x0)
         d = c.x0
+        recovery = p.track_recovery and p.experiment_safety and not self.rear
+        if recovery and self._d is None:
+            previous = self._candidate
+            consistent = (previous is not None and self._candidate_count > 0
+                          and 0.0 < t - self._candidate_t <= p.track_timeout
+                          and abs(c.x0 - previous.x0) <= p.track_jump_reset
+                          and abs((c.y0 + c.y1 - previous.y0 - previous.y1) / 2) <= 0.10)
+            self._candidate_count = self._candidate_count + 1 if consistent else 1
+            self._candidate, self._candidate_t = c, t
+            if self._candidate_count < 3:
+                self.pending_d = d
+                self.status = 'confirming'
+                return Track(False, None, None, self._v_b, (), None)
+        self.pending_d = None
         if p.experiment_safety and not self.rear and c.y1 - c.y0 < p.veh_width_min:
             # 같은 장착의 라이다 등 차체 안쪽 일부만 보이면 실제 뒷범퍼는 더 가깝다.
             d = max(0.0, d - p.lidar_to_rear)
@@ -128,7 +150,9 @@ class VehicleTracker:
         if p.experiment_safety and self._d is not None and dt is not None:
             # 가까운 앞차가 사라지고 복도 끝 등의 먼 점이 잡혀도 같은 차로 재초기화하지 않는다.
             expected = self._d + (-1.0 if self.rear else 1.0) * (self._v_b - v_ego) * dt
-            if d - expected > p.track_jump_reset:
+            limit = max(self._d, expected) if recovery else expected
+            if d - limit > p.track_jump_reset:
+                self.status = 'distance_jump'
                 return Track(False, None, None, self._v_b, (), None)
         sgn = -1.0 if self.rear else 1.0
         # 거리 변화율 = ±(v_B − v_E). v_E는 아는 값이므로 상태를 v_B로 둔다.
@@ -145,6 +169,7 @@ class VehicleTracker:
         y_mid = (c.y0 + c.y1) / 2.0     # 점 평균이 아니라 범위 중앙: 옆면 점이 한쪽에 몰려도 치우치지 않는다
         self._c = ((c.x0 + c.x1) / 2.0, y_mid)
         self._front = c.x1
+        self.status = 'tracking'
         return Track(True, d, y_mid + ego_lat, self._v_b, c.idx, None, c.y1 - c.y0, c.y_left + ego_lat)
 
     def update_side(self, points, t, v_ego, ego_lat, W, heading=0.0):
