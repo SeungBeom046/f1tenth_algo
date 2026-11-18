@@ -10,7 +10,7 @@ aur:
   guardrail_local_view: true  # TUNE: 후측면 근접 레일·벽 선 연속성·정지 중 적분 동결 | - | 임시 (실제 bag 재구성 재생, 실차 주행 미확인)
   corridor_hold_s: 0.3     # TUNE: 잠긴 벽이 잠깐 무효여도 직전 추정으로 주행하는 시간, 0이면 끔 | s | 임시 (실차 2026-11-18 무효 프레임마다 정지)
   corridor_relock_s: 1.0   # TUNE: 잠긴 벽이 이 시간 넘게 무효면 다시 초기화, 0이면 끔 | s | 임시 (실차 2026-11-18 정지 뒤 영구 무효)
-  corridor_init_window_s: 0.0  # TUNE: 벽 초기화 3회 일치를 세는 시간 창, 못 찾은 scan은 무시, 0이면 연속 3회 | s | 임시 (실차 2026-11-18 정지 후 재초기화 실패)
+  corridor_init_window_s: 2.0  # TUNE: 벽 초기화 3회 일치를 세는 시간 창, 못 찾은 scan은 무시, 0이면 연속 3회 | s | 임시 (실차 2026-11-18 정지 후 재초기화 실패)
   corridor_heading_avg: false  # TUNE: 헤딩을 양쪽 벽 선 길이 가중 평균으로 (조향 잡음 감소) | - | 임시 (실차 2026-11-18 조향 ±0.3 rad)
   stationary_pass: false     # TUNE: method a 전용 정지차 우회 시험, 초기 간격 1.5 m 이상 | - | 임시 (실차 미확인)
   # --- 안전 (식 6~11) ---
