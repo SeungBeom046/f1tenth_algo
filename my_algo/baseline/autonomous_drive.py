@@ -100,6 +100,8 @@ class AutonomousDriveNode(Node):
         self.declare_parameter('aeb_curve_max_steering', 0.0)
         # True면 휜 띠와 직선 띠 둘 다에 든 점만 AEB 대상 (옆에 나란한 벽 무시). False = 기존 동작.
         self.declare_parameter('aeb_band_intersect', False)
+        # experiment_safety AEB 전용: 정지 후 비상이 아닌 상태가 이 시간 이어지면 고정 해제 [s], 0이면 AUTO off까지 고정
+        self.declare_parameter('aeb_latch_release_sec', 0.0)
         self.declare_parameter('experiment_safety', False)
 
         # 직진 서보 값 (조향 0 rad일 때 VESC 서보 위치). 차마다 트림이 다르면 보정 실험으로 정한다.
@@ -120,10 +122,13 @@ class AutonomousDriveNode(Node):
         self.servo_gain = float(self.get_parameter('servo_gain').value)
 
         aeb_type = AEBSafetyModel
+        extra = {}
         if self.get_parameter('experiment_safety').value:
             from my_algo.aur.emergency import ExperimentAEB
             aeb_type = ExperimentAEB
+            extra['latch_release_sec'] = float(self.get_parameter('aeb_latch_release_sec').value)
         self.aeb = aeb_type(
+            **extra,
             ttc_threshold=float(self.get_parameter('aeb_ttc_threshold').value),
             lidar_to_bumper_dist=float(
                 self.get_parameter('lidar_to_bumper_dist').value),

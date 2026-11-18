@@ -6,19 +6,41 @@ from my_algo.baseline.vehicle_utils import ERPM_GAIN
 
 
 class ExperimentAEB(AEBSafetyModel):
-    def __init__(self, **kwargs):
+    CHECK_HZ = 50.0     # autonomous_drive 제어 타이머·시뮬 Car.control 주기 (check_emergency_braking 호출 빈도)
+
+    def __init__(self, latch_release_sec=0.0, **kwargs):
+        """latch_release_sec > 0: 정지(측정 속도 < 0.05 m/s) 상태에서 지금 명령으로 다시 검사해도 비상이 아닌 상태가
+        이 시간 이어지면 고정을 푼다. 0이면 AUTO off까지 고정 (기존)."""
         super().__init__(**kwargs)
+        self.latch_release_sec = latch_release_sec
         self.latched = False
         self.latched_reason = ''
+        self._clear_checks = 0
 
     def reset(self):
         self.latched = False
         self.latched_reason = ''
+        self._clear_checks = 0
 
     def check_emergency_braking(self, scan_msg, speed_mps, requested_command):
+        if self.latched and self.latch_release_sec > 0.0:
+            # 실차 2026-11-18: 정지 차 0.64 m 뒤에서 고정된 뒤 planner가 서 있어도 영영 출발하지 못했다.
+            stopped = (speed_mps or 0.0) < 0.05 and scan_msg is not None
+            clear = stopped and not self._check(scan_msg, speed_mps, requested_command)
+            self._clear_checks = self._clear_checks + 1 if clear else 0
+            if self._clear_checks >= self.latch_release_sec * self.CHECK_HZ:
+                self.latched, self._clear_checks = False, 0
         if self.latched:
             self.last_reason = 'latched ' + self.latched_reason
             return True
+        emergency = self._check(scan_msg, speed_mps, requested_command)
+        if emergency and scan_msg is not None and requested_command is not None and requested_command.is_valid():
+            self.latched = True
+            self.latched_reason = self.last_reason
+        return emergency
+
+    def _check(self, scan_msg, speed_mps, requested_command):
+        """고정 없이 이번 scan·명령만으로 판정한다."""
         speed = max(0.0, speed_mps or 0.0)
         if requested_command is not None and requested_command.is_valid():
             speed = max(speed, abs(requested_command.rpm) / ERPM_GAIN)
@@ -37,9 +59,6 @@ class ExperimentAEB(AEBSafetyModel):
             finally:
                 self.lidar_to_bumper_dist = offset
                 self.ttc_threshold = threshold
-        if emergency and scan_msg is not None and requested_command is not None and requested_command.is_valid():
-            self.latched = True
-            self.latched_reason = self.last_reason
         return emergency
 
     def _partial_target(self, scan):

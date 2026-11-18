@@ -108,6 +108,7 @@ def generate_launch_description():
                 'aeb_path_margin': 0.0,
                 'aeb_bumper_emergency_distance': 0.20,
                 'aeb_bumper_overlap_tolerance': 0.10,
+                'aeb_latch_release_sec': 0.0,
                 'lidar_to_bumper_dist': arg('lidar_to_bumper', float),
                 'max_steering': arg('max_steering', float),
                 'servo_center': arg('servo_center', float),

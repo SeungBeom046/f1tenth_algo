@@ -40,6 +40,7 @@ class AurParams:
     lane_offset_max: Optional[float] = 0.3    # δ 상한 [m]. 넓은 통로에서 벽까지 붙지 않게 (None = 상한 없음). W 1.0의 δ 0.265보다 커서 W ≤ 1.27은 그대로
     # --- 속도 ---
     v_B_nominal: float = 0.9
+    v_cruise: Optional[float] = None   # ego가 선행차를 한 번도 못 봤을 때 속도 [m/s]. None = v_B_nominal
     v_pass: float = 1.5
     erpm_gain: float = ERPM_GAIN    # 보정 결과로 덮어쓸 수 있다
     min_erpm: float = MIN_DRIVING_RPM

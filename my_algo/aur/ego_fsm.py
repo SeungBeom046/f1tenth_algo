@@ -75,6 +75,8 @@ class EgoFSM:
         if trk is None:
             if p.experiment_safety and self._last is not None:
                 return 0.0
+            if p.v_cruise is not None and self._last is None:
+                return p.v_cruise
             return p.v_B_nominal
         if self.method == 'd':
             return min(p.v_pass, self.v_lim)
