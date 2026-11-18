@@ -15,7 +15,8 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch',
             glob('launch/*.launch.py')),
-        ('share/' + package_name + '/config', ['config/exp_common.yaml']),     # exp_planner가 읽는다
+        ('share/' + package_name + '/config',
+            ['config/exp_common.yaml', 'config/perception_record_qos.yaml']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

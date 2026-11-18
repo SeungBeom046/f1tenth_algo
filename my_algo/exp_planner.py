@@ -156,7 +156,8 @@ class ExpPlanner(Node):
                  start_too_close=lg.start_too_close)
         cor = self.runner.corridor
         s.update(heading=cor.heading, W=cor.W_est, corridor_valid=cor.valid,
-                 wall_left=cor.left, wall_right=cor.right)
+                 wall_left=cor.left, wall_right=cor.right,
+                 guardrail_local_view=self.p.guardrail_local_view, wall_initializing=cor.initializing)
         prev, self.prev = self.prev, s
         d_txt = '안 보임' if s['d_rear'] is None else '%.2f m' % s['d_rear']
         if s['t0'] is not None and prev.get('t0') is None:
@@ -173,7 +174,7 @@ class ExpPlanner(Node):
 
     def straight_step(self, t, msg, v):
         cor = self.runner
-        cor.update(scan_to_points(list(msg.ranges), msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max))
+        cor.update(scan_to_points(list(msg.ranges), msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max), stamp=t)
         self.v_cmd = self.p.v_B_nominal
         if self.p.corridor_guardrail and not cor.valid:
             self.v_cmd = 0.0
@@ -193,7 +194,8 @@ class ExpPlanner(Node):
                  heading=cor.heading, W=cor.W_est, h=fsm.h if fsm.h != float('inf') else None,
                  b=fsm.belief.prob_yield(), decided=fsm.decided,
                  t0=fsm.t0, t_decided=fsm.t_decided, n_abort=fsm.abort_count)
-        s.update(corridor_valid=cor.valid, wall_left=cor.left, wall_right=cor.right)
+        s.update(corridor_valid=cor.valid, wall_left=cor.left, wall_right=cor.right,
+                 guardrail_local_view=self.p.guardrail_local_view, wall_initializing=cor.initializing)
         s.update(track_status=self.runner.tracker.status, pending_d=self.runner.tracker.pending_d)
         prev, self.prev = self.prev, s
         if prev.get('n_abort', 0) != s['n_abort']:

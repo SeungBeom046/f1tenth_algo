@@ -27,22 +27,33 @@ class Corridor:
         self.heading = 0.0          # 통로 방향 기준 차 헤딩 [rad] (왼쪽 양수). 벽 점 직선 맞춤, 못 구하면 직전 값
         self._guardrail_locked = False
         self.wall_idx = set()
+        self.sector_idx = set()
+        self._stamp = None
+        self._init_stamp = None
+        self._init_pose = None
+        self._init_count = 0
 
-    def update(self, points, exclude_idx=(), W_fixed=None):
+    def update(self, points, exclude_idx=(), W_fixed=None, stamp=None):
         """W_fixed는 선행차용이며 ego_lateral = right − W/2로 계산한다.
         가드레일 모드는 양쪽 벽으로 초기화하고, 한쪽이 가려지면 직전 위치에 맞는 벽을 쓴다.
         기존 모드는 오른쪽 벽만 쓴다."""
         p = self.p
+        self._stamp = stamp
         self.wall_idx = set()
+        self.sector_idx = set()
         ex = set(exclude_idx)
         lo = math.radians(p.corridor_sector_min_deg)
-        hi = math.radians(p.corridor_sector_max_deg)
+        sector_max = p.corridor_sector_max_deg
+        if p.corridor_guardrail and p.guardrail_local_view:
+            sector_max = max(sector_max, 155.0)
+        hi = math.radians(sector_max)
         sides = {1: [], -1: []}
         for q in points:
             if q.i in ex or not lo <= abs(q.ang) <= hi:
                 continue
             if q.x - p.lidar_to_front > p.min_point_x:
                 sides[1 if q.ang > 0 else -1].append(q)
+                self.sector_idx.add(q.i)
         if p.corridor_guardrail:
             return self._guardrail_update(sides, W_fixed)
         if W_fixed is not None:
@@ -73,14 +84,23 @@ class Corridor:
         self.valid = False
         self.left = self.right = None
         if W is None or W <= 0:
+            self._init_count = 0
             return self
         left = self._wall_lines(sides[1], 1, W)
         right = self._wall_lines(sides[-1], -1, W)
+        parallel_tol = math.radians(5 if self.p.guardrail_local_view else 2)
         pairs = [(l, r) for l in left for r in right
                  if abs(l.distance + r.distance - W) <= self.p.corridor_width_tol
-                 and abs(l.heading - r.heading) <= math.radians(2)]
+                 and abs(l.heading - r.heading) <= parallel_tol]
+        local = self.p.guardrail_local_view and self._guardrail_locked
+        if local:
+            pairs = [(l, r) for l, r in pairs
+                     if abs(l.heading - self.heading) <= math.radians(5)
+                     and abs(r.heading - self.heading) <= math.radians(5)]
         if pairs:
             l, r = min(pairs, key=lambda pair: (
+                self._continuity_cost(pair[0], W) + self._continuity_cost(pair[1], W) if local else 0.0,
+                -min(len(pair[0].points), len(pair[1].points)) if self.p.guardrail_local_view and not local else 0,
                 abs(pair[0].distance + pair[1].distance - W)
                 + W * abs(pair[0].heading - pair[1].heading),
                 -len(pair[0].points) - len(pair[1].points)))
@@ -90,6 +110,8 @@ class Corridor:
             # scan 사이의 횡 이동을 허용하되 먼 복도 벽으로 넘어가지 않는다.
             selected = []
             candidates = sorted(right + left, key=lambda line: line.span, reverse=True)
+            if self.p.guardrail_local_view:
+                candidates = sorted(candidates, key=lambda line: (self._continuity_cost(line, W), -line.span))
             for line in candidates:
                 expected = W / 2 - line.side * self.ego_lateral
                 distance_ok = abs(line.distance - expected) <= self.p.corridor_width_tol
@@ -100,6 +122,7 @@ class Corridor:
             if not selected:
                 return self
         else:
+            self._init_count = 0
             return self
         previous_heading = self.heading
         # 가까운 낮은 레일의 윗면 점보다 길게 보이는 벽 선의 방향을 우선한다.
@@ -114,12 +137,32 @@ class Corridor:
         if abs(self.left + self.right - W) > self.p.corridor_width_tol:
             self.heading = previous_heading
             self.left = self.right = None
+            self._init_count = 0
             return self
         self.ego_lateral = self.right - W / 2 if W_fixed is not None else (self.right - self.left) / 2
         self.W_est = W
+        if self.p.guardrail_local_view and not self._guardrail_locked:
+            if self._stamp is None or self._stamp != self._init_stamp:
+                previous = self._init_pose
+                consistent = (self._init_count > 0 and previous is not None
+                              and abs(self.heading - previous[0]) <= math.radians(5)
+                              and abs(self.ego_lateral - previous[1]) <= self.p.corridor_width_tol)
+                self._init_count = self._init_count + 1 if consistent else 1
+                self._init_pose = (self.heading, self.ego_lateral)
+                self._init_stamp = self._stamp
+            if self._init_count < 3:
+                return self
         self.valid = self._guardrail_locked = True
         self.wall_idx = {q.i for line in selected for q in line.points}
         return self
+
+    @property
+    def initializing(self):
+        return self.p.guardrail_local_view and not self._guardrail_locked and self._init_count > 0
+
+    def _continuity_cost(self, line, W):
+        expected_distance = W / 2 - line.side * self.ego_lateral
+        return W * abs(line.heading - self.heading) + abs(line.distance - expected_distance)
 
     def _wall_lines(self, pts, side, W):
         """가까운 소수 가드레일 점을 많은 복도 벽 점과 분리한다. 난수를 쓰지 않는다."""

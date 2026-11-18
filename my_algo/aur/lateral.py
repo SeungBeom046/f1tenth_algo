@@ -21,7 +21,7 @@ class Lateral:
         self.i_term = 0.0       # 적분항 [rad] (트림 보정)
         self.heading = None
 
-    def step(self, ego_lateral, y_target, dt, heading=0.0):
+    def step(self, ego_lateral, y_target, dt, heading=0.0, integrate=True):
         """scan마다 한 번 부른다. heading: 통로 기준 차 헤딩 [rad]. 반환: 조향각 [rad] (왼쪽 양수)."""
         p = self.p
         if p.experiment_safety:
@@ -38,7 +38,7 @@ class Lateral:
         if p.lateral_ki > 0.0:
             # 차선 유지 중(y_ref 도착, 오차 작음)에만 적분: 차선 변경의 큰 오차로 쌓이지 않게. deadband는 P항에만 둬서
             # 잡음으로 떨지 않으면서 트림처럼 일정한 치우침은 적분항이 천천히 없앤다
-            if abs(y_target - self.y_ref) < 1e-9 and abs(self.y_ref - ego_lateral) < p.lateral_i_zone:
+            if integrate and abs(y_target - self.y_ref) < 1e-9 and abs(self.y_ref - ego_lateral) < p.lateral_i_zone:
                 self.i_term = _clamp(self.i_term + p.lateral_ki * (self.y_ref - ego_lateral) * dt,
                                      -p.lateral_i_max, p.lateral_i_max)
             target = _clamp(target + self.i_term, -p.max_steering, p.max_steering)

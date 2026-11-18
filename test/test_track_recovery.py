@@ -8,7 +8,7 @@ from my_algo.aur.tracker import VehicleTracker
 from test_aur_guardrail import scan_message
 from test_aur_tracker import lead_box
 
-P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, track_recovery=True, W=1.0))
+P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, track_recovery=True, W=1.0, guardrail_local_view=False))
 
 
 def test_short_false_detection_does_not_lock_empty_corridor():

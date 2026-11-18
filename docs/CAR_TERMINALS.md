@@ -362,6 +362,32 @@ ros2 launch my_algo exp_overtake.launch.py role:=ego method:=a W:=1.0 experiment
 `/exp/state`의 `track_status`는 `no_candidate`(앞차 후보 없음), `confirming`(최초 후보 확인 중), `tracking`(추적), `distance_jump`(먼 거리 점프 차단)이다.
 가드레일이 안 잡히면 `reason=corridor_invalid`다. 이 기능의 실제 환경 효과는 **실차 미확인**이다.
 
+### 실제 bag에서 확인한 레일 초기화 실패와 재기록
+
+2026-11-18 제공 bag은 `/exp/state` 850개가 전부 `corridor_invalid`였다. 사용자가 확인한 실제 폭은 1.0 m·라이다 좌우 각각 0.5 m다.
+후측면의 짧은 가까운 면과 앞측면의 더 먼 면이 함께 반환되는 입력에서 기존 45~115° 관측은 가까운 레일 선을 초기화하지 못했다.
+`guardrail_local_view`는 측면 범위를 최소 155°까지 넓히고 기존 전후 거리 제한을 적용한다. 벽 선의 위치·방향 연속성을 우선하며 잠긴 벽의 갑작스러운 방향 교체를 차단한다.
+첫 벽은 서로 다른 3 scan에서 확인하며 이때 `corridor_initializing`·속도 명령 0이 나올 수 있다. 같은 scan에서 재계산한 횟수는 중복으로 세지 않는다.
+`/exp/state`의 `guardrail_local_view`로 적용 여부, `wall_initializing`으로 초기 확인 중 여부를 확인한다.
+좌우 선의 방향 추정 차이를 최대 5° 허용하고 초기에는 양쪽에서 충분히 지지되는 선을 우선한다. 실측 폭과의 허용 차이는 기존 0.10 m다.
+이 모드에서 정지 중 횡 적분은 동결한다. 실제 W는 줄자로 잰 값으로 지정한다.
+
+제공 bag에는 `/scan`, `/tf_static`이 0개여서 원본 점군에 기존 장착 보정을 적용해 scan을 재구성했다.
+다음 기록은 QoS override 파일을 사용해 두 토픽도 함께 받는다. Foxy의 공식 rosbag2 CLI와 YAML 정책 지원을 확인했다.
+[Foxy record 구현](https://github.com/ros2/rosbag2/blob/foxy/ros2bag/ros2bag/verb/record.py), [QoS YAML 해석](https://github.com/ros2/rosbag2/blob/foxy/ros2bag/ros2bag/api/__init__.py)
+
+```bash
+mkdir -p ~/runs
+cd ~/runs
+ros2 bag record \
+  --qos-profile-overrides-path "$(ros2 pkg prefix my_algo)/share/my_algo/config/perception_record_qos.yaml" \
+  -o debug_perception_$(date +%m%d_%H%M%S) \
+  /livox/lidar /scan /exp/state /sensors/core /reactive/lidar_command /tf_static
+```
+
+Ctrl+C로 끝낸 뒤 `ros2 bag info 생성된폴더명`에서 `/scan`과 `/tf_static`의 Count가 0보다 큰지 확인한다.
+원본 점군 재구성 재생과 실차 주행은 구분한다. 이 수정의 새 실차 주행·재기록 결과는 **실차 미확인**이다.
+
 ### 검정이 (앞차): 시나리오별 명령
 
 환경 설정 (터미널 5를 열 때마다):

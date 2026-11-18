@@ -13,7 +13,7 @@ from my_algo.aur.params import AurParams, EXPERIMENT_OVERRIDES
 from my_algo.aur.tracker import Pt
 
 P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES,
-                               W=1.0, W_leader=1.0, corridor_guardrail=True))
+                               W=1.0, W_leader=1.0, corridor_guardrail=True, guardrail_local_view=False))
 
 
 def mixed_points(ego_y=0.0, heading=0.0, rails=True):

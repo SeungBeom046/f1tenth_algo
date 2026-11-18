@@ -92,6 +92,7 @@ class AurParams:
     corridor_guardrail: bool = False   # 실측 W에 맞는 가까운 평행 벽 선택. 폭을 주지 않거나 벽이 무효면 정지
     experiment_safety: bool = False    # 추적 소실·먼 점 점프 정지, 보수적 초기 속도, 헤딩 필터
     track_recovery: bool = False      # 현재 벽 점 제외·최초 전방 후보 확인·추적 재인식 수정
+    guardrail_local_view: bool = False  # 가까운 레일의 후측면 관측·벽 선 연속성 사용
     stationary_pass: bool = False      # method a 전용, 정지차 시험임을 명시한 조기 차선 변경
     corridor_line_tol: float = 0.03    # 벽 직선에서 허용하는 점의 수직 오차 [m]
     corridor_width_tol: float = 0.10   # 실측 W와 벽 사이 거리의 허용 차이 [m]

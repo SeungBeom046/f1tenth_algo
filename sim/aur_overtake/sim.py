@@ -138,17 +138,21 @@ class Car:
         self.points = scan_to_points(scan['ranges'].tolist(), scan['angle_min'], scan['angle_increment'],
                                      scan['range_min'], scan['range_max'])
         cor, p = self.corridor, sim.p
-        if cor.W_est is None:
-            cor.update(self.points, W_fixed=self.W_fixed)
+        fresh_wall = self.name == 'ego' and p.track_recovery and p.experiment_safety
+        if cor.W_est is None and not (fresh_wall and p.guardrail_local_view):
+            cor.update(self.points, W_fixed=self.W_fixed, stamp=sim.t)
         W = self.W_fixed or (p.W if p.W is not None else cor.W_est)
         tracking_points = self.points
-        if self.name == 'ego' and p.track_recovery and p.experiment_safety:
-            cor.update(self.points)
+        if fresh_wall:
+            cor.update(self.points, stamp=sim.t)
             tracking_points = [q for q in self.points if q.i not in cor.wall_idx]
+            if p.guardrail_local_view and not cor.valid:
+                tracking_points = []
         args = (tracking_points, sim.t, self.kin.v, cor.ego_lateral, W, cor.heading)
         self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
         self.front_track = self.shadow.update(*args)
-        cor.update(self.points, self.track.idx, W_fixed=self.W_fixed)
+        if not (fresh_wall and p.guardrail_local_view) or cor.sector_idx.intersection(self.track.idx):
+            cor.update(self.points, self.track.idx, W_fixed=self.W_fixed, stamp=sim.t)
         return W
 
     def drive(self, sim, v_cmd, y_ref):
@@ -158,7 +162,8 @@ class Car:
             self.v_cmd = v_cmd = 0.0
             steer = self.lateral.steer
         else:
-            steer = self.lateral.step(self.corridor.ego_lateral, y_ref, sim.frame_dt, self.corridor.heading)
+            steer = self.lateral.step(self.corridor.ego_lateral, y_ref, sim.frame_dt, self.corridor.heading,
+                                      integrate=not sim.p.guardrail_local_view or self.kin.v > sim.p.t0_speed_threshold)
         self.cmd = (v_cmd * sim.p.erpm_gain, steer)
 
     def control(self, sim):
@@ -265,7 +270,8 @@ class Sim:
         trk = ego.track
         if self.p.corridor_guardrail and not ego.corridor.valid:
             ego.drive(self, 0.0, ego.lateral.y_ref)
-            return 0.0, ego.lateral.y_ref, self.fsm.state, 'corridor_invalid'
+            reason = 'corridor_initializing' if ego.corridor.initializing else 'corridor_invalid'
+            return 0.0, ego.lateral.y_ref, self.fsm.state, reason
         if ego.tracker.pending_d is not None:
             ego.drive(self, 0.0, ego.lateral.y_ref)
             return 0.0, ego.lateral.y_ref, self.fsm.state, 'front_track_pending'
@@ -283,7 +289,7 @@ class Sim:
         if not lead.track.valid:    # 후행차가 옆으로 오면 이어서 추적해 그 점을 벽 계산에서 뺀다
             side = lead.tracker.update_side(lead.points, self.t, lead.kin.v, lead.corridor.ego_lateral, Wl,
                                             lead.corridor.heading)
-            lead.corridor.update(lead.points, side.idx, W_fixed=lead.W_fixed)
+            lead.corridor.update(lead.points, side.idx, W_fixed=lead.W_fixed, stamp=self.t)
         if self.p.corridor_guardrail and not lead.corridor.valid:
             lead.drive(self, 0.0, lead.lateral.y_ref)
             return

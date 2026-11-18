@@ -29,15 +29,16 @@ class LeaderRunner:
         points = scan_to_points(list(scan.ranges), scan.angle_min, scan.angle_increment,
                                 scan.range_min, scan.range_max)
         if cor.W_est is None:
-            cor.update(points, W_fixed=self.W_fixed)
+            cor.update(points, W_fixed=self.W_fixed, stamp=t)
         W = self.W_fixed or (p.W if p.W is not None else cor.W_est)
         self.track = self.tracker.update(points, t, v, cor.ego_lateral, W, cor.heading)
-        cor.update(points, self.track.idx, W_fixed=self.W_fixed)
+        cor.update(points, self.track.idx, W_fixed=self.W_fixed, stamp=t)
         if not self.track.valid:    # 후행차가 옆으로 오면 이어서 추적해 그 점을 벽 계산에서 뺀다
             side = self.tracker.update_side(points, t, v, cor.ego_lateral, W, cor.heading)
-            cor.update(points, side.idx, W_fixed=self.W_fixed)
+            cor.update(points, side.idx, W_fixed=self.W_fixed, stamp=t)
         if p.corridor_guardrail and not cor.valid:
             return 0.0, self.lateral.steer, self.lateral.y_ref
         v_cmd, y_ref = self.logic.step(t, v, self.track.d if self.track.valid else None, W)
-        steer = self.lateral.step(cor.ego_lateral, y_ref, p.scan_period, cor.heading)
+        steer = self.lateral.step(cor.ego_lateral, y_ref, p.scan_period, cor.heading,
+                                  integrate=not p.guardrail_local_view or v > p.t0_speed_threshold)
         return v_cmd, steer, y_ref

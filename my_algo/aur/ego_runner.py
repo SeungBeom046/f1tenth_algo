@@ -24,22 +24,28 @@ class EgoRunner:
         p, cor = self.p, self.corridor
         points = scan_to_points(list(scan.ranges), scan.angle_min, scan.angle_increment,
                                 scan.range_min, scan.range_max)
-        if cor.W_est is None:
-            cor.update(points)
+        fresh_wall = p.track_recovery and p.experiment_safety
+        if cor.W_est is None and not (fresh_wall and p.guardrail_local_view):
+            cor.update(points, stamp=t)
         W = p.W if p.W is not None else cor.W_est
         tracking_points = points
-        if p.track_recovery and p.experiment_safety:
-            cor.update(points)
+        if fresh_wall:
+            cor.update(points, stamp=t)
             tracking_points = [q for q in points if q.i not in cor.wall_idx]
+            if p.guardrail_local_view and not cor.valid:
+                tracking_points = []
         side = self.fsm.state in ('PASS', 'MERGE', 'RETREAT')     # 옆으로 나란해지면 측면 추적
         args = (tracking_points, t, v, cor.ego_lateral, W, cor.heading)
         trk = self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
-        cor.update(points, trk.idx)
+        if not (fresh_wall and p.guardrail_local_view) or cor.sector_idx.intersection(trk.idx):
+            cor.update(points, trk.idx, stamp=t)
         if p.corridor_guardrail and not cor.valid:
-            return 0.0, self.lateral.steer, self.lateral.y_ref, self.fsm.state, 'corridor_invalid'
+            reason = 'corridor_initializing' if cor.initializing else 'corridor_invalid'
+            return 0.0, self.lateral.steer, self.lateral.y_ref, self.fsm.state, reason
         if self.tracker.pending_d is not None:
             return 0.0, self.lateral.steer, self.lateral.y_ref, self.fsm.state, 'front_track_pending'
         v_cmd, y_ref, state, reason = self.fsm.step(Obs(
             t, v, trk.valid, trk.d, trk.y_b, trk.v_b, cor.ego_lateral, W, trk.front_rel, trk.y_l))
-        steer = self.lateral.step(cor.ego_lateral, y_ref, p.scan_period, cor.heading)
+        steer = self.lateral.step(cor.ego_lateral, y_ref, p.scan_period, cor.heading,
+                                  integrate=not p.guardrail_local_view or v > p.t0_speed_threshold)
         return v_cmd, steer, y_ref, state, reason

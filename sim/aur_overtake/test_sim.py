@@ -42,10 +42,12 @@ def test_leader_runner_matches_sim_leader(behavior):
 
 @pytest.mark.parametrize('behavior', ['Y', 'NY'])
 @pytest.mark.parametrize('recovery', [False, True])
-def test_ego_runner_matches_sim_ego(behavior, recovery):
+@pytest.mark.parametrize('local_view', [False, True])
+def test_ego_runner_matches_sim_ego(behavior, recovery, local_view):
     # 실차 노드가 쓰는 EgoRunner에 시뮬 ego와 같은 scan·속도를 넣으면 같은 명령·상태가 나와야 한다
     from my_algo.aur.ego_runner import EgoRunner
-    sim = Sim('d', load_cfg(**{'leader.behavior': behavior, 'leader.d_y': 1.0}), track_recovery=recovery)
+    sim = Sim('d', load_cfg(**{'leader.behavior': behavior, 'leader.d_y': 1.0}),
+              track_recovery=recovery, guardrail_local_view=local_view)
     runner = EgoRunner(sim.p, 'd')
     frame, out = sim._ego_frame, []
 
@@ -214,17 +216,19 @@ def test_low_guardrails_inside_wider_hallway(behavior):
 def test_low_guardrail_wall_collision_is_reproduced_when_disabled():
     cfg = load_cfg(**{'track.wall_height': 0.20, 'leader.d_y': 1.0})
     cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
-    r = Sim('d', cfg, W=1.0, corridor_guardrail=False, experiment_safety=False).run()
+    r = Sim('d', cfg, W=1.0, corridor_guardrail=False, experiment_safety=False, guardrail_local_view=False).run()
     assert r['collision'] == 'ego_wall'
 
 
 @pytest.mark.parametrize('recovery', [False, True])
-def test_guardrail_runners_match_sim_with_hallway_points(recovery):
+@pytest.mark.parametrize('local_view', [False, True])
+def test_guardrail_runners_match_sim_with_hallway_points(recovery, local_view):
     from my_algo.aur.ego_runner import EgoRunner
     from my_algo.aur.leader_runner import LeaderRunner
     cfg = load_cfg(**{'track.wall_height': 0.20, 'leader.d_y': 1.0})
     cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
-    sim = Sim('d', cfg, W=1.0, corridor_guardrail=True, track_recovery=recovery)
+    sim = Sim('d', cfg, W=1.0, corridor_guardrail=True, track_recovery=recovery,
+              guardrail_local_view=local_view)
     ego = EgoRunner(sim.p, 'd')
     leader = LeaderRunner(sim.p, 'Y', sim.seed, d_y=1.0)
     ego_frame, leader_frame = sim._ego_frame, sim._leader_frame
