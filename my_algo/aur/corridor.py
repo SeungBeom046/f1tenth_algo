@@ -6,6 +6,8 @@
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 
 @dataclass
 class _WallLine:
@@ -208,14 +210,15 @@ class Corridor:
             span = xs[-1] - xs[0]
             if span < p.corridor_min_span:
                 return None
+            # 기울기와 무관한 검사를 먼저 해서 대부분의 탈락 후보에서 최소제곱을 건너뛴다 (결과는 같다)
+            if max(b - a for a, b in zip(xs, xs[1:])) > p.corridor_min_span:
+                return None
             slope = self._slope(inliers)
             if slope is None or abs(slope) > math.tan(math.radians(35)):
                 return None
             offset = sum(q.y - slope * q.x for q in inliers) / len(inliers)
             distance = side * offset / math.sqrt(1 + slope * slope)
             if not 0.05 < distance < W + p.corridor_width_tol:
-                return None
-            if max(b - a for a, b in zip(xs, xs[1:])) > p.corridor_min_span:
                 return None
             tol = p.corridor_line_tol * math.sqrt(1 + slope * slope)
             if any(abs(q.y - slope * q.x - offset) > tol for q in inliers):
@@ -231,7 +234,11 @@ class Corridor:
         near = near[:p.corridor_min_points * 2]
         indices.update(near[k * (len(near) - 1) // 7] for k in range(8))
         seeds = [pts[i] for i in sorted(indices)]
+        # 원소별 float64 +·−·×는 파이썬 float와 비트까지 같아 inlier 판정이 바뀌지 않는다 (실차 처리 71 ms → 단축)
+        X = np.array([q.x for q in pts])
+        Y = np.array([q.y for q in pts])
         lines = {}
+        fitted = {}     # 같은 inlier 집합은 fit 결과도 같다. 씨앗 쌍 대부분이 같은 집합을 내서 다시 맞추지 않는다 (실차 처리 71 ms)
         for i, a in enumerate(seeds):
             for b in seeds[i + 1:]:
                 if abs(b.x - a.x) < p.corridor_min_span:
@@ -241,11 +248,16 @@ class Corridor:
                     continue
                 offset = a.y - slope * a.x
                 tol = p.corridor_line_tol * math.sqrt(1 + slope * slope)
-                inliers = [q for q in pts if abs(q.y - slope * q.x - offset) <= tol]
-                line = fit(inliers)
+                members = np.flatnonzero(np.abs(Y - slope * X - offset) <= tol)
+                if len(members) < p.corridor_min_points:
+                    continue
+                members = members.tobytes()
+                if members not in fitted:
+                    fitted[members] = fit([pts[k] for k in np.frombuffer(members, dtype=np.intp)])
+                line = fitted[members]
                 if line is not None:
                     key = (round(line.distance / p.corridor_line_tol), round(line.heading / math.radians(3)))
-                    if key not in lines or len(inliers) > len(lines[key].points):
+                    if key not in lines or len(line.points) > len(lines[key].points):
                         lines[key] = line
         return sorted(lines.values(), key=lambda line: line.distance)
 
@@ -254,12 +266,14 @@ class Corridor:
         n = len(pts)
         if n < self.p.corridor_min_points:
             return None
-        mx = sum(q.x for q in pts) / n
-        my = sum(q.y for q in pts) / n
-        sxx = sum((q.x - mx) ** 2 for q in pts)
+        xs = [q.x for q in pts]
+        ys = [q.y for q in pts]
+        mx = sum(xs) / n
+        my = sum(ys) / n
+        sxx = sum((x - mx) ** 2 for x in xs)
         if sxx < 1e-4 * n:
             return None
-        return sum((q.x - mx) * (q.y - my) for q in pts) / sxx
+        return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
 
     def _dist(self, pts, cos_heading):
         if len(pts) < self.p.corridor_min_points:
