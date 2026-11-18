@@ -94,9 +94,16 @@ def build_xml(cfg):
     L, wcar, H, ro, wb = v['length'], cfg['w_car'], v['height'], v['rear_overhang'], v['wheelbase']
     sense = f'group="{SENSE_GROUP}" contype="0" conaffinity="0"'
 
-    def wall(name, y):
-        return (f'    <geom name="{name}" type="box" pos="{0.5 * (x0 + x1):.3f} {y:.4f} {0.5 * h:.3f}" '
-                f'size="{0.5 * (x1 - x0):.3f} {0.5 * th:.3f} {0.5 * h:.3f}" rgba="0.55 0.6 0.7 0.35" {sense}/>')
+    def wall(name, y, height=h):
+        return (f'    <geom name="{name}" type="box" pos="{0.5 * (x0 + x1):.3f} {y:.4f} {0.5 * height:.3f}" '
+                f'size="{0.5 * (x1 - x0):.3f} {0.5 * th:.3f} {0.5 * height:.3f}" rgba="0.55 0.6 0.7 0.35" {sense}/>')
+
+    outer_walls = ''
+    if t.get('outer_width') is not None:
+        half_width = 0.5 * (t['outer_width'] + th)
+        center = t.get('outer_center_y', 0.0)
+        outer_walls = '\n'.join((wall('outer_left_wall', center + half_width, 2.0),
+                                 wall('outer_right_wall', center - half_width, 2.0)))
 
     def car(name, rgba, shell, accent):
         return (f'    <body name="{name}" mocap="true" pos="0 0 0">\n'
@@ -139,6 +146,7 @@ def build_xml(cfg):
     <geom name="floor_sense" type="plane" pos="{xm:.2f} 0 0" size="{0.5 * (x1 - x0) + 20:.2f} 12 0.1" rgba="0.5 0.5 0.5 0.3" {sense}/>
 {wall('left_wall', 0.5 * W + 0.5 * th)}
 {wall('right_wall', -0.5 * W - 0.5 * th)}
+{outer_walls}
 {car('ego', '0.2 0.4 0.9 0.35', '0.08 0.32 0.85 1', '0.95 0.95 0.95 1')}
 {car('leader', '0.9 0.2 0.2 0.35', '0.06 0.06 0.07 1', '0.95 0.75 0.1 1')}
   </worldbody>

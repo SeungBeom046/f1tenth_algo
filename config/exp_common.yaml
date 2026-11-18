@@ -82,6 +82,10 @@ aur:
   corridor_sector_max_deg: 115.0    # TUNE: 벽 거리 측면 섹터 끝각 | deg | 측정 (lidar_reactive_drive와 같은 값)
   corridor_min_points: 8            # TUNE: 한쪽 벽으로 인정할 최소 점 수 | 개 | 측정 (lidar_reactive_drive와 같은 값)
   corridor_wall_percentile: 0.35    # TUNE: 측면 거리 분위값 | - | 측정 (lidar_reactive_drive와 같은 값)
+  corridor_guardrail: false        # TUNE: 실측 W에 맞는 가드레일 직선 선택, 무효면 정지 | - | 임시 (2026-11-18, 실차 미확인)
+  corridor_line_tol: 0.03          # TUNE: 벽 직선에서 허용하는 점의 수직 오차 | m | 임시 (합성·MuJoCo 회귀)
+  corridor_width_tol: 0.10         # TUNE: 실측 W와 두 벽 사이 거리의 허용 차이 | m | 임시 (합성·MuJoCo 회귀)
+  corridor_min_span: 0.20          # TUNE: 벽 직선의 최소 전후 길이, 분리된 점 덩어리 사이 최대 간격 | m | 임시 (합성·MuJoCo 회귀)
   min_point_x: -1.0         # TUNE: 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | m | 임시
   # --- 횡 제어 ---
   wall_follow_gain: 0.30    # TUNE: 횡 오차 → 조향 P 게인 | rad/m | 측정 (lidar_reactive_drive와 같은 값)

@@ -192,3 +192,52 @@ def test_level_scan_removes_floor_seen_by_pitched_lidar():
         return float(np.min(r[i - 5:i + 6]))
     assert abs(ahead(False) - 0.24 / math.tan(0.0557)) < 0.2       # 바닥 (약 4.3 m)
     assert ahead(True) > 8.0                                         # 앞차(12 m)까지 비어 있음
+
+
+@pytest.mark.parametrize('behavior', ['Y', 'NY'])
+def test_low_guardrails_inside_wider_hallway(behavior):
+    # 실제 높이로 레이캐스트한다. 위로 지나간 광선은 바깥 복도 벽에 맞아 같은 scan에 섞인다.
+    cfg = load_cfg(**{'track.wall_height': 0.20, 'leader.behavior': behavior, 'leader.d_y': 1.0})
+    cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
+    sim = Sim('d', cfg, W=1.0, corridor_guardrail=True)
+    r = sim.run()
+    assert not r['collision'] and not r['deadlock']
+    if behavior == 'Y':
+        assert r['success'] and r['N_AEB_moving'] == r['N_AEB_leader_moving'] == 0
+    else:
+        assert r['decided'] == 'NY' and not r['pass_entered'] and r['stop_gap_ok']
+
+
+def test_low_guardrail_wall_collision_is_reproduced_when_disabled():
+    cfg = load_cfg(**{'track.wall_height': 0.20, 'leader.d_y': 1.0})
+    cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
+    r = Sim('d', cfg, W=1.0, corridor_guardrail=False).run()
+    assert r['collision'] == 'ego_wall'
+
+
+def test_guardrail_runners_match_sim_with_hallway_points():
+    from my_algo.aur.ego_runner import EgoRunner
+    from my_algo.aur.leader_runner import LeaderRunner
+    cfg = load_cfg(**{'track.wall_height': 0.20, 'leader.d_y': 1.0})
+    cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
+    sim = Sim('d', cfg, W=1.0, corridor_guardrail=True)
+    ego = EgoRunner(sim.p, 'd')
+    leader = LeaderRunner(sim.p, 'Y', sim.seed, d_y=1.0)
+    ego_frame, leader_frame = sim._ego_frame, sim._leader_frame
+    frames = []
+
+    def checked_ego():
+        result = ego_frame()
+        rv, steer, y_ref, state, reason = ego.step(sim.t, sim.ego.scan_ns, sim.ego.kin.v)
+        assert (rv, y_ref, state, reason) == result
+        assert (rv * sim.p.erpm_gain, steer) == sim.ego.cmd
+        frames.append(sim.t)
+        return result
+
+    def checked_leader():
+        leader_frame()
+        rv, steer, _ = leader.step(sim.t, sim.leader.scan_ns, sim.leader.kin.v)
+        assert (rv * sim.p.erpm_gain, steer) == sim.leader.cmd
+
+    sim._ego_frame, sim._leader_frame = checked_ego, checked_leader
+    assert sim.run()['success'] and len(frames) > 100

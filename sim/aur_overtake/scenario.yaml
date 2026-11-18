@@ -11,6 +11,8 @@ track:
   x_start: -2.0             # TUNE: 통로 뒤 끝 | m | 임시
   x_end: 30.0               # TUNE: 통로 앞 끝 | m | 임시
   wall_height: 0.5          # TUNE: 벽 높이 | m | 임시
+  outer_width: null         # null이면 외부 벽 없음. 낮은 가드레일 바깥 복도 재현 시 2.7 m
+  outer_center_y: 0.0       # 외부 복도 중앙의 y [m], 가드레일 중앙은 0
 start:
   gap0: 1.5                 # TUNE: 출발 시 ego 앞범퍼 → 선행차 뒷면 | m | 기획안 (초기 간격 1.5 m 이상)
   ego_delay: 0.0            # TUNE: ego 출발 지연 (출발 시각 편차) | s | 임시

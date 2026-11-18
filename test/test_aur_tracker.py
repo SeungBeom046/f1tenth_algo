@@ -7,7 +7,8 @@ from dataclasses import replace
 from my_algo.aur.params import EXPERIMENT_OVERRIDES, AurParams
 from my_algo.aur.tracker import VehicleTracker
 
-P = replace(AurParams(), **EXPERIMENT_OVERRIDES)     # 실험 설정 (exp_common.yaml과 같음)
+# 기존 벽 추정 회귀를 유지한다. 가드레일 모드는 test_aur_guardrail.py에서 검증한다.
+P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, corridor_guardrail=False))
 LF, LR, HW = P.lidar_to_front, P.lidar_to_rear, P.w_car / 2
 
 

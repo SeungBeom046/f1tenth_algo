@@ -1,9 +1,19 @@
 """[1 인지] 다른 차 점을 제외한 벽 거리, ego 횡위치, 통로 기준 헤딩.
 
-lidar_reactive_drive.detect_corridor와 같은 방식(측면 섹터, 분위값)이다.
-가정(미확인): 차 헤딩이 통로 방향과 거의 나란하다.
+기본은 측면 섹터·분위값이다. corridor_guardrail은 실측 폭에 맞는 평행 직선을 선택한다.
+직선 통로이며 차 헤딩이 통로 방향과 거의 나란하다고 가정한다.
 """
 import math
+from dataclasses import dataclass
+
+
+@dataclass
+class _WallLine:
+    points: list
+    heading: float
+    distance: float
+    side: int
+    span: float
 
 
 class Corridor:
@@ -15,10 +25,12 @@ class Corridor:
         self.W_est = None
         self.valid = False          # 이번 scan에서 양쪽 벽이 다 보였는가
         self.heading = 0.0          # 통로 방향 기준 차 헤딩 [rad] (왼쪽 양수). 벽 점 직선 맞춤, 못 구하면 직전 값
+        self._guardrail_locked = False
 
     def update(self, points, exclude_idx=(), W_fixed=None):
-        """W_fixed(실측 통로 폭)를 주면 오른쪽 벽만 쓴다: ego_lateral = right − W/2.
-        선행차 전용이다. 후행차는 왼쪽으로 추월하므로 오른쪽 벽은 가려지지 않는다."""
+        """W_fixed는 선행차용이며 ego_lateral = right − W/2로 계산한다.
+        가드레일 모드는 양쪽 벽으로 초기화하고, 한쪽이 가려지면 직전 위치에 맞는 벽을 쓴다.
+        기존 모드는 오른쪽 벽만 쓴다."""
         p = self.p
         ex = set(exclude_idx)
         lo = math.radians(p.corridor_sector_min_deg)
@@ -29,6 +41,8 @@ class Corridor:
                 continue
             if q.x - p.lidar_to_front > p.min_point_x:
                 sides[1 if q.ang > 0 else -1].append(q)
+        if p.corridor_guardrail:
+            return self._guardrail_update(sides, W_fixed)
         if W_fixed is not None:
             sides[1] = []
         slopes = [s for s in (self._slope(sides[1]), self._slope(sides[-1])) if s is not None]
@@ -50,6 +64,113 @@ class Corridor:
             self.ego_lateral = (self.right - self.left) / 2.0
             self.W_est = self.left + self.right
         return self
+
+    def _guardrail_update(self, sides, W_fixed):
+        """실측 폭과 평행성이 맞는 벽만 사용한다. 다른 복도 벽으로 재초기화하지 않는다."""
+        W = W_fixed if W_fixed is not None else self.p.W
+        self.valid = False
+        self.left = self.right = None
+        if W is None or W <= 0:
+            return self
+        left = self._wall_lines(sides[1], 1, W)
+        right = self._wall_lines(sides[-1], -1, W)
+        pairs = [(l, r) for l in left for r in right
+                 if abs(l.distance + r.distance - W) <= self.p.corridor_width_tol
+                 and abs(l.heading - r.heading) <= math.radians(2)]
+        if pairs:
+            l, r = min(pairs, key=lambda pair: (
+                abs(pair[0].distance + pair[1].distance - W)
+                + W * abs(pair[0].heading - pair[1].heading),
+                -len(pair[0].points) - len(pair[1].points)))
+            selected = [l, r]
+        elif self._guardrail_locked:
+            # 한쪽이 차에 가려지면 직전 위치·방향과 이어지는 벽만 쓴다.
+            # scan 사이의 횡 이동을 허용하되 먼 복도 벽으로 넘어가지 않는다.
+            selected = []
+            candidates = sorted(right + left, key=lambda line: line.span, reverse=True)
+            for line in candidates:
+                expected = W / 2 - line.side * self.ego_lateral
+                distance_ok = abs(line.distance - expected) <= self.p.corridor_width_tol
+                heading_ok = abs(line.heading - self.heading) <= math.radians(5)
+                if distance_ok and heading_ok:
+                    selected = [line]
+                    break
+            if not selected:
+                return self
+        else:
+            return self
+        previous_heading = self.heading
+        # 가까운 낮은 레일의 윗면 점보다 길게 보이는 벽 선의 방향을 우선한다.
+        self.heading = max(selected, key=lambda line: line.span).heading
+        c = math.cos(self.heading)
+        distances = {line.side: self._dist(line.points, c) for line in selected}
+        self.left, self.right = distances.get(1), distances.get(-1)
+        if self.left is None:
+            self.left = W - self.right
+        if self.right is None:
+            self.right = W - self.left
+        if abs(self.left + self.right - W) > self.p.corridor_width_tol:
+            self.heading = previous_heading
+            self.left = self.right = None
+            return self
+        self.ego_lateral = self.right - W / 2 if W_fixed is not None else (self.right - self.left) / 2
+        self.W_est = W
+        self.valid = self._guardrail_locked = True
+        return self
+
+    def _wall_lines(self, pts, side, W):
+        """가까운 소수 가드레일 점을 많은 복도 벽 점과 분리한다. 난수를 쓰지 않는다."""
+        p = self.p
+        if len(pts) < p.corridor_min_points:
+            return []
+
+        def fit(inliers):
+            if len(inliers) < p.corridor_min_points:
+                return None
+            xs = sorted(q.x for q in inliers)
+            span = xs[-1] - xs[0]
+            if span < p.corridor_min_span:
+                return None
+            slope = self._slope(inliers)
+            if slope is None or abs(slope) > math.tan(math.radians(35)):
+                return None
+            offset = sum(q.y - slope * q.x for q in inliers) / len(inliers)
+            distance = side * offset / math.sqrt(1 + slope * slope)
+            if not 0.05 < distance < W + p.corridor_width_tol:
+                return None
+            if max(b - a for a, b in zip(xs, xs[1:])) > p.corridor_min_span:
+                return None
+            tol = p.corridor_line_tol * math.sqrt(1 + slope * slope)
+            if any(abs(q.y - slope * q.x - offset) > tol for q in inliers):
+                return None
+            return _WallLine(inliers, -math.atan(slope), distance, side, span)
+
+        whole = fit(pts)
+        if whole is not None:
+            return [whole]
+        # 각도 전체의 표본과 가까운 점의 표본을 함께 사용한다.
+        indices = {k * (len(pts) - 1) // 15 for k in range(16)}
+        near = sorted(range(len(pts)), key=lambda i: abs(pts[i].y - pts[i].x * math.tan(-self.heading)))
+        near = near[:p.corridor_min_points * 2]
+        indices.update(near[k * (len(near) - 1) // 7] for k in range(8))
+        seeds = [pts[i] for i in sorted(indices)]
+        lines = {}
+        for i, a in enumerate(seeds):
+            for b in seeds[i + 1:]:
+                if abs(b.x - a.x) < p.corridor_min_span:
+                    continue
+                slope = (b.y - a.y) / (b.x - a.x)
+                if abs(slope) > math.tan(math.radians(35)):
+                    continue
+                offset = a.y - slope * a.x
+                tol = p.corridor_line_tol * math.sqrt(1 + slope * slope)
+                inliers = [q for q in pts if abs(q.y - slope * q.x - offset) <= tol]
+                line = fit(inliers)
+                if line is not None:
+                    key = (round(line.distance / p.corridor_line_tol), round(line.heading / math.radians(3)))
+                    if key not in lines or len(inliers) > len(lines[key].points):
+                        lines[key] = line
+        return sorted(lines.values(), key=lambda line: line.distance)
 
     def _slope(self, pts):
         """벽 점의 최소제곱 직선 기울기 dy/dx. 점이 적거나 x 범위가 좁으면 None."""

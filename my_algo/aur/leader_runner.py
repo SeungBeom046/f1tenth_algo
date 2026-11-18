@@ -36,6 +36,8 @@ class LeaderRunner:
         if not self.track.valid:    # 후행차가 옆으로 오면 이어서 추적해 그 점을 벽 계산에서 뺀다
             side = self.tracker.update_side(points, t, v, cor.ego_lateral, W, cor.heading)
             cor.update(points, side.idx, W_fixed=self.W_fixed)
+        if p.corridor_guardrail and not cor.valid:
+            return 0.0, self.lateral.steer, self.lateral.y_ref
         v_cmd, y_ref = self.logic.step(t, v, self.track.d if self.track.valid else None, W)
         steer = self.lateral.step(cor.ego_lateral, y_ref, p.scan_period, cor.heading)
         return v_cmd, steer, y_ref

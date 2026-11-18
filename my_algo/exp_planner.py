@@ -150,6 +150,9 @@ class ExpPlanner(Node):
                  t0=lg.t0, d_y=lg.d_y, yield_triggered=lg.yield_triggered, t_yield=lg.t_yield,
                  brake_armed=lg.t_armed is not None, brake_fired=lg.brake_fired, t_brake=lg.t_brake,
                  start_too_close=lg.start_too_close)
+        cor = self.runner.corridor
+        s.update(heading=cor.heading, W=cor.W_est, corridor_valid=cor.valid,
+                 wall_left=cor.left, wall_right=cor.right)
         prev, self.prev = self.prev, s
         d_txt = '안 보임' if s['d_rear'] is None else '%.2f m' % s['d_rear']
         if s['t0'] is not None and prev.get('t0') is None:
@@ -168,6 +171,8 @@ class ExpPlanner(Node):
         cor = self.runner
         cor.update(scan_to_points(list(msg.ranges), msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max))
         self.v_cmd = self.p.v_B_nominal
+        if self.p.corridor_guardrail and not cor.valid:
+            self.v_cmd = 0.0
         if self.t_print is None or t - self.t_print >= 0.5:
             self.t_print = t
             self.event('횡위치 %+.3f m  헤딩 %+.1f°  (양쪽 벽 %s)' % (
@@ -184,6 +189,7 @@ class ExpPlanner(Node):
                  heading=cor.heading, W=cor.W_est, h=fsm.h if fsm.h != float('inf') else None,
                  b=fsm.belief.prob_yield(), decided=fsm.decided,
                  t0=fsm.t0, t_decided=fsm.t_decided, n_abort=fsm.abort_count)
+        s.update(corridor_valid=cor.valid, wall_left=cor.left, wall_right=cor.right)
         prev, self.prev = self.prev, s
         if prev.get('n_abort', 0) != s['n_abort']:
             self.event('추월 중단 (선행차가 다시 들어오거나 왼쪽 여유 부족)')

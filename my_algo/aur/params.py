@@ -89,6 +89,10 @@ class AurParams:
     corridor_sector_max_deg: float = 115.0
     corridor_min_points: int = 8
     corridor_wall_percentile: float = 0.35
+    corridor_guardrail: bool = False   # 실측 W에 맞는 가까운 평행 벽 선택. 폭을 주지 않거나 벽이 무효면 정지
+    corridor_line_tol: float = 0.03    # 벽 직선에서 허용하는 점의 수직 오차 [m]
+    corridor_width_tol: float = 0.10   # 실측 W와 벽 사이 거리의 허용 차이 [m]
+    corridor_min_span: float = 0.20    # 벽 직선의 최소 전후 길이 [m]
     min_point_x: float = -0.05      # 실험은 −1.0 (exp_common.yaml)
     # --- 횡 제어 (y_ref_rate 외에는 lidar_reactive_drive 기본값) ---
     wall_follow_gain: float = 0.30

@@ -31,6 +31,8 @@ class EgoRunner:
         args = (points, t, v, cor.ego_lateral, W, cor.heading)
         trk = self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
         cor.update(points, trk.idx)
+        if p.corridor_guardrail and not cor.valid:
+            return 0.0, self.lateral.steer, self.lateral.y_ref, self.fsm.state, 'corridor_invalid'
         v_cmd, y_ref, state, reason = self.fsm.step(Obs(
             t, v, trk.valid, trk.d, trk.y_b, trk.v_b, cor.ego_lateral, W, trk.front_rel, trk.y_l))
         steer = self.lateral.step(cor.ego_lateral, y_ref, p.scan_period, cor.heading)

@@ -143,7 +143,11 @@ class Car:
     def drive(self, sim, v_cmd, y_ref):
         """종방향 명령 v_cmd와 횡 목표 y_ref → (rpm, 조향) = /reactive/lidar_command."""
         self.v_cmd, self.y_ref = v_cmd, y_ref
-        steer = self.lateral.step(self.corridor.ego_lateral, y_ref, sim.frame_dt, self.corridor.heading)
+        if sim.p.corridor_guardrail and not self.corridor.valid:
+            self.v_cmd = v_cmd = 0.0
+            steer = self.lateral.steer
+        else:
+            steer = self.lateral.step(self.corridor.ego_lateral, y_ref, sim.frame_dt, self.corridor.heading)
         self.cmd = (v_cmd * sim.p.erpm_gain, steer)
 
     def control(self, sim):
@@ -172,6 +176,8 @@ class Sim:
         self.cfg = cfg or load_cfg()
         extra = {'W_leader': float(self.cfg['track']['W'])} if self.cfg['leader'].get('fix_W') else {}
         self.p = load_params(COMMON_YAML, **dict(self.cfg.get('params') or {}, **extra, **param_overrides))
+        if self.p.corridor_guardrail and self.p.W is None:
+            self.p.W = float(self.cfg['track']['W'])
         self.cfg['w_car'] = self.p.w_car
         self.seed = seed
         self.method = method
@@ -246,6 +252,9 @@ class Sim:
         ego = self.ego
         W = ego.perceive(self, side=self.fsm.state in ('PASS', 'MERGE', 'RETREAT'))
         trk = ego.track
+        if self.p.corridor_guardrail and not ego.corridor.valid:
+            ego.drive(self, 0.0, ego.lateral.y_ref)
+            return 0.0, ego.lateral.y_ref, self.fsm.state, 'corridor_invalid'
         v_cmd, y_ref, state, reason = self.fsm.step(Obs(
             self.t, ego.kin.v, trk.valid, trk.d, trk.y_b, trk.v_b, ego.corridor.ego_lateral, W, trk.front_rel, trk.y_l))
         if self.t < self.cfg['start']['ego_delay']:
@@ -261,6 +270,9 @@ class Sim:
             side = lead.tracker.update_side(lead.points, self.t, lead.kin.v, lead.corridor.ego_lateral, Wl,
                                             lead.corridor.heading)
             lead.corridor.update(lead.points, side.idx, W_fixed=lead.W_fixed)
+        if self.p.corridor_guardrail and not lead.corridor.valid:
+            lead.drive(self, 0.0, lead.lateral.y_ref)
+            return
         lv, ly_ref = self.logic.step(self.t, lead.kin.v, d_rear, Wl)
         if self.t < cfg['start']['leader_delay']:
             lv = 0.0
