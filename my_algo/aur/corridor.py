@@ -32,6 +32,7 @@ class Corridor:
         self._init_stamp = None
         self._init_pose = None
         self._init_count = 0
+        self._t_valid = None
 
     def update(self, points, exclude_idx=(), W_fixed=None, stamp=None):
         """W_fixed는 선행차용이며 ego_lateral = right − W/2로 계산한다.
@@ -79,6 +80,23 @@ class Corridor:
         return self
 
     def _guardrail_update(self, sides, W_fixed):
+        """벽 선 맞춤 + 짧은 무효 유지(corridor_hold_s) + 오래 무효면 재초기화(corridor_relock_s).
+
+        실차 2026-11-18: 주행 중 벽이 한 프레임만 무효여도 정지했고, 선 뒤 같은 scan이라 영영 무효였다."""
+        self._guardrail_fit(sides, W_fixed)
+        p, t = self.p, self._stamp
+        if self.valid:
+            self._t_valid = t
+        elif self._guardrail_locked and t is not None and self._t_valid is not None:
+            gap = t - self._t_valid
+            if 0.0 < p.corridor_hold_s and gap <= p.corridor_hold_s:
+                self.valid = True       # 직전 횡위치·헤딩 유지 (left/right는 None)
+            elif 0.0 < p.corridor_relock_s < gap:
+                self._guardrail_locked = False
+                self._init_count = 0
+        return self
+
+    def _guardrail_fit(self, sides, W_fixed):
         """실측 폭과 평행성이 맞는 벽만 사용한다. 다른 복도 벽으로 재초기화하지 않는다."""
         W = W_fixed if W_fixed is not None else self.p.W
         self.valid = False
