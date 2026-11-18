@@ -13,8 +13,8 @@
 | config/exp_common.yaml | 8 | `experiment_safety` | true | - | 앞차 추적 소실 정지, 먼 점 재초기화 차단, 헤딩 저역 필터 | 임시 (실차 미확인) | - | - |
 | config/exp_common.yaml | 9 | `track_recovery` | true | - | 현재 벽 점 제외, 앞차 최초 3 scan 확인, 추적 재인식 수정 | 임시 (실차 미확인) | - | - |
 | config/exp_common.yaml | 10 | `guardrail_local_view` | true | - | 후측면 근접 레일·벽 선 연속성·정지 중 적분 동결 | 임시 (실제 bag 재구성 재생, 실차 주행 미확인) | - | - |
-| config/exp_common.yaml | 11 | `corridor_hold_s` | 0.0 | s | 잠긴 벽이 잠깐 무효여도 직전 추정으로 주행하는 시간, 0이면 끔 | 임시 (실차 2026-11-18 무효 프레임마다 정지) | - | - |
-| config/exp_common.yaml | 12 | `corridor_relock_s` | 0.0 | s | 잠긴 벽이 이 시간 넘게 무효면 다시 초기화, 0이면 끔 | 임시 (실차 2026-11-18 정지 뒤 영구 무효) | - | - |
+| config/exp_common.yaml | 11 | `corridor_hold_s` | 0.3 | s | 잠긴 벽이 잠깐 무효여도 직전 추정으로 주행하는 시간, 0이면 끔 | 임시 (실차 2026-11-18 무효 프레임마다 정지) | - | - |
+| config/exp_common.yaml | 12 | `corridor_relock_s` | 1.0 | s | 잠긴 벽이 이 시간 넘게 무효면 다시 초기화, 0이면 끔 | 임시 (실차 2026-11-18 정지 뒤 영구 무효) | - | - |
 | config/exp_common.yaml | 13 | `stationary_pass` | false | - | method a 전용 정지차 우회 시험, 초기 간격 1.5 m 이상 | 임시 (실차 미확인) | - | - |
 | config/exp_common.yaml | 15 | `t_d` | 0.15 | s | 제동 지연 (명령 → 감속 시작) | 기획안 (보정 실험으로 대체) | 키우면 d_safe·d*가 커지고 v_lim이 작아진다. AEB(relative)와 같이 쓴다 | 0.10~0.30 |
 | config/exp_common.yaml | 16 | `scan_period` | 0.1 | s | 인지 주기 Δ, 식 (6)·(8)·(9)에 t_d + Δ로 들어간다 | 측정 (scan 10 Hz) | d_safe·v_lim·d*의 반응 지연에 더해진다. 0이면 기획안 식 (급정지 전 h가 이산화로 음수가 된다) | scan 주기 (0.1) |
