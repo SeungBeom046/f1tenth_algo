@@ -22,7 +22,7 @@
 | config/exp_common.yaml | 18 | `scan_period` | 0.1 | s | 인지 주기 Δ, 식 (6)·(8)·(9)에 t_d + Δ로 들어간다 | 측정 (scan 10 Hz) | d_safe·v_lim·d*의 반응 지연에 더해진다. 0이면 기획안 식 (급정지 전 h가 이산화로 음수가 된다) | scan 주기 (0.1) |
 | config/exp_common.yaml | 19 | `a_brake` | 3.0 | m/s^2 | 최대 감속도 | 기획안 (보정 실험으로 대체) | 줄이면 d_safe가 커지고 접근이 느려진다. 실제보다 크면 급정지 때 여유 m을 못 지킨다 | 2.0~4.0 |
 | config/exp_common.yaml | 20 | `m_stop` | 0.15 | m | 정지 후 남길 여유 m | 기획안 | 정지 후 간격, MERGE 시작 조건(선행차 앞면이 뒤범퍼보다 m 뒤). 키우면 d*가 멀어진다 | 0.10~0.25 |
-| config/exp_common.yaml | 21 | `eps_follow` | 0.05 | m | 추종 여유 ε | 기획안 | v_lim과 hold 판정의 여유. 키우면 d*가 멀어지고 hold가 줄어든다 | 0.03~0.10 |
+| config/exp_common.yaml | 21 | `eps_follow` | 0.15 | m | 추종 여유 ε. 0.05면 정지 앞차 뒤 planner 정지점(0.63 m)이 실험 AEB 부분 관측 한계(0.9 m/s에서 0.66 m)보다 가까워 AEB가 먼저 걸려 고정됐다 | 임시 (실차 2026-11-18) | v_lim과 hold 판정의 여유. 키우면 d*가 멀어지고 hold가 줄어든다 | 0.03~0.10 |
 | config/exp_common.yaml | 23 | `belief_model` | survival | - | belief 모델 original(기획안 식) / survival(기획안 변경) | 기획안 변경 | original은 Y를 NY로 오판(폐루프 115/200), survival은 188/200 | survival |
 | config/exp_common.yaml | 24 | `d_y_min` | 0.6 | m | π(d) 분포 하한, 선행차 양보 반응 거리 최소 | 기획안 | survival에서 NY 확정 거리가 d_y_min + (1−η)(d_y_max − d_y_min)이 된다. 선행차 d_y 추첨 범위이기도 하다 | 0.4~0.8 |
 | config/exp_common.yaml | 25 | `d_y_max` | 1.2 | m | π(d) 분포 상한, 선행차 양보 반응 거리 최대 | 기획안 | 이 거리 밖에서는 belief가 변하지 않는다. d* < d_y_max여야 탐색이 된다 | 1.0~1.5 |

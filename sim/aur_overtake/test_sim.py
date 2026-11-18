@@ -105,7 +105,7 @@ def test_aeb_flicker_while_stopped_not_counted_as_moving():
     # 이 검사는 정지 중 상승 에지 집계용이다. 깜빡임을 재현하는 기존 벽 추정 조건도 고정한다.
     r = Sim('d', load_cfg(**{'leader.behavior': 'NY', 'leader.d_y': 1.0, 'lidar.range_noise_std': 0.02,
                              'aeb.bumper_emergency_distance': 0.25}), corridor_guardrail=False,
-            experiment_safety=False, guardrail_local_view=False).run()
+            experiment_safety=False, guardrail_local_view=False, eps_follow=0.05).run()
     assert r['N_AEB'] >= 3 and r['N_AEB_moving'] <= 1 and not r['collision']
 
 

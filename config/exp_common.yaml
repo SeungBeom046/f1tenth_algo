@@ -18,7 +18,7 @@ aur:
   scan_period: 0.1          # TUNE: 인지 주기 Δ, 식 (6)·(8)·(9)에 t_d + Δ로 들어간다 | s | 측정 (scan 10 Hz)
   a_brake: 3.0              # TUNE: 최대 감속도 | m/s^2 | 기획안 (보정 실험으로 대체)
   m_stop: 0.15              # TUNE: 정지 후 남길 여유 m | m | 기획안
-  eps_follow: 0.05          # TUNE: 추종 여유 ε | m | 기획안
+  eps_follow: 0.15          # TUNE: 추종 여유 ε. 0.05면 정지 앞차 뒤 planner 정지점(0.63 m)이 실험 AEB 부분 관측 한계(0.9 m/s에서 0.66 m)보다 가까워 AEB가 먼저 걸려 고정됐다 | m | 임시 (실차 2026-11-18)
   # --- belief (식 1~5) ---
   belief_model: survival    # TUNE: belief 모델 original(기획안 식) / survival(기획안 변경) | - | 기획안 변경
   d_y_min: 0.6              # TUNE: π(d) 분포 하한, 선행차 양보 반응 거리 최소 | m | 기획안

@@ -8,7 +8,7 @@ from dataclasses import replace
 
 from my_algo.aur.params import EXPERIMENT_OVERRIDES, AurParams
 
-P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, experiment_safety=False))
+P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, experiment_safety=False, eps_follow=0.05))   # 수치는 기획안 ε
 
 
 def states(log):
