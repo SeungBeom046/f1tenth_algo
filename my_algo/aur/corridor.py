@@ -142,11 +142,14 @@ class Corridor:
             if not selected:
                 return self
         else:
-            self._init_count = 0
+            self._init_miss()
             return self
         previous_heading = self.heading
         # 가까운 낮은 레일의 윗면 점보다 길게 보이는 벽 선의 방향을 우선한다.
         self.heading = max(selected, key=lambda line: line.span).heading
+        if self.p.corridor_heading_avg and len(selected) == 2:
+            # 짧은 레일 선 하나의 기울기는 잡음이 크다 (실차 2026-11-18 조향 ±0.3 rad). 두 선을 길이 가중 평균한다.
+            self.heading = sum(line.heading * line.span for line in selected) / sum(line.span for line in selected)
         c = math.cos(self.heading)
         distances = {line.side: self._dist(line.points, c) for line in selected}
         self.left, self.right = distances.get(1), distances.get(-1)
@@ -157,14 +160,16 @@ class Corridor:
         if abs(self.left + self.right - W) > self.p.corridor_width_tol:
             self.heading = previous_heading
             self.left = self.right = None
-            self._init_count = 0
+            self._init_miss()
             return self
         self.ego_lateral = self.right - W / 2 if W_fixed is not None else (self.right - self.left) / 2
         self.W_est = W
         if self.p.guardrail_local_view and not self._guardrail_locked:
             if self._stamp is None or self._stamp != self._init_stamp:
                 previous = self._init_pose
+                window = self.p.corridor_init_window_s
                 consistent = (self._init_count > 0 and previous is not None
+                              and (window <= 0 or self._stamp is None or self._stamp - self._init_stamp <= window)
                               and abs(self.heading - previous[0]) <= math.radians(5)
                               and abs(self.ego_lateral - previous[1]) <= self.p.corridor_width_tol)
                 self._init_count = self._init_count + 1 if consistent else 1
@@ -175,6 +180,12 @@ class Corridor:
         self.valid = self._guardrail_locked = True
         self.wall_idx = {q.i for line in selected for q in line.points}
         return self
+
+    def _init_miss(self):
+        # corridor_init_window_s > 0: 선을 못 찾은 scan은 초기화 횟수를 지우지 않는다 (창 안의 3회 일치로 잠금).
+        # 실차 2026-11-18: 정지 자세에서 쌍이 10 scan에 1번꼴로만 잡혀 연속 3회를 못 채우고 영영 정지했다.
+        if self.p.corridor_init_window_s <= 0 or self._stamp is None:
+            self._init_count = 0
 
     @property
     def initializing(self):

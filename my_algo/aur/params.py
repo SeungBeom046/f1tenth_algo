@@ -95,6 +95,8 @@ class AurParams:
     guardrail_local_view: bool = False  # 가까운 레일의 후측면 관측·벽 선 연속성 사용
     corridor_hold_s: float = 0.0       # 잠긴 벽이 무효여도 이 시간 동안 직전 추정으로 주행 [s], 0이면 끔
     corridor_relock_s: float = 0.0     # 잠긴 벽이 이 시간 넘게 무효면 처음부터 다시 초기화 [s], 0이면 끔
+    corridor_init_window_s: float = 0.0  # 벽 초기화 3회 일치를 이 시간 창 안에서 센다 (못 찾은 scan은 무시) [s], 0이면 연속 3회
+    corridor_heading_avg: bool = False   # 헤딩 = 양쪽 벽 선 길이 가중 평균 (끄면 긴 선 하나)
     stationary_pass: bool = False      # method a 전용, 정지차 시험임을 명시한 조기 차선 변경
     corridor_line_tol: float = 0.03    # 벽 직선에서 허용하는 점의 수직 오차 [m]
     corridor_width_tol: float = 0.10   # 실측 W와 벽 사이 거리의 허용 차이 [m]
