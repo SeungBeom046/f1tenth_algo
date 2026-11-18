@@ -3,6 +3,15 @@
 다음 세션은 `CLAUDE_TASK.md`(커밋하지 않음, 사용자가 직접 저장)와 이 파일만 읽고 시작한다.
 아래 결과 표는 표마다 적힌 커밋 기준이다. 리팩터링(682bfdc)은 동작을 바꾸지 않았다.
 
+## 인식 태그·실행 요약, planner·AEB 정지 순서, AEB 고정 해제, 순항 속도 (2026-11-18)
+
+- 실차: 정지 차 뒤에서 planner는 0.63 m까지 0.9 m/s를 냈고, 실험 AEB 부분 관측 규칙(라이다만 보이면 범퍼 0.22 m 앞으로 보고 반응 0.35 s + 제동 + 0.20 m)이 0.66 m에서 먼저 걸려 AUTO off까지 고정됐다. 앞차가 없을 때 0.9 m/s가 느렸다.
+- `32b3471` (동작 불변): `[Drive]` reason 끝에 `rail_ok|rail_hold|rail_init|rail_lost`와 `lead_detect|lead_pending|lead_jump|lead_lost|lead_none`, 바뀔 때 `[EXP ego] 인식:` 줄, AEB 작동 줄, Ctrl+C 때 `EXP ego 요약`. launch에 기본 주행의 `autonomous_metrics_logger`를 추가했다. 읽는 법은 CAR_TERMINALS `로그·요약 읽기`.
+- `271e7e4`: `eps_follow` 0.05 → 0.15. planner 정지점이 0.63 → 약 0.73 m로 AEB 한계보다 먼저 온다. `m_stop`(stop_gap_ok 기준)은 그대로다. 기획안 수치를 쓰는 FSM 단위 테스트와 AEB 깜빡임 집계 시험은 0.05로 고정했다.
+- off `3ccc0b6`, on `ca51381`: 실험 AEB `latch_release_sec` 1.0 s. 측정 속도 < 0.05 m/s이고 지금 명령으로 다시 검사해도 비상이 아닌 상태가 1 s 이어지면 고정을 푼다. planner가 계속 앞으로 가려 하면 다시 걸린다.
+- on `b6804bc`: `v_cruise` 1.2 m/s. 선행차를 한 번도 못 봤을 때만 쓴다. 본 뒤 놓치면 그대로 정지한다.
+- 정지 차는 method d로 추월하지 않는다 (설계). 실차 주행은 **실차 미확인**이다.
+
 ## 재초기화 시간 창·양쪽 레일 헤딩 평균 기본 on (2026-11-18)
 
 - 실차 로그(장애물 없음): 재초기화(`corridor_initializing`)가 10 scan에 1번꼴로만 잡혀 연속 3회 일치를 못 채우고 정지가 이어졌다. 주행 중 조향이 −0.30 ~ +0.13 rad로 흔들렸다.
