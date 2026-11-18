@@ -49,10 +49,20 @@ class ExperimentAEB(AEBSafetyModel):
                 continue
             angle = scan.angle_min + i * scan.angle_increment
             x, y = distance * math.cos(angle), distance * math.sin(angle)
-            if x >= self.lidar_to_bumper_dist and abs(y) <= self.vehicle_half_width:
+            if x >= self.lidar_to_bumper_dist and abs(y) <= 0.5:
                 points.append((x, y))
-        if not points:
+        path_points = [(x, y) for x, y in points if abs(y) <= self.vehicle_half_width]
+        if not path_points:
             return False
-        closest = min(x for x, _ in points)
-        ys = [y for x, y in points if x <= closest + 0.10]
-        return len(ys) >= 3 and max(ys) - min(ys) < 0.12 and abs(sum(ys) / len(ys)) < 0.10
+        closest, target_y = min(path_points)
+        ys = sorted(y for x, y in points if abs(x - closest) <= 0.10)
+        groups = [[]]
+        for y in ys:
+            if groups[-1] and y - groups[-1][-1] > 0.05:
+                groups.append([])
+            groups[-1].append(y)
+        # 검사 띠로 잘린 차 모서리를 좁은 라이다 반환으로 오인하지 않도록 띠 바깥 점도 연결한다.
+        for group in groups:
+            if group[0] <= target_y <= group[-1]:
+                return len(group) >= 3 and group[-1] - group[0] < 0.12 and abs(sum(group) / len(group)) < 0.10
+        return False

@@ -70,7 +70,7 @@ def generate_launch_description():
         DeclareLaunchArgument('lidar_roll', default_value='0.0023', description='라이다 roll [rad]'),
         DeclareLaunchArgument('lidar_to_bumper', default_value='0.28', description='라이다 → 앞범퍼 [m] (AEB, 실측 2026-11-03; config lidar_to_front와 같게)'),
         DeclareLaunchArgument('speed_source', default_value='sensors_core', description='sensors_core | command'),
-        DeclareLaunchArgument('experiment_safety', default_value='false', description='추적 소실 정지·AEB 정지 유지·헤딩 필터'),
+        DeclareLaunchArgument('experiment_safety', default_value='true', description='추적 소실 정지·AEB 정지 유지·헤딩 필터'),
         DeclareLaunchArgument('stationary_pass', default_value='false', description='method a 전용 정지차 우회 시험, 앞차 간격 1.5 m 이상'),
         OpaqueFunction(function=_scan_nodes),
         Node(

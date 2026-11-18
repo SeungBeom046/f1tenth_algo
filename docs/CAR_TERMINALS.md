@@ -323,7 +323,7 @@ ros2 launch my_algo exp_overtake.launch.py role:=straight steer:=0.2 servo_cente
 
 ### 정지차 충돌 방지와 정지차 우회 시험 (2026-11-18)
 
-`experiment_safety:=true`는 앞차 추적 소실 시 정지하고, 가까운 앞차가 먼 점으로 바뀌는 재초기화를 차단한다.
+`experiment_safety:=true`는 기본값이며 앞차 추적 소실 시 정지하고, 가까운 앞차가 먼 점으로 바뀌는 재초기화를 차단한다.
 헤딩 감쇠 입력에 0.5 저역 필터를 적용한다. scan 높이 하한은 라이다 원점 기준 −0.20 m로 내려 낮은 차체를 포함한다.
 장착 높이 0.24 m·수평 프레임 가정에서 지면 약 4 cm 위부터다. 실제 바닥 제거와 직진성은 **실차 미확인**이다.
 

@@ -57,6 +57,14 @@ def test_partial_target_margin_stops_before_lidar_only_surface():
     assert 'partial_target_margin' in model.last_reason
 
 
+def test_car_corner_clipped_by_aeb_strip_is_not_a_narrow_sensor():
+    from test_aur_guardrail import scan_message
+    points = scan(1., 0., [box(.7, .76, -.05, .22)], n=1440)
+    model = ExperimentAEB(model='geometric', path_margin=0., ttc_threshold=.35)
+    assert not model.check_emergency_braking(scan_message(points), 0.,
+                                            ReactiveDriveCommand(0., .9 * P.erpm_gain))
+
+
 def test_heading_jitter_is_reduced_without_ignoring_turns():
     # 감쇠항을 실제로 사용하는 실험 설정으로 비교한다.
     old = Lateral(replace(P, experiment_safety=False, heading_gain=1., steering_deadband=0.))

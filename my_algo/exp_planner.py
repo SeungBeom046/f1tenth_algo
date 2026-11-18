@@ -59,7 +59,7 @@ class ExpPlanner(Node):
         self.declare_parameter('t_d', 0.0)              # (ego) > 0이면 제동 지연 t_d [s] 덮어쓰기 (보정 실험 값)
         self.declare_parameter('W', 0.0)                # > 0이면 실측 통로 폭 [m]. 0이면 벽으로 추정
         self.declare_parameter('speed_source', 'sensors_core')    # sensors_core | command
-        self.declare_parameter('experiment_safety', False)
+        self.declare_parameter('experiment_safety', True)
         self.declare_parameter('stationary_pass', False)
         self.declare_parameter('steer', 0.0)            # (straight) 고정 조향 [rad]. 0이 아니면 원을 그려 실제 바퀴 각을 잰다
         self.declare_parameter('params_file', os.path.join(

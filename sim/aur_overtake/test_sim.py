@@ -213,7 +213,7 @@ def test_low_guardrails_inside_wider_hallway(behavior):
 def test_low_guardrail_wall_collision_is_reproduced_when_disabled():
     cfg = load_cfg(**{'track.wall_height': 0.20, 'leader.d_y': 1.0})
     cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
-    r = Sim('d', cfg, W=1.0, corridor_guardrail=False).run()
+    r = Sim('d', cfg, W=1.0, corridor_guardrail=False, experiment_safety=False).run()
     assert r['collision'] == 'ego_wall'
 
 
@@ -251,6 +251,7 @@ def test_stationary_vehicle_bypass_with_same_lidar_mount(height):
     cfg = load_cfg(**{'start.gap0': 2.5, 'vehicle.height': height})
     sim = Sim('a', cfg, experiment_safety=True, stationary_pass=True)
     sim.leader.kin.y = -0.265
+    sim.place_bodies()
 
     def stationary():
         sim.leader.perceive(sim, False)
@@ -261,9 +262,11 @@ def test_stationary_vehicle_bypass_with_same_lidar_mount(height):
     assert r['N_AEB_moving'] == 0
 
 
-def test_stationary_vehicle_stops_method_d_with_zero_aeb_speed():
-    sim = Sim('d', load_cfg(**{'aeb.speed_source': 'zero'}), experiment_safety=True)
+@pytest.mark.parametrize('height', [0.12, 0.25])
+def test_stationary_vehicle_stops_method_d_with_zero_aeb_speed(height):
+    sim = Sim('d', load_cfg(**{'aeb.speed_source': 'zero', 'vehicle.height': height}), experiment_safety=True)
     sim.leader.kin.y = -0.265
+    sim.place_bodies()
 
     def stationary():
         sim.leader.perceive(sim, False)
@@ -271,4 +274,4 @@ def test_stationary_vehicle_stops_method_d_with_zero_aeb_speed():
     sim._leader_frame = stationary
     r = sim.run()
     assert not r['collision'] and not r['pass_entered'] and r['gap_min'] >= sim.p.m_stop
-    assert sim.ego.aeb.latched
+    assert sim.ego.kin.v < 0.01
