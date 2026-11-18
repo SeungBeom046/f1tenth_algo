@@ -310,7 +310,7 @@ ros2 launch my_algo exp_overtake.launch.py role:=straight steer:=0.2 servo_cente
 
 ### 낮은 가드레일 안에서 벽 선택 확인
 
-`config/exp_common.yaml`의 `corridor_guardrail`은 실측 `W`에 맞는 가까운 평행 벽을 선택한다.
+`config/exp_common.yaml`의 `corridor_guardrail`은 기본 true이며 실측 `W`에 맞는 가까운 평행 벽을 선택한다.
 처음에는 양쪽 벽이 필요하다. 주행 중 한쪽이 차량 등에 가려지면 직전 위치·방향과 이어지는 반대 벽으로 위치를 구한다.
 유효한 가드레일 선을 찾지 못하면 속도 명령을 0으로 내린다. 이때 `/exp/state`의 `corridor_valid`는 false이고 ego의 `reason`은 `corridor_invalid`다.
 

@@ -80,7 +80,7 @@
 | config/exp_common.yaml | 82 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
 | config/exp_common.yaml | 83 | `corridor_min_points` | 8 | 개 | 한쪽 벽으로 인정할 최소 점 수 | 측정 (lidar_reactive_drive와 같은 값) | 벽 인정 점 수 | 기존 값 유지 |
 | config/exp_common.yaml | 84 | `corridor_wall_percentile` | 0.35 | - | 측면 거리 분위값 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 분위값 | 기존 값 유지 |
-| config/exp_common.yaml | 85 | `corridor_guardrail` | false | - | 실측 W에 맞는 가드레일 직선 선택, 무효면 정지 | 임시 (2026-11-18, 실차 미확인) | 켜면 실측 W가 필요하다. 가까운 평행 벽을 선택하고 유효한 벽을 잃으면 속도 명령 0 | 실측 W와 함께 true |
+| config/exp_common.yaml | 85 | `corridor_guardrail` | true | - | 실측 W에 맞는 가드레일 직선 선택, 무효면 정지 | 임시 (2026-11-18, 실차 미확인) | 켜면 실측 W가 필요하다. 가까운 평행 벽을 선택하고 유효한 벽을 잃으면 속도 명령 0 | 실측 W와 함께 true |
 | config/exp_common.yaml | 86 | `corridor_line_tol` | 0.03 | m | 벽 직선에서 허용하는 점의 수직 오차 | 임시 (합성·MuJoCo 회귀) | 키우면 가드레일 윗면·복도 벽 점이 같은 직선에 섞일 수 있다 | 0.01~0.03 (실차 미확인) |
 | config/exp_common.yaml | 87 | `corridor_width_tol` | 0.10 | m | 실측 W와 두 벽 사이 거리의 허용 차이 | 임시 (합성·MuJoCo 회귀) | 키우면 잘못된 벽 조합을 허용하고, 줄이면 측정 오차에 정지가 늘어난다 | 0.05~0.10 (실차 미확인) |
 | config/exp_common.yaml | 88 | `corridor_min_span` | 0.20 | m | 벽 직선의 최소 전후 길이, 분리된 점 덩어리 사이 최대 간격 | 임시 (합성·MuJoCo 회귀) | 키우면 짧은 물체를 벽으로 보는 일이 줄지만 가까운 낮은 벽을 놓칠 수 있다 | 0.15~0.30 (실차 미확인) |
