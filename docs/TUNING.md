@@ -42,7 +42,7 @@
 | config/exp_common.yaml | 40 | `lane_balance` | false | - | 차선 오프셋을 벽-차·차-차·차-벽 간격이 같게 (W 1.0: 간격 0.153, δ 0.212), false면 벽 쪽 c만 | 임시 | - | - |
 | config/exp_common.yaml | 41 | `lane_offset_max` | 0.3 | m | 차선 오프셋 δ 상한 (넓은 통로에서 벽까지 붙지 않게), null이면 상한 없음. W ≤ 1.27 m는 영향 없음 | 임시 (2026-11-16 시뮬 W 2·3 m: 0.3/0.4/0.5 성공 같고 추월 시간 13.8/14.8/15.7 s) | - | - |
 | config/exp_common.yaml | 43 | `v_B_nominal` | 0.9 | m/s | 선행차 목표 속도 | 기획안 | d*와 접근 속도 차. v_min(0.867)보다 커야 한다 | 0.87~1.1 |
-| config/exp_common.yaml | 44 | `v_cruise` | null | m/s | ego가 선행차를 아직 못 봤을 때 속도, null이면 v_B_nominal | 임시 (실차 2026-11-18 0.9 m/s가 느림) | - | - |
+| config/exp_common.yaml | 44 | `v_cruise` | 1.2 | m/s | ego가 선행차를 아직 못 봤을 때 속도, null이면 v_B_nominal | 임시 (실차 2026-11-18 0.9 m/s가 느림) | - | - |
 | config/exp_common.yaml | 45 | `v_pass` | 1.5 | m/s | 추월 속도 | 기획안 | 키우면 추월이 빨라지지만 접근 중 v_lim에 걸리는 시간이 늘고 제동 거리가 길어진다 | 1.3~1.8 |
 | config/exp_common.yaml | 46 | `erpm_gain` | 4614.0 | ERPM/(m/s) | m/s → ERPM 환산 | 측정 (vehicle_utils.ERPM_GAIN, 테이프 구간으로 재검증) | 속도 환산 전체. 틀리면 v_E, v_B, h가 모두 틀어진다 | 측정값 고정 |
 | config/exp_common.yaml | 47 | `min_erpm` | 4000.0 | ERPM | 0이 아닌 명령의 최소 ERPM | 측정 (vehicle_utils.MIN_DRIVING_RPM) | v_min = min_erpm / erpm_gain | 측정값 고정 |
