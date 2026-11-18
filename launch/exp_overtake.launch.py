@@ -108,7 +108,8 @@ def generate_launch_description():
                 'aeb_path_margin': 0.0,
                 'aeb_bumper_emergency_distance': 0.20,
                 'aeb_bumper_overlap_tolerance': 0.10,
-                'aeb_latch_release_sec': 0.0,
+                # 실차 2026-11-18: 정지 차 뒤 고정 뒤 영영 출발 못함. 정지 + 비상 아님 1 s면 해제 (scenario.yaml aeb와 같게)
+                'aeb_latch_release_sec': 1.0,
                 'lidar_to_bumper_dist': arg('lidar_to_bumper', float),
                 'max_steering': arg('max_steering', float),
                 'servo_center': arg('servo_center', float),

@@ -145,7 +145,7 @@
 | sim/aur_overtake/scenario.yaml | 46 | `hz` | 50.0 | Hz | autonomous_drive 제어 주기 | 측정 | - | - |
 | sim/aur_overtake/scenario.yaml | 47 | `vehicle_half_width` | 0.135 | m | AEB 검사 띠 반폭 = 실측 차 반폭 (launch aeb_vehicle_half_width와 같게) | 측정 (2026-11-17, 이전 0.15) | - | - |
 | sim/aur_overtake/scenario.yaml | 48 | `path_margin` | 0.0 | m | AEB 검사 띠 = 차 중심 ±(반폭 + 이 값) = ±0.135. 실차는 추월 때 차체-벽 약 5 cm (launch 값과 같게) | 임시 (2026-11-17, 이전 0.01) | - | - |
-| sim/aur_overtake/scenario.yaml | 49 | `latch_release_sec` | 0.0 | s | 실험 AEB 고정을 정지 후 비상 아님이 이 시간 이어지면 해제, 0이면 AUTO off까지 (launch aeb_latch_release_sec와 같게) | 임시 (실차 2026-11-18) | - | - |
+| sim/aur_overtake/scenario.yaml | 49 | `latch_release_sec` | 1.0 | s | 실험 AEB 고정을 정지 후 비상 아님이 이 시간 이어지면 해제, 0이면 AUTO off까지 (launch aeb_latch_release_sec와 같게) | 임시 (실차 2026-11-18) | - | - |
 | sim/aur_overtake/scenario.yaml | 50 | `bumper_emergency_distance` | 0.20 | m | AEB 고정 정지 거리, 정지 여유 m 0.15 이상 (launch 값과 같게) | 임시 (2026-11-17, 이전 0.25) | - | - |
 | sim/aur_overtake/scenario.yaml | 52 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
 | sim/aur_overtake/scenario.yaml | 53 | `rays_per_frame` | 11520 | 개 | 광선 수 = 방위 1440 × 고도 8줄 | 임시 | - | - |
