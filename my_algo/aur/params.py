@@ -85,6 +85,10 @@ class AurParams:
     retreat_clear_gap: float = 0.15     # RETREAT 탈출: 선행차 뒷면이 앞범퍼보다 이만큼 앞 [m] (m과 같은 값)
     abort_yb_window: int = 3        # 추월 중단 판정의 y_B를 최근 n개(유효 scan) 중앙값으로. 1 = 그 scan 값 그대로
     lateral_ref: str = 'center'     # 횡 여유 판정 기준: center(y_B 중심, 기존) | left_edge(y_L 왼쪽 모서리)
+    # race_stack(ForzaETH) spliner의 상대 차 예측(_predict_obs_movement 'constant')을 횡 방향만 보수적으로 옮긴 것.
+    # 횡 여유(go·추월 중단)와 복귀 판정에 '이 시간 뒤 선행차 횡위치'를 쓴다. 왼쪽(추월 차선 쪽) 움직임만 더한다
+    leader_pred_time: float = 0.0   # 선행차 횡위치 예측 시간 [s]. 0 = 끔 (race_stack fixed_pred_time 0.15)
+    leader_vlat_window: int = 5     # 선행차 횡속도 = 최근 n개 유효 y_B의 최소제곱 기울기 [개]
     # --- corridor (lidar_reactive_drive.PLANNER_CONSTANTS와 같은 값) ---
     corridor_sector_min_deg: float = 45.0
     corridor_sector_max_deg: float = 115.0

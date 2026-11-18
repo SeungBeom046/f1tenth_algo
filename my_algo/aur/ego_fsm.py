@@ -14,6 +14,10 @@
     b 수동 belief: d_follow_b(≥ d_y_max) 유지, belief Y 확정 + 횡 여유면 go.
     c 공격적 탐색: v_pass로 d_probe_c까지 접근, 판단은 b와 같음.
     d 제안:        v = min(v_pass, v_lim(d, v_B)) (기획안 식 8)로 d*(식 9)까지 접근, 판단은 b와 같음.
+
+race_stack(ForzaETH)에서 옮긴 보조 기능 (기본 off):
+    leader_pred_time: 횡 여유(go·중단)와 복귀 판정에 선행차 횡위치 예측 y_B + max(0, v_lat)·t_pred
+                      (spliner의 상대 차 예측을 횡 방향, 왼쪽 움직임만 보수적으로)
 """
 from collections import namedtuple
 
@@ -61,6 +65,8 @@ class EgoFSM:
         self._overlapped = False    # PASS에서 앞뒤로 겹쳤는가 (d ≤ 0). 그 뒤에는 중단하지 않는다
         self._y_b_most_yielded = None   # PASS 중 선행차가 가장 많이 비킨 횡위치 (복귀 판정 기준)
         self._yb_hist = []              # PASS 중 최근 y_B (abort_yb_window)
+        self._yb_track = []             # 최근 유효 (t, y_B): 선행차 횡속도 (leader_vlat_window)
+        self.leader_vlat = None         # 선행차 횡속도 추정 [m/s] (기록용, 왼쪽 +)
 
     # ------------------------------------------------------------ 방법별 종방향
     def _d_ref(self, v_b):
@@ -91,6 +97,7 @@ class EgoFSM:
         W = p.W if p.W is not None else obs.W
         delta = safety.lane_offset(W, p) if W is not None else 0.0
         trk = self._update_track_and_safety(obs)
+        self._update_leader_vlat(obs)
         self._start_and_update_belief(obs)
 
         reason = self.method
@@ -143,6 +150,29 @@ class EgoFSM:
             self.h, self.d_safe, self.v_lim = INF, None, None
         return trk
 
+    def _update_leader_vlat(self, obs):
+        """최근 유효 y_B로 선행차 횡속도(최소제곱 기울기)를 구한다. 3개 미만이면 None."""
+        p = self.p
+        if not obs.valid or obs.y_b is None:
+            return
+        self._yb_track = (self._yb_track + [(obs.t, obs.y_b)])[-max(2, p.leader_vlat_window):]
+        if len(self._yb_track) < 3:
+            self.leader_vlat = None
+            return
+        n = len(self._yb_track)
+        tm = sum(t for t, _ in self._yb_track) / n
+        ym = sum(y for _, y in self._yb_track) / n
+        stt = sum((t - tm) ** 2 for t, _ in self._yb_track)
+        self.leader_vlat = sum((t - tm) * (y - ym) for t, y in self._yb_track) / stt if stt > 0 else None
+
+    def _lat_shift(self):
+        """선행차 횡위치 예측 이동량 (race_stack 상대 차 예측의 횡 성분, 보수적).
+        왼쪽(추월 차선 쪽) 움직임만 더한다: 비키는 쪽 움직임으로 여유를 앞당겨 쓰지 않는다. 끄면 0."""
+        p = self.p
+        if p.leader_pred_time <= 0.0 or self.leader_vlat is None:
+            return 0.0
+        return max(0.0, self.leader_vlat) * p.leader_pred_time
+
     def _start_and_update_belief(self, obs):
         """WAIT에서 t₀를 정하고, APPROACH·PROBE에서 belief를 갱신한다 (식 1~5, z = y_B 변위)."""
         p = self.p
@@ -181,6 +211,10 @@ class EgoFSM:
             self.state, reason = 'PASS', 'pass_start'
             self._y_b_most_yielded = trk.y_b
             self._yb_hist = [trk.y_b]
+            if p.leader_pred_time > 0.0:
+                # PASS부터 측면 추적으로 바뀌어 y_B 기준점이 튈 수 있다: 횡속도는 PASS 관측으로 새로 구한다
+                self._yb_track = self._yb_track[-1:]
+                self.leader_vlat = None
         elif give_up or waited >= p.T_max:
             self.state, reason = 'FOLLOW', ('belief_NY' if give_up else 'T_max')
             self.follow_reason = reason
@@ -197,7 +231,7 @@ class EgoFSM:
         if obs.d <= 0.0:
             self._overlapped = True     # 겹친 뒤 감속하면 나란히 있는 시간만 길어진다: 차선 유지, v_pass
             return False
-        if y_b > self._y_b_most_yielded + p.y_yield_thr \
+        if y_b + self._lat_shift() > self._y_b_most_yielded + p.y_yield_thr \
                 or not self._lateral_ok(W, obs):
             self.state = 'RETREAT' if p.abort_mode == 'retreat' else 'FOLLOW'
             self.follow_reason = 'pass_abort'
@@ -219,9 +253,10 @@ class EgoFSM:
     def _lateral_ok(self, W, o):
         """선행차 왼쪽에 ego 폭 + 양쪽 여유가 남는가. lateral_ref = left_edge이고 y_L이 있으면 왼쪽 모서리 기준."""
         p = self.p
+        shift = self._lat_shift()
         if p.lateral_ref == 'left_edge' and o.y_l is not None:
-            return safety.lateral_pass_ok_edge(W, o.y_l, p.w_car, p.c_lat)
-        return safety.lateral_pass_ok(W, o.y_b, p.w_car, p.c_lat)
+            return safety.lateral_pass_ok_edge(W, o.y_l + shift, p.w_car, p.c_lat)
+        return safety.lateral_pass_ok(W, o.y_b + shift, p.w_car, p.c_lat)
 
     def _pass_speed(self, obs, delta, v, reason):
         """PASS 속도: 선행차와 횡으로 완전히 어긋나고 추월 차선(+δ)에 도착하기 전에는 추종 속도, 그 뒤 v_pass.

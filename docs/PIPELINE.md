@@ -81,6 +81,7 @@ stateDiagram-v2
 | 횡 여유 (`lateral_pass_ok`) | W/2 − y_B − w/2 ≥ w + 2c (선행차 왼쪽에 ego 폭 + 양쪽 여유) |
 | go | a: PROBE 후 `T_wait_a`(3 s) 경과 + 횡 여유. b·c·d: belief Y 확정 + 횡 여유 |
 | 추월 중단 | PASS, 앞뒤로 겹치기 전(d > 0): 선행차 y_B > (PASS 중 최소 y_B) + `y_yield_thr` 또는 횡 여유 없음 → RETREAT (`follow_reason = pass_abort`). 겹친 뒤(d ≤ 0)에는 중단하지 않고 차선 유지 + v_pass. 횡 여유 기준은 `lateral_ref` (center: y_B, left_edge: y_L) |
+| 선행차 횡위치 예측 (`leader_pred_time`, 기본 0 = 끔) | race_stack spliner의 상대 차 예측을 옮긴 것. 최근 `leader_vlat_window`개 유효 y_B의 최소제곱 기울기 v_lat로 y_B(또는 y_L) + max(0, v_lat)·t_pred를 횡 여유(go·중단)와 복귀 판정에 쓴다. 왼쪽(추월 차선 쪽) 움직임만 더해 판정을 늦추거나 중단을 앞당길 뿐 앞당겨 추월하지 않는다. PASS 진입 때 기울기 이력을 비운다 (정면 → 측면 추적) |
 | RETREAT | 추월 차선(+δ) 유지, `retreat_speed_ratio` × v_B, 측면 추적 유지(선행차 점을 벽 계산에서 뺌). 선행차 뒷면이 앞범퍼보다 `retreat_clear_gap` 이상 앞서면 FOLLOW |
 | front_rel | 선행차 앞면 x − ego 뒤범퍼 x (측면 추적, 안 보이면 마지막 v_B로 추측 항법) |
 

@@ -78,6 +78,8 @@ NOTES = {
     'retreat_speed_ratio': ('작을수록 빨리 물러나지만 0.96(= v_min/v_B) 아래는 최소 속도 규칙 때문에 v_min 또는 0이 된다', '0.5~0.95'),
     'retreat_clear_gap': ('작으면 선행차와 가까운 채 중앙으로 돌아온다', 'm 이상'),
     'lateral_ref': ('left_edge면 횡 여유(go, 중단)를 선행차 왼쪽 모서리로 판정', 'center (측정 후 결정)'),
+    'leader_pred_time': ('키우면 왼쪽으로 돌아오는 선행차에 추월을 더 일찍 중단·보류한다. 크면 횡속도 잡음에 가짜 중단이 는다', '0.1~0.3 (측정 후)'),
+    'leader_vlat_window': ('키우면 횡속도 잡음이 줄고 복귀 감지가 늦어진다', '4~8'),
     'side_gate': ('추월 중 선행차를 다시 붙잡는 범위', '0.4~0.8'),
     'corridor_sector_min_deg': ('벽 거리 섹터', '기존 값 유지'),
     'corridor_sector_max_deg': ('벽 거리 섹터', '기존 값 유지'),

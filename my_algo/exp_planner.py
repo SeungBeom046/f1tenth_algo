@@ -221,7 +221,7 @@ class ExpPlanner(Node):
                  y_ref=y_ref, valid=trk.valid, d=trk.d, y_b=trk.y_b, v_b=trk.v_b, ego_lateral=cor.ego_lateral,
                  heading=cor.heading, W=cor.W_est, h=fsm.h if fsm.h != float('inf') else None,
                  b=fsm.belief.prob_yield(), decided=fsm.decided,
-                 t0=fsm.t0, t_decided=fsm.t_decided, n_abort=fsm.abort_count)
+                 t0=fsm.t0, t_decided=fsm.t_decided, n_abort=fsm.abort_count, leader_vlat=fsm.leader_vlat)
         s.update(corridor_valid=cor.valid, wall_left=cor.left, wall_right=cor.right,
                  guardrail_local_view=self.p.guardrail_local_view, wall_initializing=cor.initializing)
         s.update(track_status=self.runner.tracker.status, pending_d=self.runner.tracker.pending_d)
