@@ -15,7 +15,8 @@ from sim import Sim, load_cfg
 def parse(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--method', default='d', choices=list('abcd'))
-    ap.add_argument('--leader', default=None, choices=['Y', 'NY', 'YR'], help='선행차 행동 (기본: scenario.yaml)')
+    ap.add_argument('--leader', default=None, choices=['Y', 'NY', 'NYR', 'YR', 'S'],
+                    help='선행차 행동 (기본: scenario.yaml). 레이스: Y=S1 비켜 줌, NYR=S2 급정지 뒤 재출발, S=S3 멈춘 차')
     ap.add_argument('--belief', default=None, choices=['original', 'survival'])
     ap.add_argument('--aeb', default=None, choices=list(AEB), help='AEB 조건 (batch.py와 같은 이름, 기본: scenario.yaml)')
     ap.add_argument('--seed', type=int, default=0)

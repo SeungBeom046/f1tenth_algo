@@ -289,6 +289,7 @@ Ctrl+C 요약의 `IMU 자이로` 줄에 받은 개수, scan 중 자이로를 쓴
 | `lead_pending` | 처음 본 후보를 3 scan 확인 중 → 정지 |
 | `lead_lost` / `lead_jump` | 보던 선행차를 놓쳤다 / 갑자기 먼 점이라 거부했다 → 정지 |
 | `lead_none` | 아직 한 번도 못 봤다 → `v_cruise` 1.2 m/s로 간다 |
+| `lead_static 1.80m` | 멈춘 차로 확정했다 (한 번도 안 움직인 차 1 s, 달리다 선 차 3 s). 옆 공간이 있으면 의도 판단과 무관하게 우회 (`static_bypass`). 확정 전 후보 동안은 2.0 m 뒤에서 선다 |
 
 AEB가 걸리면 `[EXP ego] AEB 작동: <이유>` 줄이 찍힌다. Ctrl+C로 끄면 `EXP ego 요약`(상태 흐름, 인식 비율, 정지 이유 비율, scan 주기·처리 시간, AEB 횟수와 이유)과 기본 주행과 같은 `AUTONOMOUS TRIAL` 요약이 찍힌다. 처리 시간이 100 ms를 넘으면 scan을 못 따라가는 것이다.
 
@@ -470,9 +471,27 @@ ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=NY run_id:=dNY1 
 [EXP leader] 급정지 (NY)
 ```
 
+**레이스 시나리오 S2: 급정지 뒤 다시 출발한다** (NY + `resume_after:=2.0`)
+
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=NY resume_after:=2.0 run_id:=dS2_1 W:=1.0 servo_center:=0.50 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dS2_1_black.log
+```
+
+- 동작: NY와 같이 급정지한 뒤 2 s 지나 다시 0.9 m/s로 달린다. ego는 추월하지 않고 따라가야 한다 (멈춘 차로 잘못 확정하면 실패).
+
+**레이스 시나리오 S3: 멈춰 있는 차** (`intent:=S`)
+
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=leader intent:=S run_id:=dS3_1 W:=1.0 servo_center:=0.50 2>&1 | tee ~/runs/$(date +%m%d_%H%M)_dS3_1_black.log
+```
+
+- 동작: 출발하지 않는다. 검정이를 **손으로 오른쪽 차선 중심(오른쪽 레일에서 약 0.24 m, 차 중심 y −0.265 m)**에 놓고, 파랑이는 중앙에서 2.5 m 뒤에 둔다. ego는 서지 않고 왼쪽으로 돌아가야 한다.
+- 파랑이 로그에 `lead_static`이 뜨면 멈춘 차로 확정한 것이다. 처음 2 m 안에서 보이면 돌아갈 공간이 안 나와 안전 정지한다 (범위 밖).
+
 | 인자 | 값 | 뜻 |
 |---|---|---|
-| `intent` | `Y` / `NY` | 위 두 시나리오 |
+| `intent` | `Y` / `NY` / `S` | 위 시나리오 (S = 멈춘 차) |
+| `resume_after` | s (선택, NY) | 주면 급정지 후 이 시간 뒤 다시 출발 (레이스 S2: 2.0) |
 | `run_id` | 회차 이름 (예: `dY1`, `bNY2`) | `d_y`와 급정지 지연이 이 이름으로 정해진다. 같은 이름이면 같은 값. 시작 줄의 값을 회차표에 적는다 |
 | `W` | 실측 통로 폭 [m] | 중앙·비키는 차선 위치를 오른쪽 벽 기준으로 잡는 데 쓴다. **실제와 다르면 차가 한쪽으로 쏠린다** |
 | `d_y` | m (선택) | 주면 `run_id` 대신 이 반응 거리로 고정 |

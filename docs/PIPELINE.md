@@ -86,6 +86,7 @@ stateDiagram-v2
 | 레일 놓침 대체 주행 (`rail_fallback_v`, 기본 0.9 m/s, null = 끔) | `fallback.free_space_lateral` + `ego_runner.rail_fallback`. 레일 무효이고, 앞차를 확정한 적 없고(`fsm._last` 없음, 확인 중 후보 없음), WAIT·APPROACH이며, 마지막 레일 뒤 `rail_fallback_s`(3 s) 안일 때만. 차 옆·앞(라이다 x −0.6~1.5 m)에서 좌우 가장 가까운 점(10% 분위)으로 횡위치를 재고(폭 W + 0.1 m 밖 점은 버려 바깥 복도 벽을 레일로 안 본다) 기존 횡 제어기(y_ref 0, 헤딩은 자차 위치 필터 값)로 간다. 앞범퍼 앞 `rail_fallback_clear`(1.5 m) 안 진행 경로(w/2 + c)에 점이 있으면 쓰지 않고 정지 (레일 무효 동안 앞차 추적이 꺼지므로). 명령 reason `rail_fallback` |
 | go 유지 (`go_hold_s`, 기본 0.3 s, 0 = 끔) | race_stack state_machine의 `splini_hyst_timer_sec`. go 조건이 이 시간 동안 끊김 없이 맞아야 PASS. 한 scan이라도 깨지면 다시 센다 |
 | RETREAT | 추월 차선(+δ) 유지, `retreat_speed_ratio` × v_B, 측면 추적 유지(선행차 점을 벽 계산에서 뺌). 선행차 뒷면이 앞범퍼보다 `retreat_clear_gap` 이상 앞서면 FOLLOW |
+| 멈춘 차 확정·우회 (`static_bypass`, 기본 on, 레이스 개정안) | `EgoFSM._update_static`. 앞차를 본 지 `static_settle_s`(0.5 s) 뒤부터, v_B < `static_v`(0.15 m/s)이고 후보 시작 위치에서 횡이동 ≤ `static_lat`(5 cm)이면 후보. 후보가 `static_t_never`(1.0 s, v_B > `static_moving_v` 0.3 m/s를 본 적 없음) / `static_t_moved`(3.0 s) 이어지면 확정. 후보 동안 WAIT·APPROACH·PROBE·FOLLOW 속도를 v_lim(d − `static_bypass_gap` 2.0 m + m + ε)로 줄여 2.0 m 뒤에서 선다. 확정되고 d ≥ `static_bypass_min_d`(1.0 m)이며 횡 여유가 있으면 belief와 무관하게 PASS (reason `static_bypass`). 이 PASS는 `stationary_pass`와 같은 속도 규칙(어긋나기 전 min(v_B_nominal, v_lim), 뒤 v_B_nominal). 다시 움직이면 확정을 푼다 |
 | front_rel | 선행차 앞면 x − ego 뒤범퍼 x (측면 추적, 안 보이면 마지막 v_B로 추측 항법) |
 
 상태별 명령:

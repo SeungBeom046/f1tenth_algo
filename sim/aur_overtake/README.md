@@ -22,6 +22,12 @@ python sim/aur_overtake/run.py --method d --leader Y                            
 mjpython sim/aur_overtake/run.py --method d --leader Y --viewer --start-paused       # 뷰어 (macOS는 mjpython), Enter로 시작
 mjpython sim/aur_overtake/run.py --method d --leader Y --viewer --speed 5          # 5배속으로 시작 (끝나면 실제 재생 배속을 터미널에 찍는다)
 python sim/aur_overtake/run.py --method c --leader NY --aeb off --set start.gap0=2.0 eta=0.95
+# 레이스 시나리오 (RESEARCH_RACE.md): S2 급정지 뒤 재출발, S3 멈춘 차 (2.5 m 앞, 오른쪽 차선)
+# 결과 JSON의 success는 시나리오와 무관하게 '추월 완료(DONE)'다. S2(NYR)의 정답은 success false + pass_entered false + collision 없음
+mjpython sim/aur_overtake/run.py --method d --leader NYR --viewer
+mjpython sim/aur_overtake/run.py --method d --leader S --viewer --set start.gap0=2.5
+# 실차 조건 (20 cm 가드레일 + 2.7 m 복도 + 라이다 잡음 0.02 m)
+python sim/aur_overtake/run.py --method d --leader S --set start.gap0=2.5 track.wall_height=0.2 track.outer_width=2.7 track.outer_center_y=0.35 lidar.range_noise_std=0.02
 ```
 
 실행 중 터미널(stderr)에 바뀐 것만 한 줄씩 찍힌다. 끄려면 `--quiet`. 마지막 결과 JSON은 stdout이라 `2>/dev/null`로 따로 받을 수 있다.
