@@ -88,7 +88,7 @@
 | config/exp_common.yaml | 89 | `leader_vlat_window` | 5 | 개 | 선행차 횡속도 최소제곱 기울기에 쓰는 최근 유효 y_B 수 | 임시 (2026-11-19 추가) | 키우면 횡속도 잡음이 줄고 복귀 감지가 늦어진다 | 4~8 |
 | config/exp_common.yaml | 90 | `go_hold_s` | 0.3 | s | 추월 조건(go)이 끊김 없이 유지돼야 하는 시간 (race_stack splini_hyst_timer_sec), 0이면 끔 | 임시 (2026-11-19 on: 잡음 Y 가짜 중단 16 → 8/45) | 키우면 경계 근처 y_B 잡음으로 PASS에 들어갔다 바로 중단하는 일이 줄고 추월 시작이 그만큼 늦어진다 | 0.2~0.75 (측정 후) |
 | config/exp_common.yaml | 91 | `side_gate` | 0.6 | m | 측면 추적 연관 거리 | 임시 | 추월 중 선행차를 다시 붙잡는 범위 | 0.4~0.8 |
-| config/exp_common.yaml | 93 | `pose_filter` | false | - | 자차 횡위치·헤딩을 자이로·속도로 예측하고 레일 측정으로 보정, 자이로 없으면 기존과 같다 | 임시 (2026-11-19 잡음 0.02 m 헤딩 sd 2.9°) | - | - |
+| config/exp_common.yaml | 93 | `pose_filter` | true | - | 자차 횡위치·헤딩을 자이로·속도로 예측하고 레일 측정으로 보정, 자이로 없으면 기존과 같다 | 임시 (2026-11-19 잡음 0.02 m 헤딩 sd 2.9°) | - | - |
 | config/exp_common.yaml | 94 | `pose_k_heading` | 0.15 | - | 헤딩 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
 | config/exp_common.yaml | 95 | `pose_k_lateral` | 0.3 | - | 횡위치 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
 | config/exp_common.yaml | 96 | `pose_reset_s` | 1.0 | s | 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 (자이로 드리프트 차단) | 임시 | - | - |

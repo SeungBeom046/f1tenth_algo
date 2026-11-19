@@ -217,7 +217,8 @@ def test_low_guardrails_inside_wider_hallway(behavior):
 def test_low_guardrail_wall_collision_is_reproduced_when_disabled():
     cfg = load_cfg(**{'track.wall_height': 0.20, 'leader.d_y': 1.0})
     cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
-    r = Sim('d', cfg, W=1.0, corridor_guardrail=False, experiment_safety=False, guardrail_local_view=False).run()
+    r = Sim('d', cfg, W=1.0, corridor_guardrail=False, experiment_safety=False, guardrail_local_view=False,
+            pose_filter=False).run()
     assert r['collision'] == 'ego_wall'
 
 
