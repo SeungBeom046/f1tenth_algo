@@ -284,7 +284,7 @@ Ctrl+C 요약의 `IMU 자이로` 줄에 받은 개수, scan 중 자이로를 쓴
 | `rail_ok` | 양쪽(또는 한쪽) 가드레일 선을 잡았다 |
 | `rail_hold` | 이번 scan은 못 잡았지만 0.3 s 안이라 직전 위치·방향으로 간다 |
 | `rail_init` | 처음(또는 1 s 넘게 놓친 뒤) 다시 잡는 중, 2 s 안 3회 일치가 필요하다. 이 동안 정지 |
-| `rail_lost` | 못 잡았다 → 정지 |
+| `rail_lost` | 못 잡았다. 앞차를 아직 못 봤고 추월 전이면 3 s까지 빈 공간 가운데로 0.9 m/s (`[Drive]` reason `rail_fallback`), 아니면 정지 |
 | `lead_detect 1.23m` | 선행차를 추적 중, 앞범퍼 → 선행차 뒷면 거리 |
 | `lead_pending` | 처음 본 후보를 3 scan 확인 중 → 정지 |
 | `lead_lost` / `lead_jump` | 보던 선행차를 놓쳤다 / 갑자기 먼 점이라 거부했다 → 정지 |
