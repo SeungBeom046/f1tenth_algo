@@ -92,7 +92,7 @@
 | config/exp_common.yaml | 94 | `pose_k_heading` | 0.15 | - | 헤딩 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
 | config/exp_common.yaml | 95 | `pose_k_lateral` | 0.3 | - | 횡위치 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
 | config/exp_common.yaml | 96 | `pose_reset_s` | 1.0 | s | 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 (자이로 드리프트 차단) | 임시 | - | - |
-| config/exp_common.yaml | 98 | `rail_fallback_v` | null | m/s | 레일 무효 동안 빈 공간 가운데를 따라가는 속도, null이면 끔(정지) | 임시 (2026-11-19 실차 rail_lost 75% 정지) | - | - |
+| config/exp_common.yaml | 98 | `rail_fallback_v` | 0.9 | m/s | 레일 무효 동안 빈 공간 가운데를 따라가는 속도, null이면 끔(정지) | 임시 (2026-11-19 실차 rail_lost 75% 정지) | - | - |
 | config/exp_common.yaml | 99 | `rail_fallback_s` | 3.0 | s | 마지막 레일 측정 뒤 대체 주행을 허용하는 시간 | 임시 | - | - |
 | config/exp_common.yaml | 100 | `rail_fallback_clear` | 1.5 | m | 앞범퍼 앞 이 거리 안 진행 경로(w/2 + c)에 점이 있으면 대체 주행 없이 정지 | 임시 | - | - |
 | config/exp_common.yaml | 102 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
