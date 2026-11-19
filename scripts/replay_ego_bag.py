@@ -95,6 +95,8 @@ def main():
     ap.add_argument('--method', default='a', choices=list('abcd'))
     ap.add_argument('--set', nargs='*', default=[], metavar='K=V', help='AurParams 덮어쓰기 (실차 launch 인자와 같게)')
     ap.add_argument('--gyro-bias', type=float, default=0.0, help='뺄 자이로 바이어스 [rad/s] (실차 로그의 IMU 바이어스 보정 값)')
+    ap.add_argument('--trial', type=int, default=None,
+                    help='한 bag에 회차가 여럿이면 n번째(1부터)만. /exp/state가 2 s 넘게 끊긴 곳을 회차 경계로 본다')
     a = ap.parse_args()
     path = a.bag if a.bag.endswith('.db3') else os.path.join(a.bag, sorted(f for f in os.listdir(a.bag) if f.endswith('.db3'))[0])
     over = dict(kv.split('=', 1) for kv in a.set)
@@ -103,6 +105,16 @@ def main():
     scans = [(t, laserscan(b)) for t, b in read(path, '/scan')]
     imu = [(t, imu_z(b)[2]) for t, b in read(path, '/livox/imu')]
     states = [json.loads(string(b)) for _, b in read(path, '/exp/state')]
+    trials = [[]]
+    for s in states:
+        if trials[-1] and s['t'] - trials[-1][-1]['t'] > 2.0:
+            trials.append([])
+        trials[-1].append(s)
+    print('회차 %d개: %s' % (len(trials), ', '.join('%d) %s %s %.0f s' % (k + 1, tr[0].get('role'), tr[0].get('method', ''),
+                                                                      tr[-1]['t'] - tr[0]['t']) for k, tr in enumerate(trials))))
+    if a.trial is not None:
+        states = trials[a.trial - 1]
+        scans = [(t, s) for t, s in scans if states[0]['t'] - 0.2 <= t <= states[-1]['t'] + 0.2]
     runner = EgoRunner(p, a.method)
     st_t, it = [s['t'] for s in states], [t for t, _ in imu]
     prev_t, prev_key, n, same = None, None, 0, 0
