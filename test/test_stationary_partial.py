@@ -71,3 +71,41 @@ def test_track_loss_resets_hold_and_blocks_pass():
     for k, valid in enumerate([True, True, False, True, True]):
         fsm.step(obs(0.1 * k, valid, 1.9 if valid else None, -0.3 if valid else None))
     assert fsm.state != 'PASS' and fsm.pass_block.startswith('조건 유지 시간 미충족')
+
+
+G = replace(P, stationary_geom_pass=True, stationary_steer_frac=0.8, go_hold_s=0.0)
+
+
+def test_geometric_pass_distance_and_close_start():
+    import math
+    fsm = EgoFSM(G, 'a')
+    shift, need = fsm._pass_need(Obs(0.0, 0.0, True, 1.35, -0.29, 0.0, 0.0, 1.0))
+    radius = G.wheelbase / math.tan(0.8 * G.max_steering)
+    assert abs(shift - (-0.29 + G.leader_width / 2 + G.stationary_clear + G.w_car / 2)) < 1e-9     # 약 0.03 m
+    assert abs(need - (math.sqrt(radius ** 2 - (radius - shift) ** 2) + G.stationary_margin_x)) < 1e-9
+    fsm.step(Obs(0.0, 0.0, True, 1.35, -0.29, 0.0, 0.0, 1.0))           # 1.5 m 안이지만 옆 이동이 작다
+    assert fsm.state == 'PASS'
+    near = EgoFSM(G, 'a')                                                # 가운데 가까운 차를 너무 가까이서
+    near.step(Obs(0.0, 0.0, True, 0.4, -0.12, 0.0, 0.0, 1.0))
+    assert near.state != 'PASS' and near.pass_block.startswith('종방향 거리 부족 (d 0.40 < 필요')
+
+
+def test_stationary_pass_ignores_y_jitter_but_keeps_lateral_check():
+    fsm = EgoFSM(G, 'a')
+    fsm.step(Obs(0.0, 1.0, True, 1.35, -0.29, 0.0, 0.0, 1.0))
+    assert fsm.state == 'PASS'
+    for k, y in enumerate([-0.22, -0.29, -0.21, -0.22]):                 # 넓게·좁게 보여 y_B가 7 cm씩 튐
+        fsm.step(Obs(0.1 * (k + 1), 1.0, True, 1.2, y, 0.0, 0.05, 1.0))
+    assert fsm.state == 'PASS' and fsm.abort_count == 0
+    fsm.step(Obs(0.6, 1.0, True, 1.1, 0.0, 0.0, 0.05, 1.0))               # 실제로 가운데로 들어오면 중단
+    assert fsm.state != 'PASS' and fsm.abort_count == 1
+
+
+def test_seen_wide_face_keeps_distance_steady():
+    trk = VehicleTracker(G)
+    wide, narrow = blob(1.56, -0.29, 0.26, n=14), blob(1.56, -0.22, 0.08)
+    ds = [r.d for r in run(trk, [(0.0, wide), (0.1, wide), (0.2, wide), (0.3, narrow), (0.4, wide), (0.5, narrow)])]
+    assert ds[3:] == [1.56, 1.56, 1.56]
+    old = VehicleTracker(replace(G, stationary_geom_pass=False))
+    ds = [r.d for r in run(old, [(0.0, wide), (0.1, wide), (0.2, wide), (0.3, narrow)])]
+    assert abs(ds[3] - (1.56 - G.lidar_to_rear)) < 1e-9

@@ -25,6 +25,7 @@ race_stack(ForzaETH)에서 옮긴 보조 기능 (leader_pred_time 기본 off, go
     확정: 후보가 이어진 시간 ≥ static_t_never(처음 본 뒤 한 번도 안 움직인 차) / static_t_moved(달리다 선 차, 급정지일 수 있음).
     확정되면 WAIT·APPROACH·PROBE·FOLLOW 어디서든 횡 여유가 있으면 PASS (belief와 무관). 다시 움직이면 확정을 푼다.
 """
+import math
 from collections import namedtuple
 
 from my_algo.aur import safety
@@ -124,7 +125,8 @@ class EgoFSM:
         if self.state in ('APPROACH', 'PROBE') or (p.stationary_pass and self.state == 'WAIT'):
             reason = self._decide(obs, trk, W, reason)
         if p.static_bypass and self.state in ('WAIT', 'APPROACH', 'PROBE', 'FOLLOW'):
-            if self.static_confirmed and obs.valid and obs.d >= p.static_bypass_min_d and self._lateral_ok(W, obs):
+            min_d = self._pass_need(obs)[1] if (p.stationary_geom_pass and obs.valid) else p.static_bypass_min_d
+            if self.static_confirmed and obs.valid and obs.d >= min_d and self._lateral_ok(W, obs):
                 self.state, reason = 'PASS', 'static_bypass'
                 self._static_pass = True
                 self._y_b_most_yielded = obs.y_b
@@ -253,15 +255,19 @@ class EgoFSM:
             go, give_up = waited >= p.T_wait_a and lat_ok, False
             if p.stationary_pass:
                 # 정지차 모드는 충분히 멀리서 차선 변경을 시작한다. 가까우면 추종·정지만 한다.
-                go = obs.valid and lat_ok and obs.d >= STATIONARY_PASS_MIN_D
+                # stationary_geom_pass: 고정 1.5 m 대신 필요한 옆 이동을 원호로 끝낼 거리 (_pass_need)
+                min_d = self._pass_need(obs)[1] if (p.stationary_geom_pass and obs.valid) else STATIONARY_PASS_MIN_D
+                go = obs.valid and lat_ok and obs.d >= min_d
         else:
             go, give_up = self.decided == 'Y' and lat_ok, self.decided == 'NY'
         block = None
         if self.method == 'a' and p.stationary_pass:
             if not obs.valid:
                 block = '추적 미확정'
-            elif obs.d < STATIONARY_PASS_MIN_D:
-                block = '종방향 거리 부족 (d %.2f < %.2f m)' % (obs.d, STATIONARY_PASS_MIN_D)
+            elif obs.d < min_d:
+                block = ('종방향 거리 부족 (d %.2f < 필요 %.2f m, 옆 이동 %.2f m)' % (obs.d, min_d, self._pass_need(obs)[0])
+                         if p.stationary_geom_pass else
+                         '종방향 거리 부족 (d %.2f < %.2f m)' % (obs.d, STATIONARY_PASS_MIN_D))
             elif not lat_ok:
                 block = '횡 여유 부족 (%s)' % self._lateral_detail(W, trk)
         if p.go_hold_s > 0.0:
@@ -298,8 +304,11 @@ class EgoFSM:
         if obs.d <= 0.0:
             self._overlapped = True     # 겹친 뒤 감속하면 나란히 있는 시간만 길어진다: 차선 유지, v_pass
             return False
-        if y_b + self._lat_shift() > self._y_b_most_yielded + p.y_yield_thr \
-                or not self._lateral_ok(W, obs):
+        # 멈춘 차 우회(stationary_geom_pass)에서는 '돌아온다' 판정을 쓰지 않는다: 정지 차의 y_B는 넓게·좁게 보이는 데 따라
+        # 7 cm씩 튀어(실차 test_02) 복귀로 보였다. 다시 움직여 들어오면 아래 횡 여유 판정이 막는다
+        stationary = p.stationary_geom_pass and (p.stationary_pass or self._static_pass)
+        returning = not stationary and y_b + self._lat_shift() > self._y_b_most_yielded + p.y_yield_thr
+        if returning or not self._lateral_ok(W, obs):
             self.state = 'RETREAT' if p.abort_mode == 'retreat' else 'FOLLOW'
             self.follow_reason = 'pass_abort'
             self.abort_count += 1
@@ -316,6 +325,20 @@ class EgoFSM:
             return 0.0, self._follow_speed(trk), 'retreat_done'
         v_b = trk.v_b if trk is not None else p.v_B_nominal
         return delta, p.retreat_speed_ratio * v_b, 'retreat'
+
+    def _pass_need(self, o):
+        """정지 차 옆을 지나가는 데 필요한 (옆 이동 [m], 시작 거리 [m]). stationary_geom_pass.
+
+        옆 이동 = 선행차 왼쪽 모서리 + stationary_clear − ego 오른쪽 모서리. 조향 최대의 stationary_steer_frac로 도는
+        원호(반경 R = L / tan δ)가 그만큼 옆으로 가는 전진 거리 √(R² − (R − Δ)²)에 반응 거리 v·(t_d + Δt)와 여유를 더한다."""
+        p = self.p
+        edge = o.y_l if (p.lateral_ref == 'left_edge' and o.y_l is not None) else o.y_b + p.leader_width / 2.0
+        shift = max(0.0, edge + p.stationary_clear - (o.ego_lat - p.w_car / 2.0))
+        radius = p.wheelbase / math.tan(p.stationary_steer_frac * p.max_steering)
+        if shift >= radius:
+            return shift, INF
+        run = math.sqrt(radius * radius - (radius - shift) ** 2)
+        return shift, run + max(0.0, o.v_e) * (p.t_d + p.scan_period) + p.stationary_margin_x
 
     def _lateral_detail(self, W, o):
         """_lateral_ok 판정에 쓴 값 (로그용): 통로 폭, 선행차 횡위치 또는 왼쪽 경계, 차폭, 필요 여유, 잔여 여유."""
@@ -347,6 +370,10 @@ class EgoFSM:
         stationary = p.stationary_pass or self._static_pass
         if stationary and not self._cleared:
             v = min(p.v_B_nominal, self.v_lim) if self.v_lim is not None else 0.0
+            if p.stationary_geom_pass and obs.valid and v < p.v_min and obs.d >= self._pass_need(obs)[1]:
+                # 남은 옆 이동을 원호로 끝낼 거리가 있으면 최소 속도로 계속 간다 (식 8의 v_lim은 멈춘 차 뒤 정지 기준이라
+                # 가까이서 시작한 차선 변경이 v_min 아래로 떨어져 선 자리에 멈췄다). 경로 위 장애물은 휜 띠 AEB가 막는다
+                v = p.v_min
         if self._overlapped:
             self._cleared = True
         if not self._cleared and self._last is not None:

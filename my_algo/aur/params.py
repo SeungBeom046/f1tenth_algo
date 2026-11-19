@@ -124,6 +124,11 @@ class AurParams:
     corridor_init_window_s: float = 0.0  # 벽 초기화 3회 일치를 이 시간 창 안에서 센다 (못 찾은 scan은 무시) [s], 0이면 연속 3회
     corridor_heading_avg: bool = False   # 헤딩 = 양쪽 벽 선 길이 가중 평균 (끄면 긴 선 하나)
     stationary_pass: bool = False      # method a 전용, 정지차 시험임을 명시한 조기 차선 변경
+    stationary_geom_pass: bool = False  # 정지 차 우회 시작 거리를 고정 1.5 m(멈춘 차 확정 우회 1.0 m) 대신 필요한 옆 이동으로 계산
+    stationary_clear: float = 0.05      # 지나갈 때 선행차 옆면과 남길 간격 [m] (실차 추월 때 차체-벽 약 5 cm)
+    stationary_steer_frac: float = 0.6  # 원호 계산에 쓰는 조향 비율 (서보 지연·횡 제어 여유)
+    stationary_margin_x: float = 0.15   # 원호 거리에 더하는 종방향 여유 [m]
+    wheelbase: float = 0.33             # [m] 실측
     stationary_partial_lead: bool = False   # stationary_pass에서 첫 확정 전 좁은(일부만 보인) 정지 차 클러스터도 후보로, 확인 중 한 scan 놓침 허용
     partial_width_min: float = 0.04     # 좁은 후보 최소 폭 [m]
     partial_depth_max: float = 0.3      # 좁은 후보 최대 깊이 [m] (레일 조각은 길다)

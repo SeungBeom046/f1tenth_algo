@@ -128,6 +128,7 @@ class Car:
                                   model=a['model'], ttc_threshold=a['ttc_threshold'], curved_band=a['curved_band'],
                                   curve_max_steering=a.get('curve_max_steering', 0.0),
                                   band_intersect=a.get('band_intersect', False),
+                                  bumper_overlap_tolerance=a.get('bumper_overlap_tolerance', 0.10),
                                   wheelbase=v['wheelbase'], lidar_x_from_rear_axle=cfg['lidar']['mount_xyz'][0])
         self.W_fixed = p.W_leader if name == 'leader' else None
         self.scan_ns = None         # AEB 입력 (LaserScan 필드)

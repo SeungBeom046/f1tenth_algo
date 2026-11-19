@@ -51,6 +51,7 @@ class VehicleTracker:
         self._candidate_count = 0
         self.pending_d = None
         self.status = 'no_candidate'
+        self._seen_wide = False         # 이 추적에서 뒷면 전체를 본 적이 있는가 (stationary_geom_pass)
 
     def _clusters(self, points, ego_lat, W, fov=True):
         p = self.p
@@ -155,7 +156,11 @@ class VehicleTracker:
                 self.status = 'confirming'
                 return Track(False, None, None, self._v_b, (), None)
         self.pending_d = None
-        if p.experiment_safety and not self.rear and c.y1 - c.y0 < p.veh_width_min:
+        narrow = c.y1 - c.y0 < p.veh_width_min
+        # stationary_geom_pass: 이 추적에서 뒷면 전체(폭 ≥ veh_width_min)를 본 적이 있으면 좁게 보인 scan도 같은 뒷면이다.
+        # 실차 test_02(2026-11-19): 넓게 보일 때 1.56 m, 좁게 보일 때 0.22 m를 빼 1.35 m로 매 scan 바뀌어 추월 조건 유지가 끊겼다
+        same_face = p.stationary_pass and p.stationary_geom_pass and self._seen_wide and self._d is not None
+        if p.experiment_safety and not self.rear and narrow and not same_face:
             # 같은 장착의 라이다 등 차체 안쪽 일부만 보이면 실제 뒷범퍼는 더 가깝다.
             d = max(0.0, d - p.lidar_to_rear)
         dt = None if self._t is None else t - self._t
@@ -174,10 +179,12 @@ class VehicleTracker:
             # 새 물체: 상대속도 0(v_B = v_E)에서 시작한다. 수렴 전에는 AEB(relative)가 마지막 안전망.
             self._d = d
             self._v_b = 0.0 if p.experiment_safety else max(0.0, v_ego)
+            self._seen_wide = False
         else:
             self._d = pred + p.track_alpha * (d - pred)
             self._v_b = max(0.0, self._v_b + sgn * p.track_beta * (d - pred) / dt)
         self._t = t
+        self._seen_wide = self._seen_wide or not narrow
         y_mid = (c.y0 + c.y1) / 2.0     # 점 평균이 아니라 범위 중앙: 옆면 점이 한쪽에 몰려도 치우치지 않는다
         self._c = ((c.x0 + c.x1) / 2.0, y_mid)
         self._front = c.x1

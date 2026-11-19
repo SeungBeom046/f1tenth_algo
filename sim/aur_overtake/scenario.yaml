@@ -49,6 +49,7 @@ aeb:                        # 실차 autonomous_drive의 AEBSafetyModel을 두 �
   vehicle_half_width: 0.135 # TUNE: AEB 검사 띠 반폭 = 실측 차 반폭 (launch aeb_vehicle_half_width와 같게) | m | 측정 (2026-11-17, 이전 0.15)
   path_margin: 0.0          # TUNE: AEB 검사 띠 = 차 중심 ±(반폭 + 이 값) = ±0.135. 실차는 추월 때 차체-벽 약 5 cm (launch 값과 같게) | m | 임시 (2026-11-17, 이전 0.01)
   latch_release_sec: 1.0    # TUNE: 실험 AEB 고정을 정지 후 비상 아님이 이 시간 이어지면 해제, 0이면 AUTO off까지 (launch aeb_latch_release_sec와 같게) | s | 임시 (실차 2026-11-18)
+  bumper_overlap_tolerance: 0.10    # TUNE: 앞범퍼 뒤 이 거리까지의 점도 AEB 후보 (launch aeb_bumper_overlap_tolerance와 같게) | m | 측정 구성
   bumper_emergency_distance: 0.20   # TUNE: AEB 고정 정지 거리, 정지 여유 m 0.15 이상 (launch 값과 같게) | m | 임시 (2026-11-17, 이전 0.25)
 imu:                        # 자차 IMU 자이로 (pose_filter 입력). Mid-360 내장 IMU 가정
   gyro_noise_std: 0.01      # TUNE: scan 주기(0.1 s) 평균 yaw rate 잡음 | rad/s | 임시 (사양 미확인)
