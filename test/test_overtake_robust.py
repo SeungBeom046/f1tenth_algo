@@ -36,3 +36,16 @@ def test_single_noisy_scan_does_not_abort_with_hysteresis():
         for k, y in enumerate([-0.20, -0.09, -0.20]):             # 한 scan만 −0.09 (여유 −0.015)
             fsm.step(obs(0.1 * (k + 1), 1.1, y))
         assert fsm.abort_count == aborted
+
+
+def test_retreat_holds_lane_until_slow():
+    for hold, expect in ((False, 'FOLLOW'), (True, 'RETREAT')):
+        q = replace(P, retreat_hold=hold, abort_mode='retreat')
+        fsm = to_pass(q, -0.20)
+        r = fsm.step(obs(0.1, 1.3, -0.05, v_e=0.9, v_b=0.1))     # 선행차가 가운데로: 중단
+        assert fsm.abort_count == 1 and fsm.state == expect
+        if hold:
+            v, y_ref, _, reason = r
+            assert y_ref > 0.2 and reason == 'retreat' and v <= q.v_min + 1e-9     # 추월 차선 유지, 최소 속도 이하
+            fsm.step(obs(0.2, 1.2, -0.05, v_e=0.2, v_b=0.1))       # 거의 멈춤 → FOLLOW
+            assert fsm.state == 'FOLLOW'

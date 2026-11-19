@@ -17,6 +17,9 @@ aur:
   stationary_clear: 0.05    # TUNE: 정지 차 옆면과 남길 간격 | m | 임시 (실차 추월 때 차체-벽 약 5 cm)
   stationary_steer_frac: 0.8  # TUNE: 원호 계산 조향 비율 (최대 조향 × 이 값) | - | 임시 (2026-11-19 시뮬 짧은 출발 간격: 0.6 a 12·d 10/16, 0.8 a 13·d 10/16, 충돌 0. 실차 조향 게인 미확인)
   stationary_margin_x: 0.15  # TUNE: 원호 거리에 더하는 종방향 여유 | m | 임시
+  retreat_hold: false       # TUNE: 추월 중단 뒤 추월 차선을 유지한 채 감속, 거의 멈추거나 선행차가 retreat_exit_d 넘게 앞서면 FOLLOW | - | 임시 (실차 overtake_02: 중단 즉시 가운데로 꺾다 접촉)
+  retreat_exit_v: 0.3       # TUNE: 이 속도 이하면 RETREAT 종료 | m/s | 임시
+  retreat_exit_d: 2.0       # TUNE: 선행차가 이만큼 앞서면 RETREAT 종료 | m | 임시
   pass_margin_hyst: false   # TUNE: 추월 시작은 횡 여유 + pass_start_margin, 중단은 최근 3개 y_B 중앙값으로 여유 0 판정 | - | 임시 (실차 overtake_02: 여유 +4.5 cm에서 시작해 튄 scan 하나로 중단 → 접촉)
   pass_start_margin: 0.05   # TUNE: 추월 시작에 더 요구하는 횡 여유 | m | 임시
   lead_steady_face: false   # TUNE: 앞차 뒷면을 넓게 본 추적은 좁게 보인 scan에서도 뒷범퍼를 0.22 m 당기지 않는다 (모든 방법) | - | 임시 (실차 overtake_02: 거리 0.66 ↔ 0.89 m 반복)

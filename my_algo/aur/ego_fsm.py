@@ -323,6 +323,15 @@ class EgoFSM:
         중단 직후 바로 중앙(y_ref 0)으로 가면 옆의 선행차 쪽으로 붙고, 정면 추적으로 바꾸면 옆의 선행차를 벽으로 본다.
         선행차 뒷면이 앞범퍼보다 retreat_clear_gap 이상 앞서면 FOLLOW (y_ref 0, 추종 속도). 반환: (y_ref, v, reason)."""
         p = self.p
+        if p.retreat_hold:
+            # 겹치기 전 중단에서는 선행차가 늘 앞(d ≥ retreat_clear_gap)이라 즉시 FOLLOW(y_ref 0)가 되어 0.9 m/s·헤딩 15°로
+            # 가운데로 꺾다 선행차 모서리에 닿았다 (실차 overtake_02). 추월 차선을 유지한 채 추종 속도 이하로 줄이고,
+            # 거의 멈췄거나 선행차가 retreat_exit_d 넘게 앞서면 FOLLOW로 간다
+            if obs.v_e <= p.retreat_exit_v or (trk is not None and trk.d >= p.retreat_exit_d):
+                self.state = 'FOLLOW'
+                return 0.0, self._follow_speed(trk), 'retreat_done'
+            v_b = trk.v_b if trk is not None else 0.0
+            return delta, min(p.retreat_speed_ratio * v_b, self._follow_speed(trk)), 'retreat'
         if trk is not None and trk.d >= p.retreat_clear_gap:
             self.state = 'FOLLOW'
             return 0.0, self._follow_speed(trk), 'retreat_done'

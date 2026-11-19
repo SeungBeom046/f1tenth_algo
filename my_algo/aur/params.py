@@ -129,6 +129,9 @@ class AurParams:
     stationary_steer_frac: float = 0.6  # 원호 계산에 쓰는 조향 비율 (서보 지연·횡 제어 여유)
     stationary_margin_x: float = 0.15   # 원호 거리에 더하는 종방향 여유 [m]
     wheelbase: float = 0.33             # [m] 실측
+    retreat_hold: bool = False          # 추월 중단 뒤 추월 차선 유지·감속, 거의 멈추거나 선행차가 멀어지면 FOLLOW
+    retreat_exit_v: float = 0.3         # 이 속도 이하면 RETREAT 종료 [m/s]
+    retreat_exit_d: float = 2.0         # 선행차가 이만큼 앞서면 RETREAT 종료 [m]
     pass_margin_hyst: bool = False      # 추월 시작은 횡 여유 + pass_start_margin, 중단은 3개 중앙값 y_B로 여유 0 판정
     pass_start_margin: float = 0.05     # 추월 시작에 더 요구하는 횡 여유 [m]
     lead_steady_face: bool = False      # 앞 추적에서 넓은 뒷면을 본 뒤에는 좁게 보인 scan도 같은 면 (0.22 m를 빼지 않음), 모든 방법
