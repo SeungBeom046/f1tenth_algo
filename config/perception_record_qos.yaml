@@ -9,6 +9,11 @@
   durability: volatile
   history: keep_last
   depth: 100
+/livox/imu:
+  reliability: best_effort
+  durability: volatile
+  history: keep_last
+  depth: 1000
 /tf_static:
   reliability: reliable
   durability: transient_local

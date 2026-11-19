@@ -72,6 +72,8 @@ def generate_launch_description():
         DeclareLaunchArgument('lidar_to_bumper', default_value='0.28', description='라이다 → 앞범퍼 [m] (AEB, 실측 2026-11-03; config lidar_to_front와 같게)'),
         DeclareLaunchArgument('speed_source', default_value='sensors_core', description='sensors_core | command'),
         DeclareLaunchArgument('experiment_safety', default_value='true', description='추적 소실 정지·AEB 정지 유지·헤딩 필터'),
+        DeclareLaunchArgument('imu_yaw_sign', default_value='1.0',
+                              description='자이로 z 부호. 차를 왼쪽(반시계)으로 돌릴 때 /livox/imu angular_velocity.z가 음수면 -1.0'),
         DeclareLaunchArgument('use_metrics_logger', default_value='true', description='종료 때 기본 주행과 같은 주행 요약 (autonomous_metrics_logger)'),
         DeclareLaunchArgument('stationary_pass', default_value='false', description='method a 전용 정지차 우회 시험, 앞차 간격 1.5 m 이상'),
         OpaqueFunction(function=_scan_nodes),
@@ -85,6 +87,7 @@ def generate_launch_description():
                 'method': arg('method', str), 't_d': arg('t_d', float), 'steer': arg('steer', float),
                 'experiment_safety': arg('experiment_safety', bool),
                 'stationary_pass': arg('stationary_pass', bool),
+                'imu_yaw_sign': arg('imu_yaw_sign', float),
             }],
         ),
         Node(

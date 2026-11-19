@@ -105,7 +105,7 @@ source /opt/ros/jazzy/setup.bash
 mkdir -p ~/runs && cd ~/runs
 ros2 bag record -o $(date +%m%d_%H%M)_test1_black \
   /scan /sensors/core /commands/motor/speed /commands/servo/position \
-  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state
+  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state /livox/imu
 ```
 
 ### 터미널 5: 주행 알고리즘 (실행하면 바로 출발)
@@ -201,7 +201,7 @@ source ~/vesc_ws/install/setup.bash          # /sensors/core(vesc_msgs) 기록�
 mkdir -p ~/runs && cd ~/runs
 ros2 bag record -o $(date +%m%d_%H%M)_test1_blue \
   /scan /sensors/core /commands/motor/speed /commands/servo/position \
-  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state
+  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state /livox/imu
 ```
 
 ### 터미널 5: 주행 알고리즘 (실행하면 바로 출발)
@@ -256,6 +256,24 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 | `/scan`이 안 나온다 | 터미널 1이 꺼졌거나 `/livox/lidar`가 PointCloud2가 아니다 (터미널 3 확인) |
 | 바퀴가 안 돈다 | 터미널 2 VESC 오류, 또는 차 앞 0.25 m 안에 무언가가 있어 AEB가 걸렸다 (`/aeb/status`) |
 | 다른 차가 같이 움직인다 / 토픽이 섞인다 | 두 차 `ROS_DOMAIN_ID`가 같다. 37·38로 나눈다 |
+
+## 자이로 확인 (pose_filter, 차마다 처음 한 번)
+
+추월 launch는 `/livox/imu`(Mid-360 내장 IMU)의 z 각속도로 자차 헤딩을 예측한다 (지도는 안 쓴다). 단위(rad/s)와 부호는 **실차 미확인**이다.
+
+```bash
+ros2 topic hz /livox/imu                                   # 보통 200 Hz 근처
+ros2 topic echo /livox/imu --field angular_velocity.z      # 차를 손으로 왼쪽(반시계)으로 돌린다
+```
+
+| 보이는 것 | 할 것 |
+|---|---|
+| 왼쪽으로 돌릴 때 양수, 90°를 1 s에 돌리면 약 1.5 | 그대로 |
+| 왼쪽으로 돌릴 때 음수 | launch에 `imu_yaw_sign:=-1.0` |
+| 값이 약 57배 크다 (deg/s) | 단위가 다르다. 알려 주면 코드에서 바꾼다 |
+| 토픽이 없다 | Livox 드라이버 설정에서 IMU 발행을 켠다. 없어도 주행은 되지만 레일 측정만 쓴다 (요약 `IMU 자이로: 없음`) |
+
+Ctrl+C 요약의 `IMU 자이로` 줄에 받은 개수, scan 중 자이로를 쓴 비율, yaw rate 평균이 나온다. 서 있을 때 평균이 0.01 rad/s보다 크면 바이어스가 큰 것이다 (레일 측정이 계속 보정한다).
 
 ## 로그·요약 읽기 (추월 launch)
 
@@ -402,7 +420,7 @@ cd ~/runs
 ros2 bag record \
   --qos-profile-overrides-path "$(ros2 pkg prefix my_algo)/share/my_algo/config/perception_record_qos.yaml" \
   -o debug_perception_$(date +%m%d_%H%M%S) \
-  /livox/lidar /scan /exp/state /sensors/core /reactive/lidar_command /tf_static
+  /livox/lidar /livox/imu /scan /exp/state /sensors/core /reactive/lidar_command /tf_static
 ```
 
 Ctrl+C로 끝낸 뒤 `ros2 bag info 생성된폴더명`에서 `/scan`과 `/tf_static`의 Count가 0보다 큰지 확인한다.
