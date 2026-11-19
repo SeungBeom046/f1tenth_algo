@@ -20,6 +20,7 @@
 | NY / YR (각 8회) | 충돌 0 / 0 | 충돌 0 / 0 |
 
 - 이동 앞차 Y가 아직 약하다. 앞차가 실제로 비키기 전에 ego의 y_B 추정이 약 6 cm 치우쳐(기준점 대비) 누적 변위 임계값 0.08 m에 늦게 닿아 NY로 판정한다. belief 변위를 최근 3·5개 y_B 중앙값으로 세는 시도는 Y 1/8로 나빠져 넣지 않았다. 원인(앞차 뒷면 중심 추정의 치우침으로 추정)은 미확인이다.
+- 기준선 252회(매끈한 벽, 잡음 없음): off는 이전 커밋과 0회 다름. on은 로그 해시 252회 바뀌고 최종 상태·원인·충돌·교착·중단·판정·정지 여유·AEB·성공 0회 바뀜 (a/b/c/d 성공 8/0/30/42, c 충돌 38 그대로). T_pass 평균 13.08 → 13.06 s, ego 최대 헤딩 평균 4.04 → 4.22° (잡음 없는 곳에서는 보정 지연만큼 약간 늘었다).
 - 테스트: `test_pose_filter.py` 3개, 시뮬 `test_pose_filter_steadies_heading_and_passes_stationary_car_with_lidar_noise`, 벽·추적 runner 일치 시험에 pose_filter on/off. 끈 상태 벽 충돌 재현 시험은 `pose_filter=False`로 고정했다. 단위 115 통과/0 실패/0 xfail (Python 3.12·3.8), 시뮬 40 통과/0 실패/0 xfail, 기본 주행 28,521개 일치.
 - 실차는 **미확인**: `/livox/imu` 단위·부호(CAR_TERMINALS `자이로 확인`), 실제 헤딩 잡음, Jetson 처리 시간.
 
