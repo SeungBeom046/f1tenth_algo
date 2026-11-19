@@ -38,6 +38,7 @@ archive/imu_tools/          쓰지 않는 IMU 단독 기록 도구 보관 (main 
 
 | 문서 | 내용 |
 |---|---|
+| [docs/RESEARCH_RACE.md](docs/RESEARCH_RACE.md) | **연구 계획 개정안 (레이스 가정)**: 실차 3 시나리오 축약 + 시뮬 보완, 연구 질문 1~4, 구현 예정 항목 |
 | [docs/RESEARCH.md](docs/RESEARCH.md) | **연구 개요**: 연구 질문, 가정, 비교 방법, 실험 시나리오, 지표, 지금까지 결과 |
 | [docs/PIPELINE.md](docs/PIPELINE.md) | 노드·토픽, 모듈 파이프라인, 상태 기계 전이 조건, belief 식, 안전 거리, AEB 2층 구조, 담당 파일·함수 |
 | [docs/RACE_STACK.md](docs/RACE_STACK.md) | ForzaETH race_stack 추월 코드 검토, 이 연구와의 대응, 옮긴 기능(기본 off) |
