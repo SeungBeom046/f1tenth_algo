@@ -159,7 +159,9 @@ class VehicleTracker:
         narrow = c.y1 - c.y0 < p.veh_width_min
         # stationary_geom_pass: 이 추적에서 뒷면 전체(폭 ≥ veh_width_min)를 본 적이 있으면 좁게 보인 scan도 같은 뒷면이다.
         # 실차 test_02(2026-11-19): 넓게 보일 때 1.56 m, 좁게 보일 때 0.22 m를 빼 1.35 m로 매 scan 바뀌어 추월 조건 유지가 끊겼다
-        same_face = p.stationary_pass and p.stationary_geom_pass and self._seen_wide and self._d is not None
+        # lead_steady_face: 모든 방법에 적용 (실차 overtake_02: 0.66 ↔ 0.89 m로 튀어 v_B가 0 ↔ 0.5, 출발·정지 반복)
+        same_face = (self._seen_wide and self._d is not None
+                     and (p.lead_steady_face or (p.stationary_pass and p.stationary_geom_pass)))
         if p.experiment_safety and not self.rear and narrow and not same_face:
             # 같은 장착의 라이다 등 차체 안쪽 일부만 보이면 실제 뒷범퍼는 더 가깝다.
             d = max(0.0, d - p.lidar_to_rear)

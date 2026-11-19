@@ -109,3 +109,14 @@ def test_seen_wide_face_keeps_distance_steady():
     old = VehicleTracker(replace(G, stationary_geom_pass=False))
     ds = [r.d for r in run(old, [(0.0, wide), (0.1, wide), (0.2, wide), (0.3, narrow)])]
     assert abs(ds[3] - (1.56 - G.lidar_to_rear)) < 1e-9
+
+
+def test_lead_steady_face_applies_to_any_method():
+    q = replace(G, stationary_pass=False, stationary_geom_pass=False, lead_steady_face=True)
+    trk = VehicleTracker(q)
+    wide, narrow = blob(0.89, 0.0, 0.26, n=14), blob(0.89, 0.04, 0.08)
+    ds = [r.d for r in run(trk, [(0.0, wide), (0.1, wide), (0.2, wide), (0.3, narrow), (0.4, narrow)])]
+    assert all(abs(d - 0.89) < 1e-9 for d in ds[3:])
+    off = VehicleTracker(replace(q, lead_steady_face=False))
+    ds = [r.d for r in run(off, [(0.0, wide), (0.1, wide), (0.2, wide), (0.3, narrow)])]
+    assert abs(ds[3] - (0.89 - q.lidar_to_rear)) < 1e-9

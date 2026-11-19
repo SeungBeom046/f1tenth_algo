@@ -17,6 +17,7 @@ aur:
   stationary_clear: 0.05    # TUNE: 정지 차 옆면과 남길 간격 | m | 임시 (실차 추월 때 차체-벽 약 5 cm)
   stationary_steer_frac: 0.8  # TUNE: 원호 계산 조향 비율 (최대 조향 × 이 값) | - | 임시 (2026-11-19 시뮬 짧은 출발 간격: 0.6 a 12·d 10/16, 0.8 a 13·d 10/16, 충돌 0. 실차 조향 게인 미확인)
   stationary_margin_x: 0.15  # TUNE: 원호 거리에 더하는 종방향 여유 | m | 임시
+  lead_steady_face: false   # TUNE: 앞차 뒷면을 넓게 본 추적은 좁게 보인 scan에서도 뒷범퍼를 0.22 m 당기지 않는다 (모든 방법) | - | 임시 (실차 overtake_02: 거리 0.66 ↔ 0.89 m 반복)
   stationary_partial_lead: true   # TUNE: stationary_pass에서 첫 확정 전 좁은(검은 차 일부만 보인) 클러스터도 후보, 확인 중 한 scan 놓침 허용 | - | 임시 (실차 test_01 2026-11-19: 2.1 m 앞 정지 차가 폭 0.02~0.11 m로 보여 1.36 m에서야 후보)
   partial_width_min: 0.04   # TUNE: 좁은 후보 최소 폭 | m | 임시 (test_01 정지 차 0.05~0.11 m)
   partial_depth_max: 0.3    # TUNE: 좁은 후보 최대 깊이, 레일 조각(1~2 m)을 거른다 | m | 임시
