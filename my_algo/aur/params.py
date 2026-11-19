@@ -124,6 +124,11 @@ class AurParams:
     corridor_init_window_s: float = 0.0  # 벽 초기화 3회 일치를 이 시간 창 안에서 센다 (못 찾은 scan은 무시) [s], 0이면 연속 3회
     corridor_heading_avg: bool = False   # 헤딩 = 양쪽 벽 선 길이 가중 평균 (끄면 긴 선 하나)
     stationary_pass: bool = False      # method a 전용, 정지차 시험임을 명시한 조기 차선 변경
+    stationary_partial_lead: bool = False   # stationary_pass에서 첫 확정 전 좁은(일부만 보인) 정지 차 클러스터도 후보로, 확인 중 한 scan 놓침 허용
+    partial_width_min: float = 0.04     # 좁은 후보 최소 폭 [m]
+    partial_depth_max: float = 0.3      # 좁은 후보 최대 깊이 [m] (레일 조각은 길다)
+    partial_min_points: int = 4         # 좁은 후보 최소 점 수
+    partial_wall_clear: float = 0.10    # 좁은 후보 중심이 벽 경계(W/2 − wall_margin)에서 이만큼 안쪽 [m]
     corridor_line_tol: float = 0.03    # 벽 직선에서 허용하는 점의 수직 오차 [m]
     corridor_width_tol: float = 0.10   # 실측 W와 벽 사이 거리의 허용 차이 [m]
     corridor_min_span: float = 0.20    # 벽 직선의 최소 전후 길이 [m]

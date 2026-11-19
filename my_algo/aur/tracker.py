@@ -113,6 +113,11 @@ class VehicleTracker:
     def update(self, points, t, v_ego, ego_lat, W, heading=0.0):
         """정면 규칙으로 가장 가까운 차량 클러스터를 찾는다."""
         p = self.p
+        recovery = p.track_recovery and p.experiment_safety and not self.rear
+        # stationary_partial_lead: 정지 차 우회 시험에서 첫 확정 전에는 검은 차체 일부만 보인 좁은 클러스터도 후보로 센다.
+        # 실차 test_01(2026-11-19): 2.1 m 앞 정지 차가 폭 0.02~0.11 m로만 보여 차량 폭 하한 0.12에 걸려 1.36 m에서야 후보가 됐다.
+        # 벽 근처 레일 조각(|y| ≈ W/2)은 벽 경계에서 partial_wall_clear 안쪽만 받아 제외한다. 확정은 그대로 3 scan.
+        partial = recovery and p.stationary_pass and p.stationary_partial_lead and self._d is None and W is not None
         cands = [] if W is None else [
             c for c in self._clusters(self._aligned(points, heading), ego_lat, W)
             if 0.0 < c.x0 < p.track_x_max
@@ -120,16 +125,23 @@ class VehicleTracker:
                  or (p.experiment_safety and self._c is not None
                      and c.y1 - c.y0 <= p.veh_width_max
                      and abs((c.y0 + c.y1) / 2 - self._c[1]) <= p.wall_margin * 2
-                     and abs(c.x0 - self._d) <= p.track_jump_reset))
+                     and abs(c.x0 - self._d) <= p.track_jump_reset)
+                 or (partial and p.partial_width_min <= c.y1 - c.y0
+                     and c.x1 - c.x0 <= p.partial_depth_max and len(c.idx) >= p.partial_min_points
+                     and abs((c.y0 + c.y1) / 2 + ego_lat) <= W / 2.0 - p.wall_margin - p.partial_wall_clear))
             and c.x1 - c.x0 <= p.veh_depth_max]
         if not cands:
+            if partial and self._candidate is not None and self._candidate_count > 0 \
+                    and 0.0 < t - self._candidate_t <= p.track_timeout:
+                # 확인 중 한 scan을 놓쳐도 횟수를 지우지 않는다 (그동안은 확인 중으로 정지 유지)
+                self.status = 'confirming'
+                return Track(False, None, None, self._v_b, (), None)
             self.pending_d = None
             self._candidate_count = 0
             self.status = 'no_candidate'
             return Track(False, None, None, self._v_b, (), None)
         c = min(cands, key=lambda c: c.x0)
         d = c.x0
-        recovery = p.track_recovery and p.experiment_safety and not self.rear
         if recovery and self._d is None:
             previous = self._candidate
             consistent = (previous is not None and self._candidate_count > 0
