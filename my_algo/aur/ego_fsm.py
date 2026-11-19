@@ -77,6 +77,9 @@ class EgoFSM:
         self._yb_track = []             # 최근 유효 (t, y_B): 선행차 횡속도 (leader_vlat_window)
         self._go_since = None           # go 조건이 끊김 없이 맞기 시작한 시각 (go_hold_s)
         self._yb_first = []             # 출발 전 첫 유효 y_B 3개 (belief_pre_t0 기준점)
+        self._follow_ref = None         # FOLLOW 들어간 뒤 첫 유효 y_B 중앙값 (follow_repass 기준점)
+        self._yb_follow = []
+        self._repass_since = None
         self._yb_recent = []            # 최근 유효 y_B 3개 (belief_pre_t0)
         # 멈춘 차 확정 (static_bypass)
         self.static_confirmed = False
@@ -136,6 +139,8 @@ class EgoFSM:
             elif self._still_since is not None and trk is not None:
                 # 멈춘 차 후보: 확정까지 우회 공간(static_bypass_gap) 뒤에서 선다. 너무 붙으면 돌아갈 수 없다
                 v = min(v, safety.v_lim(max(0.0, trk.d - p.static_bypass_gap + p.m_stop + p.eps_follow), trk.v_b, p))
+        if p.follow_repass and self.state == 'FOLLOW' and obs.valid:
+            reason = self._repass(obs, W, reason)
         if self.state == 'PASS' and not self._overlapped and obs.valid:
             if self._check_pass_abort(obs, W):
                 reason = 'pass_abort'
@@ -303,6 +308,36 @@ class EgoFSM:
         elif give_up or waited >= p.T_max:
             self.state, reason = 'FOLLOW', ('belief_NY' if give_up else 'T_max')
             self.follow_reason = reason
+        return reason
+
+    def _repass(self, obs, W, reason):
+        """follow_repass: FOLLOW에서 선행차가 들어간 때보다 y_yield_thr 넘게 더 비키고 시작 여유가 있으면 다시 추월한다.
+        belief NY 확정은 되돌리지 않는다. 실차 overtake_01: NY 뒤 선행차가 −0.19 → −0.30으로 비켜 여유가 충분했지만 FOLLOW는
+        다시 판단하지 않아 뒤에 서 있었다 (2026-11-19, 레이스 가정: 길을 내주면 지나간다)."""
+        p = self.p
+        self._yb_follow = (self._yb_follow + [obs.y_b])[-3:]
+        if len(self._yb_follow) < 3:
+            return reason
+        y_b = sorted(self._yb_follow)[1]
+        if self._follow_ref is None:
+            self._follow_ref = y_b
+            return reason
+        go = (y_b <= self._follow_ref - p.y_yield_thr and W is not None
+              and self._lateral_ok(W, obs._replace(y_b=y_b), self._start_margin()))
+        if not go:
+            self._repass_since = None
+            return reason
+        self._repass_since = obs.t if self._repass_since is None else self._repass_since
+        if obs.t - self._repass_since < p.go_hold_s:
+            return reason
+        self.state, reason = 'PASS', 'repass'
+        # 비킨 뒤 멈춘 선행차는 멈춘 차 우회 규칙(기하 시작 거리 뒤 최소 속도 유지, '돌아온다' 중단 없음)으로 지나간다.
+        # 그냥 PASS면 어긋나기 전 추종 속도가 멈춘 차 바로 뒤에서 0이라 선 채로 남는다
+        self._static_pass = obs.v_b is not None and obs.v_b < p.static_v
+        self._y_b_most_yielded = y_b
+        self._yb_hist = [y_b]
+        self._cleared = self._overlapped = False
+        self._follow_ref, self._yb_follow, self._repass_since = None, [], None
         return reason
 
     def _check_pass_abort(self, obs, W):

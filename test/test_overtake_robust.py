@@ -61,3 +61,32 @@ def test_belief_counts_yield_before_departure():
         for y in (-0.16, -0.17, -0.18, -0.19):                                # 출발 뒤 4 cm 더
             fsm.step(obs(t, 0.9, y, v_e=0.5)); t += 0.1
         assert fsm.decided == decided
+
+
+def test_follow_repass_after_lead_yields_further():
+    for on, state in ((False, 'FOLLOW'), (True, 'PASS')):
+        q = replace(P, follow_repass=on)
+        fsm = EgoFSM(q, 'd')
+        fsm.state, fsm.decided = 'FOLLOW', 'NY'
+        t = 0.0
+        for y in [-0.19] * 4 + [-0.25, -0.30, -0.31, -0.32, -0.32, -0.32]:
+            fsm.step(obs(t, 0.5, y, v_e=0.0, v_b=0.0)); t += 0.1
+        assert fsm.state == state
+
+
+def test_follow_repass_ignores_not_yielding_lead():
+    fsm = EgoFSM(replace(P, follow_repass=True), 'd')
+    fsm.state, fsm.decided = 'FOLLOW', 'NY'
+    for k in range(20):
+        fsm.step(obs(0.1 * k, 0.5, -0.05 + 0.01 * (k % 3), v_e=0.0, v_b=0.0))
+    assert fsm.state == 'FOLLOW'
+
+
+def test_follow_repass_behind_stopped_lead_creeps_past():
+    q = replace(P, follow_repass=True, stationary_geom_pass=True)
+    fsm = EgoFSM(q, 'd')
+    fsm.state, fsm.decided = 'FOLLOW', 'NY'
+    t = 0.0
+    for y in [-0.19] * 4 + [-0.30] * 6:
+        v, _, state, _ = fsm.step(obs(t, 0.5, y, v_e=0.0, v_b=0.0)); t += 0.1
+    assert state == 'PASS' and fsm._static_pass and v >= q.v_min - 1e-9
