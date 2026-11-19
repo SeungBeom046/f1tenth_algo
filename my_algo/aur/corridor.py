@@ -119,10 +119,14 @@ class Corridor:
                          and abs(r.heading - self.heading) <= math.radians(5))
                      or (min(l.span, r.span) >= 3 * self.p.corridor_min_span
                          and min(len(l.points), len(r.points)) >= 3 * self.p.corridor_min_points)]
+        if pairs and self.p.guardrail_local_view and not local:
+            # 초기화는 지지점이 확실히 많은 쌍(최대의 80% 이상)만 남기고 그 안에서 폭·평행이 맞는 쌍을 고른다.
+            # 지지점 1개 차이로 폭 허용 끝(1.0 ± 0.10)에 걸친 쌍이 이기면 Python 3.8에서 잘못된 쌍이 잠겼다 (2026-11-19)
+            best = max(min(len(l.points), len(r.points)) for l, r in pairs)
+            pairs = [(l, r) for l, r in pairs if min(len(l.points), len(r.points)) >= 0.8 * best]
         if pairs:
             l, r = min(pairs, key=lambda pair: (
                 self._continuity_cost(pair[0], W) + self._continuity_cost(pair[1], W) if local else 0.0,
-                -min(len(pair[0].points), len(pair[1].points)) if self.p.guardrail_local_view and not local else 0,
                 abs(pair[0].distance + pair[1].distance - W)
                 + W * abs(pair[0].heading - pair[1].heading),
                 -len(pair[0].points) - len(pair[1].points)))
