@@ -95,6 +95,8 @@ class AurParams:
     pose_filter: bool = False       # 끄면 매 scan 레일 측정을 그대로 쓴다 (자이로가 없어도 그렇다)
     pose_k_heading: float = 0.15    # 헤딩 보정 비율 (1이면 측정 그대로)
     pose_k_lateral: float = 0.3     # 횡위치 보정 비율
+    pose_gate_deg: float = 0.0      # 레일 헤딩이 예측과 이보다 많이 다르면 보정 비율을 pose_gate_scale배로 [deg]. 0 = 끔
+    pose_gate_scale: float = 0.2
     pose_reset_s: float = 1.0       # 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 [s]
     # --- 레이스 개정안: 멈춘 앞차 확정·우회 (EgoFSM._update_static). 의도(belief)와 무관 ---
     static_bypass: bool = False     # 끄면 멈춘 차도 belief대로 (method d는 뒤에서 정지)

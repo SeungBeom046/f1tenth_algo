@@ -108,42 +108,44 @@
 | config/exp_common.yaml | 110 | `pose_filter` | true | - | 자차 횡위치·헤딩을 자이로·속도로 예측하고 레일 측정으로 보정, 자이로 없으면 기존과 같다 | 임시 (2026-11-19 잡음 0.02 m 헤딩 sd 2.9°) | - | - |
 | config/exp_common.yaml | 111 | `pose_k_heading` | 0.15 | - | 헤딩 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
 | config/exp_common.yaml | 112 | `pose_k_lateral` | 0.3 | - | 횡위치 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
-| config/exp_common.yaml | 113 | `pose_reset_s` | 1.0 | s | 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 (자이로 드리프트 차단) | 임시 | - | - |
-| config/exp_common.yaml | 115 | `static_bypass` | true | - | 멈춘 앞차를 확정하면 belief와 무관하게 우회 (끄면 method d는 뒤에서 정지) | 레이스 개정안 (2026-11-19) | - | - |
-| config/exp_common.yaml | 116 | `static_v` | 0.15 | m/s | 앞차 속도가 이보다 작으면 멈춘 차 후보 | 임시 | - | - |
-| config/exp_common.yaml | 117 | `static_lat` | 0.05 | m | 후보 동안 앞차 횡이동 허용 | 임시 | - | - |
-| config/exp_common.yaml | 118 | `static_moving_v` | 0.3 | m/s | 앞차가 이보다 빠르면 '움직이는 것을 본 차' | 임시 | - | - |
-| config/exp_common.yaml | 119 | `static_t_never` | 1.0 | s | 한 번도 안 움직인 차를 멈춘 차로 확정하는 시간 | 임시 | - | - |
-| config/exp_common.yaml | 120 | `static_t_moved` | 3.0 | s | 달리다 선 차를 확정하는 시간, 급정지 뒤 재출발(S2 2 s)보다 길게 | 임시 | - | - |
-| config/exp_common.yaml | 121 | `static_settle_s` | 0.5 | s | 앞차를 처음 본 뒤 이 시간은 후보로 안 봄 (새 추적의 v_B는 0에서 시작) | 임시 (2026-11-19 시뮬: 출발 지연으로 Y 추월 9 → 4/16) | - | - |
-| config/exp_common.yaml | 122 | `static_bypass_gap` | 2.0 | m | 후보 동안 이 거리 뒤에서 선다 (붙으면 돌아갈 수 없다) | 임시 (2026-11-19 시뮬: 1.5면 y −0.2 정지 차 0/4, 2.0이면 4/4) | - | - |
-| config/exp_common.yaml | 123 | `static_bypass_min_d` | 1.0 | m | 우회를 시작할 수 있는 최소 거리 | 임시 | - | - |
-| config/exp_common.yaml | 125 | `rail_fallback_v` | 0.9 | m/s | 레일 무효 동안 빈 공간 가운데를 따라가는 속도, null이면 끔(정지) | 임시 (2026-11-19 실차 rail_lost 75% 정지) | - | - |
-| config/exp_common.yaml | 126 | `rail_fallback_s` | 3.0 | s | 마지막 레일 측정 뒤 대체 주행을 허용하는 시간 | 임시 | - | - |
-| config/exp_common.yaml | 127 | `rail_fallback_clear` | 1.5 | m | 앞범퍼 앞 이 거리 안 진행 경로(w/2 + c)에 점이 있으면 대체 주행 없이 정지 | 임시 | - | - |
-| config/exp_common.yaml | 129 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
-| config/exp_common.yaml | 130 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
-| config/exp_common.yaml | 131 | `corridor_min_points` | 8 | 개 | 한쪽 벽으로 인정할 최소 점 수 | 측정 (lidar_reactive_drive와 같은 값) | 벽 인정 점 수 | 기존 값 유지 |
-| config/exp_common.yaml | 132 | `corridor_wall_percentile` | 0.35 | - | 측면 거리 분위값 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 분위값 | 기존 값 유지 |
-| config/exp_common.yaml | 133 | `corridor_guardrail` | true | - | 실측 W에 맞는 가드레일 직선 선택, 무효면 정지 | 임시 (2026-11-18, 실차 미확인) | 켜면 실측 W가 필요하다. 가까운 평행 벽을 선택하고 유효한 벽을 잃으면 속도 명령 0 | 실측 W와 함께 true |
-| config/exp_common.yaml | 134 | `corridor_line_tol` | 0.03 | m | 벽 직선에서 허용하는 점의 수직 오차 | 임시 (합성·MuJoCo 회귀) | 키우면 가드레일 윗면·복도 벽 점이 같은 직선에 섞일 수 있다 | 0.01~0.03 (실차 미확인) |
-| config/exp_common.yaml | 135 | `corridor_width_tol` | 0.10 | m | 실측 W와 두 벽 사이 거리의 허용 차이 | 임시 (합성·MuJoCo 회귀) | 키우면 잘못된 벽 조합을 허용하고, 줄이면 측정 오차에 정지가 늘어난다 | 0.05~0.10 (실차 미확인) |
-| config/exp_common.yaml | 136 | `corridor_min_span` | 0.20 | m | 벽 직선의 최소 전후 길이, 분리된 점 덩어리 사이 최대 간격 | 임시 (합성·MuJoCo 회귀) | 키우면 짧은 물체를 벽으로 보는 일이 줄지만 가까운 낮은 벽을 놓칠 수 있다 | 0.15~0.30 (실차 미확인) |
-| config/exp_common.yaml | 137 | `min_point_x` | -1.0 | m | 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | 임시 | −0.05면 벽 거리 < 0.25 m에서 벽을 놓친다 (추월 차선 0.235 m). −1.0은 곡선에서 편향이 더 작지만 앞쪽 벽을 미리 보는 효과가 없다 | −1.0 (직선 통로) |
-| config/exp_common.yaml | 139 | `wall_follow_gain` | 0.30 | rad/m | 횡 오차 → 조향 P 게인 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 횡 수렴이 빠르지만 흔들린다 | 0.2~0.5 |
-| config/exp_common.yaml | 140 | `wall_error_filter_alpha` | 0.25 | - | 횡 오차 저역 필터 계수 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 반응이 빠르고 잡음에 민감하다 | 0.15~0.5 |
-| config/exp_common.yaml | 141 | `steer_rate_limit` | 0.08 | rad/scan | 조향 변화 한계 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 차선 변경이 빠르고 덜그럭거린다 | 0.05~0.15 |
-| config/exp_common.yaml | 142 | `steering_deadband` | 0.0 | rad | 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | 임시 (2026-11-16 시뮬) | 0.055 rad는 횡오차 약 0.09 m에 해당한다. 추월 차선 벽 여유(c = 0.10)와 merge_tol보다 크면 줄여야 한다 | 0.01~0.055 |
-| config/exp_common.yaml | 143 | `max_steering` | 0.349 | rad | 최대 조향각 (실차 앞바퀴 물리 한계 ±20°, 기본 주행은 0.78) | 측정 (2026-11-17 사용자 측정) | 조향 포화 | 기존 값 유지 |
-| config/exp_common.yaml | 144 | `heading_gain` | 1.0 | rad/rad | 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°) | 감쇠비 ζ = heading_gain / (2·sqrt(2·wall_follow_gain·L)), 속도와 무관. 0.7이면 ζ ≈ 0.8 | 0.5~1.0 |
-| config/exp_common.yaml | 145 | `y_ref_rate` | 0.4 | m/s | 차선 변경 시 y_ref 기울기 제한 | 기획안 | 키우면 차선 변경이 빠르고 yaw가 커진다 (tracker 폭 게이트) | 0.2~0.5 |
-| config/exp_common.yaml | 146 | `lateral_ki` | 0.3 | rad/(m·s) | 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m) | - | - |
-| config/exp_common.yaml | 147 | `lateral_i_max` | 0.10 | rad | 횡 적분항 한계 | 임시 | - | - |
-| config/exp_common.yaml | 148 | `lateral_i_zone` | 0.10 | m | 횡오차가 이보다 작고 차선 변경 중이 아닐 때만 적분 | 임시 | - | - |
-| config/exp_common.yaml | 150 | `d_brake_trigger` | 1.0 | m | NY 급정지 이벤트 무장 거리 | 기획안 | NY 급정지 이벤트가 무장되는 거리 | 0.8~1.2 |
-| config/exp_common.yaml | 151 | `brake_delay_min` | 0.5 | s | 급정지 지연 최소 | 기획안 | 급정지 시점 난수 범위 | 0.5 |
-| config/exp_common.yaml | 152 | `brake_delay_max` | 2.0 | s | 급정지 지연 최대 | 기획안 | 급정지 시점 난수 범위 | 2.0 |
-| config/exp_common.yaml | 153 | `start_gap_margin` | 0.2 | m | t0에서 d_rear < d_y_max + 이 값이면 경고 | 기획안 | 출발 간격 경고 기준 | 0.2 |
+| config/exp_common.yaml | 113 | `pose_gate_deg` | 0.0 | deg | 레일 헤딩이 자이로 예측과 이보다 많이 다르면 그 측정의 보정 비율을 pose_gate_scale배로, 0이면 끔 | 임시 (실차 Test 03·04: 서 있는데 레일 헤딩이 ±4~7° 튐) | - | - |
+| config/exp_common.yaml | 114 | `pose_gate_scale` | 0.2 | - | 크게 다른 레일 헤딩에 곱하는 보정 비율 배수 | 임시 | - | - |
+| config/exp_common.yaml | 115 | `pose_reset_s` | 1.0 | s | 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 (자이로 드리프트 차단) | 임시 | - | - |
+| config/exp_common.yaml | 117 | `static_bypass` | true | - | 멈춘 앞차를 확정하면 belief와 무관하게 우회 (끄면 method d는 뒤에서 정지) | 레이스 개정안 (2026-11-19) | - | - |
+| config/exp_common.yaml | 118 | `static_v` | 0.15 | m/s | 앞차 속도가 이보다 작으면 멈춘 차 후보 | 임시 | - | - |
+| config/exp_common.yaml | 119 | `static_lat` | 0.05 | m | 후보 동안 앞차 횡이동 허용 | 임시 | - | - |
+| config/exp_common.yaml | 120 | `static_moving_v` | 0.3 | m/s | 앞차가 이보다 빠르면 '움직이는 것을 본 차' | 임시 | - | - |
+| config/exp_common.yaml | 121 | `static_t_never` | 1.0 | s | 한 번도 안 움직인 차를 멈춘 차로 확정하는 시간 | 임시 | - | - |
+| config/exp_common.yaml | 122 | `static_t_moved` | 3.0 | s | 달리다 선 차를 확정하는 시간, 급정지 뒤 재출발(S2 2 s)보다 길게 | 임시 | - | - |
+| config/exp_common.yaml | 123 | `static_settle_s` | 0.5 | s | 앞차를 처음 본 뒤 이 시간은 후보로 안 봄 (새 추적의 v_B는 0에서 시작) | 임시 (2026-11-19 시뮬: 출발 지연으로 Y 추월 9 → 4/16) | - | - |
+| config/exp_common.yaml | 124 | `static_bypass_gap` | 2.0 | m | 후보 동안 이 거리 뒤에서 선다 (붙으면 돌아갈 수 없다) | 임시 (2026-11-19 시뮬: 1.5면 y −0.2 정지 차 0/4, 2.0이면 4/4) | - | - |
+| config/exp_common.yaml | 125 | `static_bypass_min_d` | 1.0 | m | 우회를 시작할 수 있는 최소 거리 | 임시 | - | - |
+| config/exp_common.yaml | 127 | `rail_fallback_v` | 0.9 | m/s | 레일 무효 동안 빈 공간 가운데를 따라가는 속도, null이면 끔(정지) | 임시 (2026-11-19 실차 rail_lost 75% 정지) | - | - |
+| config/exp_common.yaml | 128 | `rail_fallback_s` | 3.0 | s | 마지막 레일 측정 뒤 대체 주행을 허용하는 시간 | 임시 | - | - |
+| config/exp_common.yaml | 129 | `rail_fallback_clear` | 1.5 | m | 앞범퍼 앞 이 거리 안 진행 경로(w/2 + c)에 점이 있으면 대체 주행 없이 정지 | 임시 | - | - |
+| config/exp_common.yaml | 131 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
+| config/exp_common.yaml | 132 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
+| config/exp_common.yaml | 133 | `corridor_min_points` | 8 | 개 | 한쪽 벽으로 인정할 최소 점 수 | 측정 (lidar_reactive_drive와 같은 값) | 벽 인정 점 수 | 기존 값 유지 |
+| config/exp_common.yaml | 134 | `corridor_wall_percentile` | 0.35 | - | 측면 거리 분위값 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 분위값 | 기존 값 유지 |
+| config/exp_common.yaml | 135 | `corridor_guardrail` | true | - | 실측 W에 맞는 가드레일 직선 선택, 무효면 정지 | 임시 (2026-11-18, 실차 미확인) | 켜면 실측 W가 필요하다. 가까운 평행 벽을 선택하고 유효한 벽을 잃으면 속도 명령 0 | 실측 W와 함께 true |
+| config/exp_common.yaml | 136 | `corridor_line_tol` | 0.03 | m | 벽 직선에서 허용하는 점의 수직 오차 | 임시 (합성·MuJoCo 회귀) | 키우면 가드레일 윗면·복도 벽 점이 같은 직선에 섞일 수 있다 | 0.01~0.03 (실차 미확인) |
+| config/exp_common.yaml | 137 | `corridor_width_tol` | 0.10 | m | 실측 W와 두 벽 사이 거리의 허용 차이 | 임시 (합성·MuJoCo 회귀) | 키우면 잘못된 벽 조합을 허용하고, 줄이면 측정 오차에 정지가 늘어난다 | 0.05~0.10 (실차 미확인) |
+| config/exp_common.yaml | 138 | `corridor_min_span` | 0.20 | m | 벽 직선의 최소 전후 길이, 분리된 점 덩어리 사이 최대 간격 | 임시 (합성·MuJoCo 회귀) | 키우면 짧은 물체를 벽으로 보는 일이 줄지만 가까운 낮은 벽을 놓칠 수 있다 | 0.15~0.30 (실차 미확인) |
+| config/exp_common.yaml | 139 | `min_point_x` | -1.0 | m | 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | 임시 | −0.05면 벽 거리 < 0.25 m에서 벽을 놓친다 (추월 차선 0.235 m). −1.0은 곡선에서 편향이 더 작지만 앞쪽 벽을 미리 보는 효과가 없다 | −1.0 (직선 통로) |
+| config/exp_common.yaml | 141 | `wall_follow_gain` | 0.30 | rad/m | 횡 오차 → 조향 P 게인 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 횡 수렴이 빠르지만 흔들린다 | 0.2~0.5 |
+| config/exp_common.yaml | 142 | `wall_error_filter_alpha` | 0.25 | - | 횡 오차 저역 필터 계수 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 반응이 빠르고 잡음에 민감하다 | 0.15~0.5 |
+| config/exp_common.yaml | 143 | `steer_rate_limit` | 0.08 | rad/scan | 조향 변화 한계 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 차선 변경이 빠르고 덜그럭거린다 | 0.05~0.15 |
+| config/exp_common.yaml | 144 | `steering_deadband` | 0.0 | rad | 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | 임시 (2026-11-16 시뮬) | 0.055 rad는 횡오차 약 0.09 m에 해당한다. 추월 차선 벽 여유(c = 0.10)와 merge_tol보다 크면 줄여야 한다 | 0.01~0.055 |
+| config/exp_common.yaml | 145 | `max_steering` | 0.349 | rad | 최대 조향각 (실차 앞바퀴 물리 한계 ±20°, 기본 주행은 0.78) | 측정 (2026-11-17 사용자 측정) | 조향 포화 | 기존 값 유지 |
+| config/exp_common.yaml | 146 | `heading_gain` | 1.0 | rad/rad | 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°) | 감쇠비 ζ = heading_gain / (2·sqrt(2·wall_follow_gain·L)), 속도와 무관. 0.7이면 ζ ≈ 0.8 | 0.5~1.0 |
+| config/exp_common.yaml | 147 | `y_ref_rate` | 0.4 | m/s | 차선 변경 시 y_ref 기울기 제한 | 기획안 | 키우면 차선 변경이 빠르고 yaw가 커진다 (tracker 폭 게이트) | 0.2~0.5 |
+| config/exp_common.yaml | 148 | `lateral_ki` | 0.3 | rad/(m·s) | 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m) | - | - |
+| config/exp_common.yaml | 149 | `lateral_i_max` | 0.10 | rad | 횡 적분항 한계 | 임시 | - | - |
+| config/exp_common.yaml | 150 | `lateral_i_zone` | 0.10 | m | 횡오차가 이보다 작고 차선 변경 중이 아닐 때만 적분 | 임시 | - | - |
+| config/exp_common.yaml | 152 | `d_brake_trigger` | 1.0 | m | NY 급정지 이벤트 무장 거리 | 기획안 | NY 급정지 이벤트가 무장되는 거리 | 0.8~1.2 |
+| config/exp_common.yaml | 153 | `brake_delay_min` | 0.5 | s | 급정지 지연 최소 | 기획안 | 급정지 시점 난수 범위 | 0.5 |
+| config/exp_common.yaml | 154 | `brake_delay_max` | 2.0 | s | 급정지 지연 최대 | 기획안 | 급정지 시점 난수 범위 | 2.0 |
+| config/exp_common.yaml | 155 | `start_gap_margin` | 0.2 | m | t0에서 d_rear < d_y_max + 이 값이면 경고 | 기획안 | 출발 간격 경고 기준 | 0.2 |
 | sim/aur_overtake/scenario.yaml | 4 | `dt` | 0.01 | s | 시뮬 고정 스텝 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 5 | `max_time` | 25.0 | s | 회차 최대 시간 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 6 | `end_after_done` | 1.0 | s | DONE 또는 FOLLOW 후 정지 뒤 이만큼 더 돌고 끝 | 임시 | - | - |

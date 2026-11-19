@@ -44,3 +44,13 @@ def test_off_or_no_gyro_leaves_measurement():
             c = cor(0.01 * k, 0.02 * k)
             f.apply(c, 0.1 * k, 1.0, rate)
             assert (c.ego_lateral, c.heading) == (0.01 * k, 0.02 * k)
+
+
+def test_gate_downweights_heading_jump():
+    q = replace(P, pose_gate_deg=3.0, pose_gate_scale=0.2)
+    for p, expect in ((P, 0.2 * math.radians(6)), (q, 0.2 * 0.2 * math.radians(6))):
+        f = PoseFilter(p)
+        f.apply(cor(0.0, 0.0), 0.0, 0.0, 0.0)
+        c = cor(0.0, math.radians(6))                 # 서 있는데 6° 튐
+        f.apply(c, 0.1, 0.0, 0.0)
+        assert abs(c.heading - expect) < 1e-9

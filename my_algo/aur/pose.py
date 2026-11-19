@@ -44,7 +44,12 @@ class PoseFilter:
             return
         y, psi = self._pred
         if fresh:
-            psi += p.pose_k_heading * (cor.heading - psi)
+            k_h = p.pose_k_heading
+            if p.pose_gate_deg > 0.0 and abs(cor.heading - psi) > math.radians(p.pose_gate_deg):
+                # 자이로 예측과 크게 다른 레일 헤딩은 덜 믿는다: 서 있는데(자이로 ≈ 0) 낮은 가드레일 직선 헤딩이 혼자 ±4~7° 튀어
+                # 2 m 앞 선행차 횡위치가 10 cm 넘게 흔들렸다 (실차 Test 03·04, 2026-11-19)
+                k_h *= p.pose_gate_scale
+            psi += k_h * (cor.heading - psi)
             y += p.pose_k_lateral * (cor.ego_lateral - y)
             self.t_fresh = t
         self.y, self.psi = y, psi
