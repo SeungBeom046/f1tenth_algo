@@ -68,6 +68,8 @@ class ExpPlanner(Node):
         # 자차 위치 필터(pose_filter)의 자이로. Mid-360 내장 IMU, z축 각속도 [rad/s] (단위·부호는 실차 미확인)
         self.declare_parameter('imu_topic', '/livox/imu')
         self.declare_parameter('imu_yaw_sign', 1.0)
+        self.declare_parameter('imu_calib_s', 0.0)      # > 0이면 실행 직후 이 시간 정지한 채 자이로 평균을 바이어스로 재서 뺀다 [s]
+        self.declare_parameter('imu_print_s', 0.0)      # > 0이면 이 주기로 IMU yaw rate·헤딩을 터미널에 찍는다 [s]
         self.declare_parameter('params_file', os.path.join(
             get_package_share_directory('my_algo'), 'config', 'exp_common.yaml'))
 
@@ -115,6 +117,12 @@ class ExpPlanner(Node):
         self.create_subscription(LaserScan, '/scan', self.scan_callback, qos)
         self.imu_sign = float(self.get_parameter('imu_yaw_sign').value)
         self.gyro_sum, self.gyro_n, self.t_gyro = 0.0, 0, None
+        self.imu_calib_s = float(self.get_parameter('imu_calib_s').value)
+        self.imu_print_s = float(self.get_parameter('imu_print_s').value)
+        self.gyro_bias = 0.0
+        self.calib_pending = self.imu_calib_s > 0.0 and self.role != 'straight'
+        self.calib_sum, self.calib_n, self.t_calib, self.t_start = 0.0, 0, None, None
+        self.last_rate, self.t_imu_print = None, None
         self.create_subscription(Imu, self.get_parameter('imu_topic').value, self.imu_callback,
                                  QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT,
                                             history=QoSHistoryPolicy.KEEP_LAST, depth=50))
@@ -160,9 +168,23 @@ class ExpPlanner(Node):
         self.aeb_on = msg.data
 
     def imu_callback(self, msg):
-        self.gyro_sum += self.imu_sign * msg.angular_velocity.z
+        z = self.imu_sign * msg.angular_velocity.z
+        now = self.get_clock().now().nanoseconds / 1e9
+        if self.calib_pending:
+            # 출발 전 정지 평균 = 자이로 바이어스. 레일 보정이 천천히 지우던 것을 처음부터 뺀다
+            self.t_calib = now if self.t_calib is None else self.t_calib
+            if self.v < 0.05:
+                self.calib_sum += z
+                self.calib_n += 1
+            if now - self.t_calib >= self.imu_calib_s and self.calib_n:
+                self.gyro_bias = self.calib_sum / self.calib_n
+                self.calib_pending = False
+                self.stats.imu_bias = self.gyro_bias
+                self.event('IMU 바이어스 보정: %+.4f rad/s (%+.2f°/s, 정지 %d개 평균)' % (
+                    self.gyro_bias, math.degrees(self.gyro_bias), self.calib_n))
+        self.gyro_sum += z - self.gyro_bias
         self.gyro_n += 1
-        self.t_gyro = self.get_clock().now().nanoseconds / 1e9
+        self.t_gyro = now
 
     def yaw_rate(self, t):
         """직전 scan 이후 자이로 평균 [rad/s]. 0.3 s 넘게 안 왔으면 None (pose_filter는 기존 동작으로 돌아간다)."""
@@ -171,6 +193,7 @@ class ExpPlanner(Node):
             rate = self.gyro_sum / self.gyro_n
         self.stats.imu(self.gyro_n, rate)
         self.gyro_sum, self.gyro_n = 0.0, 0
+        self.last_rate = rate
         return rate
 
     def scan_callback(self, msg):
@@ -184,6 +207,19 @@ class ExpPlanner(Node):
         else:
             state, mode, steer, reason = self.ego_step(t, msg, v)
         if self.role != 'straight':
+            self.t_start = t if self.t_start is None else self.t_start
+            if self.calib_pending:
+                if t - self.t_start > self.imu_calib_s + 1.0 and not self.calib_n:
+                    self.calib_pending = False      # IMU가 안 온다: 보정 없이 출발 (pose_filter는 레일 측정만 쓴다)
+                    self.event('IMU 없음 (%s): 바이어스 보정 건너뜀' % self.get_parameter('imu_topic').value)
+                else:
+                    self.v_cmd, reason = 0.0, 'imu_calibrating'
+            if self.imu_print_s > 0.0 and self.last_rate is not None and (
+                    self.t_imu_print is None or t - self.t_imu_print >= self.imu_print_s):
+                self.t_imu_print = t
+                cor = self.runner.corridor
+                self.event('IMU yaw rate %+.3f rad/s (바이어스 %+.4f 뺌) | 헤딩 %+.1f° 횡위치 %+.3f m' % (
+                    self.last_rate, self.gyro_bias, math.degrees(cor.heading), cor.ego_lateral))
             rail, lead = perception_tags(self.runner)
             if rail != self.tags[0]:
                 self.event('인식: %s' % rail)
@@ -303,6 +339,7 @@ class RunStats:
         self.d_min = None
         self.aeb_reasons = []
         self.imu_samples = 0
+        self.imu_bias = None
         self.imu_scans = 0
         self.yaw_rates = []
 
@@ -360,9 +397,10 @@ class RunStats:
             '명령                 : %s' % pct(self.reasons),
             '선행차 최소 거리     : %s' % ('없음' if self.d_min is None else '%.2f m' % self.d_min),
             'IMU 자이로           : %s' % ('없음 (pose_filter는 레일 측정만 씀)' if not self.imu_scans else
-                                          '%d개, scan %.0f%%, yaw rate 평균 %+.3f / 최대 |%.3f| rad/s' % (
+                                          '%d개, scan %.0f%%, yaw rate 평균 %+.3f / 최대 |%.3f| rad/s, 바이어스 %s' % (
                                               self.imu_samples, 100.0 * self.imu_scans / self.n,
-                                              sum(self.yaw_rates) / len(self.yaw_rates), max(map(abs, self.yaw_rates)))),
+                                              sum(self.yaw_rates) / len(self.yaw_rates), max(map(abs, self.yaw_rates)),
+                                              '보정 안 함' if self.imu_bias is None else '%+.4f rad/s 뺌' % self.imu_bias)),
             'AEB 작동             : %d회%s' % (len(self.aeb_reasons), ''.join('\n  - ' + r for r in self.aeb_reasons[:5])),
             '=================================',
         ]
