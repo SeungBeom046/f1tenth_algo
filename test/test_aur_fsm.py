@@ -10,7 +10,9 @@ from my_algo.aur.params import EXPERIMENT_OVERRIDES, AurParams
 
 # 수치는 기획안 ε. go_hold_s는 끈다: 기획안 FSM 판단(조건이 맞는 scan에 PASS)을 그대로 검사한다.
 # ε 0.05에서 0.3 s 유지를 켜면 PROBE·APPROACH가 길어져 속도 지연으로 h가 −1 cm까지 내려간다 (test_aur_racestack 참고)
-P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, experiment_safety=False, eps_follow=0.05, go_hold_s=0.0))   # 수치는 기획안 ε
+P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, experiment_safety=False, eps_follow=0.05, go_hold_s=0.0,
+                                pass_margin_hyst=False, retreat_hold=False, belief_pre_t0=False, follow_repass=False,
+                                lead_steady_face=False, pose_gate_deg=0.0))   # 수치는 기획안 ε, 실차 보강 옵션은 끔
 
 
 def states(log):

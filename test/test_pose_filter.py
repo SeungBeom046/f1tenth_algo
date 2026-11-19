@@ -6,7 +6,8 @@ from types import SimpleNamespace
 from my_algo.aur.params import AurParams, EXPERIMENT_OVERRIDES
 from my_algo.aur.pose import PoseFilter
 
-P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, pose_filter=True, pose_k_heading=0.2, pose_k_lateral=0.5))
+P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, pose_filter=True, pose_k_heading=0.2, pose_k_lateral=0.5,
+                                pose_gate_deg=0.0))
 
 
 def cor(y, psi, valid=True, fresh=True):

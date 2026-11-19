@@ -17,14 +17,14 @@ aur:
   stationary_clear: 0.05    # TUNE: 정지 차 옆면과 남길 간격 | m | 임시 (실차 추월 때 차체-벽 약 5 cm)
   stationary_steer_frac: 0.8  # TUNE: 원호 계산 조향 비율 (최대 조향 × 이 값) | - | 임시 (2026-11-19 시뮬 짧은 출발 간격: 0.6 a 12·d 10/16, 0.8 a 13·d 10/16, 충돌 0. 실차 조향 게인 미확인)
   stationary_margin_x: 0.15  # TUNE: 원호 거리에 더하는 종방향 여유 | m | 임시
-  follow_repass: false      # TUNE: FOLLOW에서 선행차가 들어간 때보다 y_yield_thr 넘게 더 비키고 횡 시작 여유가 go_hold_s 유지되면 다시 추월 | - | 임시 (실차 overtake_01: 길을 터줘도 뒤에 서 있음)
-  belief_pre_t0: false      # TUNE: belief 누적 횡변위에 ego 출발 전 선행차가 비킨 변위도 넣는다 (첫·최근 유효 y_B 3개 중앙값 차, NY 증거는 출발부터) | - | 임시 (실차 overtake_01: 출발 전 6 cm 비킨 것을 버려 NY 판정)
-  retreat_hold: false       # TUNE: 추월 중단 뒤 추월 차선을 유지한 채 감속, 거의 멈추거나 선행차가 retreat_exit_d 넘게 앞서면 FOLLOW | - | 임시 (실차 overtake_02: 중단 즉시 가운데로 꺾다 접촉)
+  follow_repass: true      # TUNE: FOLLOW에서 선행차가 들어간 때보다 y_yield_thr 넘게 더 비키고 횡 시작 여유가 go_hold_s 유지되면 다시 추월 | - | 임시 (실차 overtake_01: 길을 터줘도 뒤에 서 있음)
+  belief_pre_t0: true      # TUNE: belief 누적 횡변위에 ego 출발 전 선행차가 비킨 변위도 넣는다 (첫·최근 유효 y_B 3개 중앙값 차, NY 증거는 출발부터) | - | 임시 (실차 overtake_01: 출발 전 6 cm 비킨 것을 버려 NY 판정)
+  retreat_hold: true       # TUNE: 추월 중단 뒤 추월 차선을 유지한 채 감속, 거의 멈추거나 선행차가 retreat_exit_d 넘게 앞서면 FOLLOW | - | 임시 (실차 overtake_02: 중단 즉시 가운데로 꺾다 접촉)
   retreat_exit_v: 0.3       # TUNE: 이 속도 이하면 RETREAT 종료 | m/s | 임시
   retreat_exit_d: 2.0       # TUNE: 선행차가 이만큼 앞서며 ego보다 빠르면(멀어지면) RETREAT 종료 | m | 임시
-  pass_margin_hyst: false   # TUNE: 추월 시작은 횡 여유 + pass_start_margin, 중단은 최근 3개 y_B 중앙값으로 여유 0 판정 | - | 임시 (실차 overtake_02: 여유 +4.5 cm에서 시작해 튄 scan 하나로 중단 → 접촉)
+  pass_margin_hyst: true   # TUNE: 추월 시작은 횡 여유 + pass_start_margin, 중단은 최근 3개 y_B 중앙값으로 여유 0 판정 | - | 임시 (실차 overtake_02: 여유 +4.5 cm에서 시작해 튄 scan 하나로 중단 → 접촉)
   pass_start_margin: 0.05   # TUNE: 추월 시작에 더 요구하는 횡 여유 | m | 임시
-  lead_steady_face: false   # TUNE: 앞차 뒷면을 넓게 본 추적은 좁게 보인 scan에서도 뒷범퍼를 0.22 m 당기지 않는다 (모든 방법) | - | 임시 (실차 overtake_02: 거리 0.66 ↔ 0.89 m 반복)
+  lead_steady_face: true   # TUNE: 앞차 뒷면을 넓게 본 추적은 좁게 보인 scan에서도 뒷범퍼를 0.22 m 당기지 않는다 (모든 방법) | - | 임시 (실차 overtake_02: 거리 0.66 ↔ 0.89 m 반복)
   stationary_partial_lead: true   # TUNE: stationary_pass에서 첫 확정 전 좁은(검은 차 일부만 보인) 클러스터도 후보, 확인 중 한 scan 놓침 허용 | - | 임시 (실차 test_01 2026-11-19: 2.1 m 앞 정지 차가 폭 0.02~0.11 m로 보여 1.36 m에서야 후보)
   partial_width_min: 0.04   # TUNE: 좁은 후보 최소 폭 | m | 임시 (test_01 정지 차 0.05~0.11 m)
   partial_depth_max: 0.3    # TUNE: 좁은 후보 최대 깊이, 레일 조각(1~2 m)을 거른다 | m | 임시
@@ -110,7 +110,7 @@ aur:
   pose_filter: true         # TUNE: 자차 횡위치·헤딩을 자이로·속도로 예측하고 레일 측정으로 보정, 자이로 없으면 기존과 같다 | - | 임시 (2026-11-19 잡음 0.02 m 헤딩 sd 2.9°)
   pose_k_heading: 0.15      # TUNE: 헤딩 보정 비율, 1이면 레일 측정 그대로 | - | 임시
   pose_k_lateral: 0.3       # TUNE: 횡위치 보정 비율, 1이면 레일 측정 그대로 | - | 임시
-  pose_gate_deg: 0.0        # TUNE: 레일 헤딩이 자이로 예측과 이보다 많이 다르면 그 측정의 보정 비율을 pose_gate_scale배로, 0이면 끔 | deg | 임시 (실차 Test 03·04: 서 있는데 레일 헤딩이 ±4~7° 튐)
+  pose_gate_deg: 3.0        # TUNE: 레일 헤딩이 자이로 예측과 이보다 많이 다르면 그 측정의 보정 비율을 pose_gate_scale배로, 0이면 끔 | deg | 임시 (실차 Test 03·04: 서 있는데 레일 헤딩이 ±4~7° 튐)
   pose_gate_scale: 0.2      # TUNE: 크게 다른 레일 헤딩에 곱하는 보정 비율 배수 | - | 임시
   pose_reset_s: 1.0         # TUNE: 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 (자이로 드리프트 차단) | s | 임시
   # --- 레이스 개정안: 멈춘 앞차 확정·우회 (의도 판단과 무관, 사고 차는 기다리지 않고 돌아간다) ---

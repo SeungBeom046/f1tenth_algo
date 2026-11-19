@@ -4,7 +4,8 @@ from dataclasses import replace
 from my_algo.aur.ego_fsm import EgoFSM, Obs
 from my_algo.aur.params import AurParams, EXPERIMENT_OVERRIDES
 
-P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, W=1.0, go_hold_s=0.0, static_bypass=False))
+# 보강 옵션은 각 시험에서 켜고 끈다
+P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, W=1.0, go_hold_s=0.0, static_bypass=False, pass_margin_hyst=False, retreat_hold=False, belief_pre_t0=False, follow_repass=False, lead_steady_face=False, pose_gate_deg=0.0))
 
 
 def obs(t, d, y_b, v_e=0.5, v_b=0.5, ego_lat=0.0, front_rel=None):
