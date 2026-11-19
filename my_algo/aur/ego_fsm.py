@@ -126,7 +126,7 @@ class EgoFSM:
             reason = self._decide(obs, trk, W, reason)
         if p.static_bypass and self.state in ('WAIT', 'APPROACH', 'PROBE', 'FOLLOW'):
             min_d = self._pass_need(obs)[1] if (p.stationary_geom_pass and obs.valid) else p.static_bypass_min_d
-            if self.static_confirmed and obs.valid and obs.d >= min_d and self._lateral_ok(W, obs):
+            if self.static_confirmed and obs.valid and obs.d >= min_d and self._lateral_ok(W, obs, self._start_margin()):
                 self.state, reason = 'PASS', 'static_bypass'
                 self._static_pass = True
                 self._y_b_most_yielded = obs.y_b
@@ -250,7 +250,8 @@ class EgoFSM:
         if self.decided is None and (b >= p.eta or b <= 1.0 - p.eta):
             self.decided, self.t_decided = ('Y' if b >= p.eta else 'NY'), obs.t
         waited = obs.t - self.t_probe if self.state == 'PROBE' else -1.0
-        lat_ok = trk is not None and W is not None and self._lateral_ok(W, trk)
+        # pass_margin_hyst: 시작은 여유 + pass_start_margin, 중단은 여유 0 (실차 overtake_02: 여유 +4.5 cm에서 시작해 scan 하나에 중단)
+        lat_ok = trk is not None and W is not None and self._lateral_ok(W, trk, self._start_margin())
         if self.method == 'a':      # belief는 기록만 하고 판단에 쓰지 않는다
             go, give_up = waited >= p.T_wait_a and lat_ok, False
             if p.stationary_pass:
@@ -308,7 +309,9 @@ class EgoFSM:
         # 7 cm씩 튀어(실차 test_02) 복귀로 보였다. 다시 움직여 들어오면 아래 횡 여유 판정이 막는다
         stationary = p.stationary_geom_pass and (p.stationary_pass or self._static_pass)
         returning = not stationary and y_b + self._lat_shift() > self._y_b_most_yielded + p.y_yield_thr
-        if returning or not self._lateral_ok(W, obs):
+        # pass_margin_hyst: 횡 여유 중단도 최근 abort_yb_window개 y_B 중앙값으로 본다 (튄 scan 하나로 중단하지 않는다)
+        lateral_obs = obs._replace(y_b=y_b) if p.pass_margin_hyst else obs
+        if returning or not self._lateral_ok(W, lateral_obs):
             self.state = 'RETREAT' if p.abort_mode == 'retreat' else 'FOLLOW'
             self.follow_reason = 'pass_abort'
             self.abort_count += 1
@@ -355,13 +358,17 @@ class EgoFSM:
         return 'W %.2f, 선행차 y_B %+.3f, 차폭 %.2f, 필요 %.3f(w+2c), 잔여 %+.3f m' % (
             W, y_b, p.w_car, need, W / 2.0 - y_b - p.w_car / 2.0 - need)
 
-    def _lateral_ok(self, W, o):
-        """선행차 왼쪽에 ego 폭 + 양쪽 여유가 남는가. lateral_ref = left_edge이고 y_L이 있으면 왼쪽 모서리 기준."""
+    def _lateral_ok(self, W, o, extra=0.0):
+        """선행차 왼쪽에 ego 폭 + 양쪽 여유가 남는가. lateral_ref = left_edge이고 y_L이 있으면 왼쪽 모서리 기준.
+        extra > 0이면 그만큼 더 남아야 한다 (pass_margin_hyst의 추월 시작 여유)."""
         p = self.p
         shift = self._lat_shift()
         if p.lateral_ref == 'left_edge' and o.y_l is not None:
-            return safety.lateral_pass_ok_edge(W, o.y_l + shift, p.w_car, p.c_lat)
-        return safety.lateral_pass_ok(W, o.y_b + shift, p.w_car, p.c_lat)
+            return safety.lateral_pass_ok_edge(W, o.y_l + shift + extra, p.w_car, p.c_lat)
+        return safety.lateral_pass_ok(W, o.y_b + shift + extra, p.w_car, p.c_lat)
+
+    def _start_margin(self):
+        return self.p.pass_start_margin if self.p.pass_margin_hyst else 0.0
 
     def _pass_speed(self, obs, delta, v, reason):
         """PASS 속도: 선행차와 횡으로 완전히 어긋나고 추월 차선(+δ)에 도착하기 전에는 추종 속도, 그 뒤 v_pass.

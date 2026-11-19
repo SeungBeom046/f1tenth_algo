@@ -129,6 +129,8 @@ class AurParams:
     stationary_steer_frac: float = 0.6  # 원호 계산에 쓰는 조향 비율 (서보 지연·횡 제어 여유)
     stationary_margin_x: float = 0.15   # 원호 거리에 더하는 종방향 여유 [m]
     wheelbase: float = 0.33             # [m] 실측
+    pass_margin_hyst: bool = False      # 추월 시작은 횡 여유 + pass_start_margin, 중단은 3개 중앙값 y_B로 여유 0 판정
+    pass_start_margin: float = 0.05     # 추월 시작에 더 요구하는 횡 여유 [m]
     lead_steady_face: bool = False      # 앞 추적에서 넓은 뒷면을 본 뒤에는 좁게 보인 scan도 같은 면 (0.22 m를 빼지 않음), 모든 방법
     stationary_partial_lead: bool = False   # stationary_pass에서 첫 확정 전 좁은(일부만 보인) 정지 차 클러스터도 후보로, 확인 중 한 scan 놓침 허용
     partial_width_min: float = 0.04     # 좁은 후보 최소 폭 [m]
