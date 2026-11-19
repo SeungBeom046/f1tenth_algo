@@ -39,6 +39,7 @@ Obs = namedtuple('Obs', 't v_e valid d y_b v_b ego_lat W front_rel y_l')
 Obs.__new__.__defaults__ = (None, None)
 
 INF = float('inf')
+STATIONARY_PASS_MIN_D = 1.5     # 정지차 모드에서 차선 변경을 시작할 수 있는 최소 거리 [m] (가까우면 추종·정지만)
 
 
 class EgoFSM:
@@ -58,6 +59,7 @@ class EgoFSM:
         self.follow_reason = None   # FOLLOW로 간 이유: belief_NY | T_max | pass_abort
         self.hold_count = 0
         self.abort_count = 0
+        self.pass_block = None          # 추월을 시작하지 않은 이유 (기록·터미널용, 판단에는 쓰지 않는다)
         # 기록용 (/exp/state)
         self.h = INF                # 식 7 안전 여유
         self.d_safe = None          # 식 6
@@ -110,6 +112,7 @@ class EgoFSM:
         p = self.p
         W = p.W if p.W is not None else obs.W
         delta = safety.lane_offset(W, p) if W is not None else 0.0
+        self.pass_block = None
         trk = self._update_track_and_safety(obs)
         self._update_static(obs)
         self._update_leader_vlat(obs)
@@ -250,16 +253,27 @@ class EgoFSM:
             go, give_up = waited >= p.T_wait_a and lat_ok, False
             if p.stationary_pass:
                 # 정지차 모드는 충분히 멀리서 차선 변경을 시작한다. 가까우면 추종·정지만 한다.
-                go = obs.valid and lat_ok and obs.d >= 1.5
+                go = obs.valid and lat_ok and obs.d >= STATIONARY_PASS_MIN_D
         else:
             go, give_up = self.decided == 'Y' and lat_ok, self.decided == 'NY'
+        block = None
+        if self.method == 'a' and p.stationary_pass:
+            if not obs.valid:
+                block = '추적 미확정'
+            elif obs.d < STATIONARY_PASS_MIN_D:
+                block = '종방향 거리 부족 (d %.2f < %.2f m)' % (obs.d, STATIONARY_PASS_MIN_D)
+            elif not lat_ok:
+                block = '횡 여유 부족 (%s)' % self._lateral_detail(W, trk)
         if p.go_hold_s > 0.0:
             # race_stack splini_hyst_timer_sec: 조건이 go_hold_s 동안 끊김 없이 맞아야 PASS
             if not go:
                 self._go_since = None
             elif self._go_since is None:
                 self._go_since = obs.t
+            if go and obs.t - self._go_since < p.go_hold_s:
+                block = '조건 유지 시간 미충족 (%.2f / %.2f s)' % (obs.t - self._go_since, p.go_hold_s)
             go = go and obs.t - self._go_since >= p.go_hold_s
+        self.pass_block = None if go else block
         if go:
             self.state, reason = 'PASS', 'pass_start'
             self._y_b_most_yielded = trk.y_b
@@ -302,6 +316,21 @@ class EgoFSM:
             return 0.0, self._follow_speed(trk), 'retreat_done'
         v_b = trk.v_b if trk is not None else p.v_B_nominal
         return delta, p.retreat_speed_ratio * v_b, 'retreat'
+
+    def _lateral_detail(self, W, o):
+        """_lateral_ok 판정에 쓴 값 (로그용): 통로 폭, 선행차 횡위치 또는 왼쪽 경계, 차폭, 필요 여유, 잔여 여유."""
+        p = self.p
+        if o is None or W is None:
+            return '선행차 또는 통로 폭 없음'
+        shift = self._lat_shift()
+        need = p.w_car + 2.0 * p.c_lat
+        if p.lateral_ref == 'left_edge' and o.y_l is not None:
+            edge = o.y_l + shift
+            return 'W %.2f, 선행차 왼쪽 경계 y_L %+.3f, 차폭 %.2f, 필요 %.3f, 잔여 %+.3f m' % (
+                W, edge, p.w_car, need, W / 2.0 - edge - need)
+        y_b = o.y_b + shift
+        return 'W %.2f, 선행차 y_B %+.3f, 차폭 %.2f, 필요 %.3f(w+2c), 잔여 %+.3f m' % (
+            W, y_b, p.w_car, need, W / 2.0 - y_b - p.w_car / 2.0 - need)
 
     def _lateral_ok(self, W, o):
         """선행차 왼쪽에 ego 폭 + 양쪽 여유가 남는가. lateral_ref = left_edge이고 y_L이 있으면 왼쪽 모서리 기준."""

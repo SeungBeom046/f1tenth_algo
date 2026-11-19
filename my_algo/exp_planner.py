@@ -289,8 +289,12 @@ class ExpPlanner(Node):
         s.update(corridor_valid=cor.valid, wall_left=cor.left, wall_right=cor.right,
                  guardrail_local_view=self.p.guardrail_local_view, wall_initializing=cor.initializing,
                  pose_filter=self.p.pose_filter)
-        s.update(track_status=self.runner.tracker.status, pending_d=self.runner.tracker.pending_d)
+        s.update(track_status=self.runner.tracker.status, pending_d=self.runner.tracker.pending_d,
+                 pass_block=fsm.pass_block)
         prev, self.prev = self.prev, s
+        block = (s['pass_block'] or '').split(' (')[0]
+        if block != (prev.get('pass_block') or '').split(' (')[0] and st in ('WAIT', 'APPROACH', 'PROBE'):
+            self.event('추월 보류: %s' % s['pass_block'] if s['pass_block'] else '추월 보류 해제')
         if prev.get('n_abort', 0) != s['n_abort']:
             self.event('추월 중단 (선행차가 다시 들어오거나 왼쪽 여유 부족)')
         if st != prev.get('state'):

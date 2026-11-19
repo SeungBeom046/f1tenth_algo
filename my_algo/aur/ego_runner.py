@@ -57,6 +57,9 @@ class EgoRunner:
             reason = 'corridor_initializing' if cor.initializing else 'corridor_invalid'
             return 0.0, self.lateral.steer, self.lateral.y_ref, self.fsm.state, reason
         if self.tracker.pending_d is not None:
+            if p.stationary_pass:
+                self.fsm.pass_block = '추적 미확정 (후보 확인 %d/3, %.2f m)' % (
+                    self.tracker._candidate_count, self.tracker.pending_d)
             return 0.0, self.lateral.steer, self.lateral.y_ref, self.fsm.state, 'front_track_pending'
         v_cmd, y_ref, state, reason = self.fsm.step(Obs(
             t, v, trk.valid, trk.d, trk.y_b, trk.v_b, cor.ego_lateral, W, trk.front_rel, trk.y_l))
