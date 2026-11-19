@@ -115,7 +115,9 @@ def generate_launch_description():
                 'aeb_vehicle_half_width': 0.135,
                 'aeb_path_margin': 0.0,
                 'aeb_bumper_emergency_distance': 0.20,
-                'aeb_bumper_overlap_tolerance': 0.10,
+                # 라이다와 앞범퍼 사이 점(자기 차 앞부분)은 AEB 후보가 아니다. 실차 test_02(2026-11-19): 라이다 앞 0.19~0.23 m,
+                # 옆 0.11~0.12 m 점 하나로 closest 0.00 m AEB가 두 번 걸렸다 (기본 주행 launch는 0.10 그대로)
+                'aeb_bumper_overlap_tolerance': 0.0,
                 # 실차 2026-11-18: 정지 차 뒤 고정 뒤 영영 출발 못함. 정지 + 비상 아님 1 s면 해제 (scenario.yaml aeb와 같게)
                 'aeb_latch_release_sec': 1.0,
                 'lidar_to_bumper_dist': arg('lidar_to_bumper', float),

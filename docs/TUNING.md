@@ -176,7 +176,7 @@
 | sim/aur_overtake/scenario.yaml | 49 | `vehicle_half_width` | 0.135 | m | AEB 검사 띠 반폭 = 실측 차 반폭 (launch aeb_vehicle_half_width와 같게) | 측정 (2026-11-17, 이전 0.15) | - | - |
 | sim/aur_overtake/scenario.yaml | 50 | `path_margin` | 0.0 | m | AEB 검사 띠 = 차 중심 ±(반폭 + 이 값) = ±0.135. 실차는 추월 때 차체-벽 약 5 cm (launch 값과 같게) | 임시 (2026-11-17, 이전 0.01) | - | - |
 | sim/aur_overtake/scenario.yaml | 51 | `latch_release_sec` | 1.0 | s | 실험 AEB 고정을 정지 후 비상 아님이 이 시간 이어지면 해제, 0이면 AUTO off까지 (launch aeb_latch_release_sec와 같게) | 임시 (실차 2026-11-18) | - | - |
-| sim/aur_overtake/scenario.yaml | 52 | `bumper_overlap_tolerance` | 0.10 | m | 앞범퍼 뒤 이 거리까지의 점도 AEB 후보 (launch aeb_bumper_overlap_tolerance와 같게) | 측정 구성 | - | - |
+| sim/aur_overtake/scenario.yaml | 52 | `bumper_overlap_tolerance` | 0.0 | m | 앞범퍼 뒤 이 거리까지의 점도 AEB 후보 (launch aeb_bumper_overlap_tolerance와 같게) | 임시 (실차 test_02: 자기 차 앞부분 점으로 closest 0 AEB) | - | - |
 | sim/aur_overtake/scenario.yaml | 53 | `bumper_emergency_distance` | 0.20 | m | AEB 고정 정지 거리, 정지 여유 m 0.15 이상 (launch 값과 같게) | 임시 (2026-11-17, 이전 0.25) | - | - |
 | sim/aur_overtake/scenario.yaml | 55 | `gyro_noise_std` | 0.01 | rad/s | scan 주기(0.1 s) 평균 yaw rate 잡음 | 임시 (사양 미확인) | - | - |
 | sim/aur_overtake/scenario.yaml | 56 | `gyro_bias` | 0.005 | rad/s | 고정 바이어스 (선행차는 부호 반대) | 임시 (0.3°/s) | - | - |
