@@ -272,8 +272,12 @@ def test_stationary_vehicle_bypass_with_same_lidar_mount(height):
 
 
 @pytest.mark.parametrize('height', [0.12, 0.25])
-def test_stationary_vehicle_stops_method_d_with_zero_aeb_speed(height):
-    sim = Sim('d', load_cfg(**{'aeb.speed_source': 'zero', 'vehicle.height': height}), experiment_safety=True)
+@pytest.mark.parametrize('geom', [False, True])
+def test_stationary_vehicle_stops_method_d_with_zero_aeb_speed(height, geom):
+    # 1.5 m 앞 정지 차. 고정 기준(멈춘 차 우회 1.0 m)이면 안전 정지. 기하 기준(stationary_geom_pass)이면 우회를 시작하고 충돌하지 않는다
+    # (선 자리에서 시작하면 최소 속도 0.87 m/s에서 횡 제어가 원호만큼 꺾지 못해 차선 변경 중 다시 설 수 있다: 알려진 한계)
+    sim = Sim('d', load_cfg(**{'aeb.speed_source': 'zero', 'vehicle.height': height}), experiment_safety=True,
+              stationary_geom_pass=geom)
     sim.leader.kin.y = -0.265
     sim.place_bodies()
 
@@ -282,6 +286,9 @@ def test_stationary_vehicle_stops_method_d_with_zero_aeb_speed(height):
         sim.leader.drive(sim, 0.0, -0.265)
     sim._leader_frame = stationary
     r = sim.run()
+    if geom:
+        assert not r['collision'] and r['pass_entered']
+        return
     assert not r['collision'] and not r['pass_entered'] and r['gap_min'] >= sim.p.m_stop
     assert sim.ego.kin.v < 0.01
 
@@ -304,7 +311,8 @@ def test_pose_filter_steadies_heading_and_passes_stationary_car_with_lidar_noise
     def run(pose_filter):
         cfg = load_cfg(**{'track.wall_height': 0.20, 'lidar.range_noise_std': 0.02, 'start.gap0': 2.5})
         cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
-        sim = Sim('a', cfg, W=1.0, experiment_safety=True, stationary_pass=True, pose_filter=pose_filter)
+        sim = Sim('a', cfg, W=1.0, experiment_safety=True, stationary_pass=True, pose_filter=pose_filter,
+                  stationary_geom_pass=False)   # 위치 필터 효과만 본다 (기하 기준이면 필터 없이도 지나간다)
         sim.leader.kin.y = -0.2
         sim.place_bodies()
 

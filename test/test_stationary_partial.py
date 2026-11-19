@@ -6,7 +6,7 @@ from my_algo.aur.params import AurParams, EXPERIMENT_OVERRIDES
 from my_algo.aur.tracker import Pt, VehicleTracker
 
 P = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, W=1.0, stationary_pass=True, stationary_partial_lead=True,
-                                static_bypass=False))
+                                static_bypass=False, stationary_geom_pass=False))   # 고정 1.5 m 규칙 (아래 G가 기하 규칙)
 
 
 def blob(x, y, width, depth=0.1, n=6, i0=0):

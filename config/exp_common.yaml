@@ -13,9 +13,9 @@ aur:
   corridor_init_window_s: 2.0  # TUNE: 벽 초기화 3회 일치를 세는 시간 창, 못 찾은 scan은 무시, 0이면 연속 3회 | s | 임시 (실차 2026-11-18 정지 후 재초기화 실패)
   corridor_heading_avg: true   # TUNE: 헤딩을 양쪽 벽 선 길이 가중 평균으로 (조향 잡음 감소) | - | 임시 (실차 2026-11-18 조향 ±0.3 rad)
   stationary_pass: false     # TUNE: method a 전용 정지차 우회 시험, 초기 간격 1.5 m 이상 | - | 임시 (실차 미확인)
-  stationary_geom_pass: false  # TUNE: 정지 차 우회 시작 거리를 고정 1.5 m(멈춘 차 우회 1.0 m) 대신 필요한 옆 이동을 원호로 끝낼 거리로, 차선 변경 중 그 거리가 남으면 최소 속도 유지 | - | 임시 (실차 test_02 2026-11-19: 1.55 m 출발, 옆 이동 약 6 cm면 되는데 정지)
+  stationary_geom_pass: true   # TUNE: 정지 차 우회 시작 거리를 고정 1.5 m(멈춘 차 우회 1.0 m) 대신 필요한 옆 이동을 원호로 끝낼 거리로, 차선 변경 중 그 거리가 남으면 최소 속도 유지 | - | 임시 (실차 test_02 2026-11-19: 1.55 m 출발, 옆 이동 약 6 cm면 되는데 정지)
   stationary_clear: 0.05    # TUNE: 정지 차 옆면과 남길 간격 | m | 임시 (실차 추월 때 차체-벽 약 5 cm)
-  stationary_steer_frac: 0.6  # TUNE: 원호 계산 조향 비율 (최대 조향 × 이 값) | - | 임시
+  stationary_steer_frac: 0.8  # TUNE: 원호 계산 조향 비율 (최대 조향 × 이 값) | - | 임시 (2026-11-19 시뮬 짧은 출발 간격: 0.6 a 12·d 10/16, 0.8 a 13·d 10/16, 충돌 0. 실차 조향 게인 미확인)
   stationary_margin_x: 0.15  # TUNE: 원호 거리에 더하는 종방향 여유 | m | 임시
   stationary_partial_lead: true   # TUNE: stationary_pass에서 첫 확정 전 좁은(검은 차 일부만 보인) 클러스터도 후보, 확인 중 한 scan 놓침 허용 | - | 임시 (실차 test_01 2026-11-19: 2.1 m 앞 정지 차가 폭 0.02~0.11 m로 보여 1.36 m에서야 후보)
   partial_width_min: 0.04   # TUNE: 좁은 후보 최소 폭 | m | 임시 (test_01 정지 차 0.05~0.11 m)
