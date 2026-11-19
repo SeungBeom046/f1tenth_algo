@@ -1,5 +1,5 @@
 """race_stack(ForzaETH)에서 옮긴 판단 보조 기능: 선행차 횡위치 예측(leader_pred_time), 추월 조건 유지 시간(go_hold_s).
-둘 다 기본 off이며 꺼져 있으면 기존 판단과 같다."""
+leader_pred_time은 기본 off, go_hold_s는 기본 0.3 s (2026-11-19 on). 0이면 기존 판단과 같다."""
 from dataclasses import replace
 
 from my_algo.aur.ego_fsm import EgoFSM, Obs
@@ -14,9 +14,9 @@ def obs(t, y_b, d=0.8, ego_lat=0.0):
     return Obs(t, 0.9, True, d, y_b, 0.9, ego_lat, W, None, None)
 
 
-def test_defaults_are_off():
+def test_defaults():
     p = AurParams()
-    assert p.leader_pred_time == 0.0 and p.go_hold_s == 0.0
+    assert p.leader_pred_time == 0.0 and p.go_hold_s == 0.3
 
 
 def test_leader_vlat_is_least_squares_slope():
@@ -84,7 +84,17 @@ def _go_scan(p, gap_at=None):
 
 
 def test_go_hold_delays_and_resets():
-    assert _go_scan(P) == 1
+    assert _go_scan(replace(P, go_hold_s=0.0)) == 1
     on = replace(P, go_hold_s=0.3)
     assert _go_scan(on) == 4                    # 1에서 시작, 0.3 s 뒤
     assert _go_scan(on, gap_at=3) == 7          # 3에서 끊겨 4부터 다시 센다
+
+
+def test_go_hold_keeps_safety_margin_with_experiment_eps():
+    """실험 설정(ε 0.15)에서 기본 go_hold_s로도 접근·탐색 중 안전 여유 h ≥ 0 (d 방법, Y)."""
+    from _aur_synth import run
+    p = replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, experiment_safety=False))
+    assert p.go_hold_s == 0.3 and p.eps_follow == 0.15
+    for d_y in (0.9, 1.0, 1.1, 1.2):
+        _, _, log = run(p, 'd', 'Y', d_y=d_y)
+        assert min(r['h'] for r in log if r['state'] in ('APPROACH', 'PROBE')) >= 0.0

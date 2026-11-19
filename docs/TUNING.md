@@ -86,7 +86,7 @@
 | config/exp_common.yaml | 87 | `abort_yb_window` | 3 | 개 | 추월 중단 판정 y_B를 최근 n개 중앙값으로 (라이다 튐 제거), 1이면 그 scan 값 | 임시 (2026-11-16 시뮬, 잡음 0.02 m W 2·3에서 가짜 중단 제거) | - | - |
 | config/exp_common.yaml | 88 | `leader_pred_time` | 0.0 | s | 선행차 횡위치 예측 시간 (race_stack spliner 상대 차 예측). 횡 여유·복귀 판정에 왼쪽으로 오는 움직임만 더함, 0이면 끔 | 임시 (2026-11-19 추가, 기본 off) | 키우면 왼쪽으로 돌아오는 선행차에 추월을 더 일찍 중단·보류한다. 크면 횡속도 잡음에 가짜 중단이 는다 | 0.1~0.3 (측정 후) |
 | config/exp_common.yaml | 89 | `leader_vlat_window` | 5 | 개 | 선행차 횡속도 최소제곱 기울기에 쓰는 최근 유효 y_B 수 | 임시 (2026-11-19 추가) | 키우면 횡속도 잡음이 줄고 복귀 감지가 늦어진다 | 4~8 |
-| config/exp_common.yaml | 90 | `go_hold_s` | 0.0 | s | 추월 조건(go)이 끊김 없이 유지돼야 하는 시간 (race_stack splini_hyst_timer_sec), 0이면 끔 | 임시 (2026-11-19 추가, 기본 off) | 키우면 경계 근처 y_B 잡음으로 PASS에 들어갔다 바로 중단하는 일이 줄고 추월 시작이 그만큼 늦어진다 | 0.2~0.75 (측정 후) |
+| config/exp_common.yaml | 90 | `go_hold_s` | 0.3 | s | 추월 조건(go)이 끊김 없이 유지돼야 하는 시간 (race_stack splini_hyst_timer_sec), 0이면 끔 | 임시 (2026-11-19 on: 잡음 Y 가짜 중단 16 → 8/45) | 키우면 경계 근처 y_B 잡음으로 PASS에 들어갔다 바로 중단하는 일이 줄고 추월 시작이 그만큼 늦어진다 | 0.2~0.75 (측정 후) |
 | config/exp_common.yaml | 91 | `side_gate` | 0.6 | m | 측면 추적 연관 거리 | 임시 | 추월 중 선행차를 다시 붙잡는 범위 | 0.4~0.8 |
 | config/exp_common.yaml | 93 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
 | config/exp_common.yaml | 94 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |

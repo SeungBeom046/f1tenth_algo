@@ -1,7 +1,7 @@
 # ForzaETH race_stack 추월 코드 검토와 반영
 
 [ForzaETH/race_stack](https://github.com/ForzaETH/race_stack) (2026-11-18 main, `88da6c2` 기준)의 추월 관련 코드를 읽고 이 연구(exp/aur-overtake)에 옮길 수 있는 것을 정리했다 (2026-11-19).
-옮긴 기능은 모두 **기본 off**이고 실차 미확인이다. 켤지는 아래 시뮬 결과를 보고 정한다.
+`leader_pred_time`은 기본 off, `go_hold_s`는 시뮬 결과를 보고 기본 0.3 s로 켰다 (2026-11-19). 둘 다 실차 미확인.
 
 ## 1. race_stack 추월 구조
 
@@ -40,7 +40,7 @@
 - PASS 진입 때 기울기 이력을 비운다 (정면 → 측면 추적으로 y_B 기준점이 튈 수 있다).
 - `/exp/state`에 `leader_vlat` 기록.
 
-### 3.2 추월 조건 유지 시간 `go_hold_s` (기본 0 = 끔)
+### 3.2 추월 조건 유지 시간 `go_hold_s` (기본 0.3 s, 0 = 끔)
 
 - go 조건(belief Y 확정 + 횡 여유, method a는 대기 규칙)이 이 시간 동안 끊김 없이 맞아야 PASS. 한 scan이라도 깨지면 다시 센다.
 - 노린 것: 횡 여유 경계 근처에서 y_B 잡음으로 PASS에 들어갔다 바로 중단하는 경우.

@@ -15,7 +15,7 @@
     c 공격적 탐색: v_pass로 d_probe_c까지 접근, 판단은 b와 같음.
     d 제안:        v = min(v_pass, v_lim(d, v_B)) (기획안 식 8)로 d*(식 9)까지 접근, 판단은 b와 같음.
 
-race_stack(ForzaETH)에서 옮긴 보조 기능 (둘 다 기본 off):
+race_stack(ForzaETH)에서 옮긴 보조 기능 (leader_pred_time 기본 off, go_hold_s 기본 0.3 s):
     leader_pred_time: 횡 여유(go·중단)와 복귀 판정에 선행차 횡위치 예측 y_B + max(0, v_lat)·t_pred
                       (spliner의 상대 차 예측을 횡 방향, 왼쪽 움직임만 보수적으로)
     go_hold_s:        go 조건이 이 시간 동안 끊김 없이 맞아야 PASS (state_machine의 splini_hyst_timer_sec)
