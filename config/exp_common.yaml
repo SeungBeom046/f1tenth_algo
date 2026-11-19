@@ -95,7 +95,7 @@ aur:
   pose_k_lateral: 0.3       # TUNE: 횡위치 보정 비율, 1이면 레일 측정 그대로 | - | 임시
   pose_reset_s: 1.0         # TUNE: 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 (자이로 드리프트 차단) | s | 임시
   # --- 레이스 개정안: 멈춘 앞차 확정·우회 (의도 판단과 무관, 사고 차는 기다리지 않고 돌아간다) ---
-  static_bypass: false      # TUNE: 멈춘 앞차를 확정하면 belief와 무관하게 우회 (끄면 method d는 뒤에서 정지) | - | 레이스 개정안 (2026-11-19)
+  static_bypass: true       # TUNE: 멈춘 앞차를 확정하면 belief와 무관하게 우회 (끄면 method d는 뒤에서 정지) | - | 레이스 개정안 (2026-11-19)
   static_v: 0.15            # TUNE: 앞차 속도가 이보다 작으면 멈춘 차 후보 | m/s | 임시
   static_lat: 0.05          # TUNE: 후보 동안 앞차 횡이동 허용 | m | 임시
   static_moving_v: 0.3      # TUNE: 앞차가 이보다 빠르면 '움직이는 것을 본 차' | m/s | 임시

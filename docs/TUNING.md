@@ -92,7 +92,7 @@
 | config/exp_common.yaml | 94 | `pose_k_heading` | 0.15 | - | 헤딩 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
 | config/exp_common.yaml | 95 | `pose_k_lateral` | 0.3 | - | 횡위치 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
 | config/exp_common.yaml | 96 | `pose_reset_s` | 1.0 | s | 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 (자이로 드리프트 차단) | 임시 | - | - |
-| config/exp_common.yaml | 98 | `static_bypass` | false | - | 멈춘 앞차를 확정하면 belief와 무관하게 우회 (끄면 method d는 뒤에서 정지) | 레이스 개정안 (2026-11-19) | - | - |
+| config/exp_common.yaml | 98 | `static_bypass` | true | - | 멈춘 앞차를 확정하면 belief와 무관하게 우회 (끄면 method d는 뒤에서 정지) | 레이스 개정안 (2026-11-19) | - | - |
 | config/exp_common.yaml | 99 | `static_v` | 0.15 | m/s | 앞차 속도가 이보다 작으면 멈춘 차 후보 | 임시 | - | - |
 | config/exp_common.yaml | 100 | `static_lat` | 0.05 | m | 후보 동안 앞차 횡이동 허용 | 임시 | - | - |
 | config/exp_common.yaml | 101 | `static_moving_v` | 0.3 | m/s | 앞차가 이보다 빠르면 '움직이는 것을 본 차' | 임시 | - | - |

@@ -152,7 +152,7 @@ class AurParams:
 
 
 # exp_common.yaml이 기본값과 다르게 두는 값 (실험 전용). 이유는 yaml의 TUNE 태그와 docs/PROGRESS.md.
-EXPERIMENT_OVERRIDES = {'min_point_x': -1.0, 'steering_deadband': 0.0, 'heading_gain': 1.0, 'max_steering': 0.349, 'lidar_to_front': 0.28, 'corridor_guardrail': True, 'experiment_safety': True, 'track_recovery': True, 'guardrail_local_view': True, 'corridor_hold_s': 0.3, 'corridor_relock_s': 1.0, 'corridor_init_window_s': 2.0, 'corridor_heading_avg': True, 'eps_follow': 0.15, 'v_cruise': 1.2, 'pose_filter': True, 'rail_fallback_v': 0.9}
+EXPERIMENT_OVERRIDES = {'min_point_x': -1.0, 'steering_deadband': 0.0, 'heading_gain': 1.0, 'max_steering': 0.349, 'lidar_to_front': 0.28, 'corridor_guardrail': True, 'experiment_safety': True, 'track_recovery': True, 'guardrail_local_view': True, 'corridor_hold_s': 0.3, 'corridor_relock_s': 1.0, 'corridor_init_window_s': 2.0, 'corridor_heading_avg': True, 'eps_follow': 0.15, 'v_cruise': 1.2, 'pose_filter': True, 'rail_fallback_v': 0.9, 'static_bypass': True}
 
 
 def load_params(*paths, **overrides):
