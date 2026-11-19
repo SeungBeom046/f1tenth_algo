@@ -3,6 +3,11 @@
 다음 세션은 `CLAUDE_TASK.md`(커밋하지 않음, 사용자가 직접 저장)와 이 파일만 읽고 시작한다.
 아래 결과 표는 표마다 적힌 커밋 기준이다. 리팩터링(682bfdc)은 동작을 바꾸지 않았다.
 
+## 출발 전 자이로 바이어스 보정, IMU 실시간 출력 기본 on (2026-11-19)
+
+- off `4cb6a71`, on은 launch 기본값 `imu_calib_s:=1.0`, `imu_print_s:=1.0`. 실행 직후 1 s 정지한 채 자이로 평균을 바이어스로 재서 뺀다 (그동안 reason `imu_calibrating`, IMU가 2 s 안에 안 오면 건너뜀). 1 s마다 yaw rate·뺀 바이어스·헤딩·횡위치를 찍는다. 실차 노드만 바뀌고 runner·시뮬은 그대로다.
+- 가짜 IMU(바이어스 0.01 rad/s + 시뮬 자이로)로 확인: 1 s 정지 후 +0.0126 rad/s를 재서 뺐다. 실차는 **미확인**.
+
 ## 레이스 시나리오 S2·S3, 멈춘 차 확정·우회 기본 on (2026-11-19)
 
 - 앞차: `intent:=S`(오른쪽 차선 중심에 정지, S3), NY + `resume_after`(급정지 뒤 재출발, S2). 시뮬 `leader.behavior` NYR·S, `run.py --leader NYR|S`. 실차 명령은 CAR_TERMINALS `검정이 (앞차): 시나리오별 명령`.
