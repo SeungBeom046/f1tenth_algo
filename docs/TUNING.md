@@ -26,7 +26,7 @@
 | config/exp_common.yaml | 21 | `belief_pre_t0` | false | - | belief 누적 횡변위에 ego 출발 전 선행차가 비킨 변위도 넣는다 (첫·최근 유효 y_B 3개 중앙값 차, NY 증거는 출발부터) | 임시 (실차 overtake_01: 출발 전 6 cm 비킨 것을 버려 NY 판정) | - | - |
 | config/exp_common.yaml | 22 | `retreat_hold` | false | - | 추월 중단 뒤 추월 차선을 유지한 채 감속, 거의 멈추거나 선행차가 retreat_exit_d 넘게 앞서면 FOLLOW | 임시 (실차 overtake_02: 중단 즉시 가운데로 꺾다 접촉) | - | - |
 | config/exp_common.yaml | 23 | `retreat_exit_v` | 0.3 | m/s | 이 속도 이하면 RETREAT 종료 | 임시 | - | - |
-| config/exp_common.yaml | 24 | `retreat_exit_d` | 2.0 | m | 선행차가 이만큼 앞서면 RETREAT 종료 | 임시 | - | - |
+| config/exp_common.yaml | 24 | `retreat_exit_d` | 2.0 | m | 선행차가 이만큼 앞서며 ego보다 빠르면(멀어지면) RETREAT 종료 | 임시 | - | - |
 | config/exp_common.yaml | 25 | `pass_margin_hyst` | false | - | 추월 시작은 횡 여유 + pass_start_margin, 중단은 최근 3개 y_B 중앙값으로 여유 0 판정 | 임시 (실차 overtake_02: 여유 +4.5 cm에서 시작해 튄 scan 하나로 중단 → 접촉) | - | - |
 | config/exp_common.yaml | 26 | `pass_start_margin` | 0.05 | m | 추월 시작에 더 요구하는 횡 여유 | 임시 | - | - |
 | config/exp_common.yaml | 27 | `lead_steady_face` | false | - | 앞차 뒷면을 넓게 본 추적은 좁게 보인 scan에서도 뒷범퍼를 0.22 m 당기지 않는다 (모든 방법) | 임시 (실차 overtake_02: 거리 0.66 ↔ 0.89 m 반복) | - | - |

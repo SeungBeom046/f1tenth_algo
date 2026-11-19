@@ -372,8 +372,9 @@ class EgoFSM:
         if p.retreat_hold:
             # 겹치기 전 중단에서는 선행차가 늘 앞(d ≥ retreat_clear_gap)이라 즉시 FOLLOW(y_ref 0)가 되어 0.9 m/s·헤딩 15°로
             # 가운데로 꺾다 선행차 모서리에 닿았다 (실차 overtake_02). 추월 차선을 유지한 채 추종 속도 이하로 줄이고,
-            # 거의 멈췄거나 선행차가 retreat_exit_d 넘게 앞서면 FOLLOW로 간다
-            if obs.v_e <= p.retreat_exit_v or (trk is not None and trk.d >= p.retreat_exit_d):
+            # 거의 멈췄거나, 선행차가 retreat_exit_d 넘게 앞서며 ego보다 빨라 멀어지고 있으면 FOLLOW로 간다
+            # (서 있는 선행차가 2 m 앞이면 그대로 FOLLOW가 되어 가운데로 꺾었다: 실차 Test 03 재생)
+            if obs.v_e <= p.retreat_exit_v or (trk is not None and trk.d >= p.retreat_exit_d and trk.v_b > obs.v_e):
                 self.state = 'FOLLOW'
                 return 0.0, self._follow_speed(trk), 'retreat_done'
             v_b = trk.v_b if trk is not None else 0.0

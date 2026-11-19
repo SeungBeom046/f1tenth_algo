@@ -90,3 +90,12 @@ def test_follow_repass_behind_stopped_lead_creeps_past():
     for y in [-0.19] * 4 + [-0.30] * 6:
         v, _, state, _ = fsm.step(obs(t, 0.5, y, v_e=0.0, v_b=0.0)); t += 0.1
     assert state == 'PASS' and fsm._static_pass and v >= q.v_min - 1e-9
+
+
+def test_retreat_does_not_end_behind_far_stopped_lead():
+    q = replace(P, retreat_hold=True, abort_mode='retreat')
+    fsm = to_pass(q, -0.20)
+    fsm.step(obs(0.1, 2.1, -0.05, v_e=0.6, v_b=0.0))              # 2.1 m 앞 정지 선행차가 가운데로: 중단
+    assert fsm.state == 'RETREAT'
+    fsm.step(obs(0.2, 2.1, -0.05, v_e=0.6, v_b=0.9))              # 선행차가 ego보다 빠르게 멀어지면 끝
+    assert fsm.state == 'FOLLOW'
