@@ -13,7 +13,7 @@ aur:
   corridor_init_window_s: 2.0  # TUNE: 벽 초기화 3회 일치를 세는 시간 창, 못 찾은 scan은 무시, 0이면 연속 3회 | s | 임시 (실차 2026-11-18 정지 후 재초기화 실패)
   corridor_heading_avg: true   # TUNE: 헤딩을 양쪽 벽 선 길이 가중 평균으로 (조향 잡음 감소) | - | 임시 (실차 2026-11-18 조향 ±0.3 rad)
   stationary_pass: false     # TUNE: method a 전용 정지차 우회 시험, 초기 간격 1.5 m 이상 | - | 임시 (실차 미확인)
-  stationary_partial_lead: false  # TUNE: stationary_pass에서 첫 확정 전 좁은(검은 차 일부만 보인) 클러스터도 후보, 확인 중 한 scan 놓침 허용 | - | 임시 (실차 test_01 2026-11-19: 2.1 m 앞 정지 차가 폭 0.02~0.11 m로 보여 1.36 m에서야 후보)
+  stationary_partial_lead: true   # TUNE: stationary_pass에서 첫 확정 전 좁은(검은 차 일부만 보인) 클러스터도 후보, 확인 중 한 scan 놓침 허용 | - | 임시 (실차 test_01 2026-11-19: 2.1 m 앞 정지 차가 폭 0.02~0.11 m로 보여 1.36 m에서야 후보)
   partial_width_min: 0.04   # TUNE: 좁은 후보 최소 폭 | m | 임시 (test_01 정지 차 0.05~0.11 m)
   partial_depth_max: 0.3    # TUNE: 좁은 후보 최대 깊이, 레일 조각(1~2 m)을 거른다 | m | 임시
   partial_min_points: 4     # TUNE: 좁은 후보 최소 점 수 | 개 | 임시

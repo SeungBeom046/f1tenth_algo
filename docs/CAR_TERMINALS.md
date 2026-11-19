@@ -257,6 +257,14 @@ ros2 launch my_algo lidar_drive.launch.py use_camera:=false
 | 바퀴가 안 돈다 | 터미널 2 VESC 오류, 또는 차 앞 0.25 m 안에 무언가가 있어 AEB가 걸렸다 (`/aeb/status`) |
 | 다른 차가 같이 움직인다 / 토픽이 섞인다 | 두 차 `ROS_DOMAIN_ID`가 같다. 37·38로 나눈다 |
 
+## 기록 bag 오프라인 재생 (차 없이)
+
+```bash
+python3 scripts/replay_ego_bag.py ~/runs/<기록 폴더>/bag --method a --set stationary_pass=true W=1.0 t_d=0.25 --gyro-bias 0.0031
+```
+
+실차와 같은 판단 코드에 기록된 /scan·속도·/livox/imu를 넣어 기록된 `/exp/state`와 비교한다 (마지막 줄 일치 비율). `--set`은 실차 launch 인자와 같게, `--gyro-bias`는 로그의 `IMU 바이어스 보정` 값. 파라미터를 바꿔 돌리면 결정이 달라진 시점 이후는 실제 차가 그대로 움직였으므로 참고만 한다.
+
 ## 자이로 확인 (pose_filter, 차마다 처음 한 번)
 
 추월 launch는 `/livox/imu`(Mid-360 내장 IMU)의 z 각속도로 자차 헤딩을 예측한다 (지도는 안 쓴다). 단위(rad/s)와 부호는 **실차 미확인**이다.
@@ -293,6 +301,7 @@ Ctrl+C 요약의 `IMU 자이로` 줄에 받은 개수, scan 중 자이로를 쓴
 | `lead_pending` | 처음 본 후보를 3 scan 확인 중 → 정지 |
 | `lead_lost` / `lead_jump` | 보던 선행차를 놓쳤다 / 갑자기 먼 점이라 거부했다 → 정지 |
 | `lead_none` | 아직 한 번도 못 봤다 → `v_cruise` 1.2 m/s로 간다 |
+| `[EXP ego] 추월 보류: ...` | (method a + stationary_pass) 추월을 시작하지 않은 이유. `추적 미확정 (후보 확인 n/3, d m)` / `종방향 거리 부족 (d < 1.50 m)` / `횡 여유 부족 (W, 선행차 y_B, 차폭, 필요, 잔여)` / `조건 유지 시간 미충족 (t / 0.30 s)`. 이유 종류가 바뀔 때만 찍힌다. `/exp/state`의 `pass_block` |
 | `lead_static 1.80m` | 멈춘 차로 확정했다 (한 번도 안 움직인 차 1 s, 달리다 선 차 3 s). 옆 공간이 있으면 의도 판단과 무관하게 우회 (`static_bypass`). 확정 전 후보 동안은 2.0 m 뒤에서 선다 |
 
 AEB가 걸리면 `[EXP ego] AEB 작동: <이유>` 줄이 찍힌다. Ctrl+C로 끄면 `EXP ego 요약`(상태 흐름, 인식 비율, 정지 이유 비율, scan 주기·처리 시간, AEB 횟수와 이유)과 기본 주행과 같은 `AUTONOMOUS TRIAL` 요약이 찍힌다. 처리 시간이 100 ms를 넘으면 scan을 못 따라가는 것이다.
