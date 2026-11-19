@@ -11,10 +11,10 @@ from my_algo.aur.tracker import VehicleTracker, scan_to_points
 
 
 class LeaderRunner:
-    def __init__(self, p, intent, run_id, d_y=None):
+    def __init__(self, p, intent, run_id, d_y=None, resume_after=None):
         """intent: 'Y'(양보) | 'NY'(양보 안 함, 급정지). run_id: d_y·급정지 지연 seed. d_y: 주면 seed 대신 이 값 [m]."""
         self.p = p
-        self.logic = Leader(p, intent, run_id)
+        self.logic = Leader(p, intent, run_id, resume_after=resume_after)
         if d_y is not None:
             self.logic.d_y = float(d_y)
         self.tracker = VehicleTracker(p, view='rear')

@@ -19,6 +19,11 @@ race_stack(ForzaETH)에서 옮긴 보조 기능 (leader_pred_time 기본 off, go
     leader_pred_time: 횡 여유(go·중단)와 복귀 판정에 선행차 횡위치 예측 y_B + max(0, v_lat)·t_pred
                       (spliner의 상대 차 예측을 횡 방향, 왼쪽 움직임만 보수적으로)
     go_hold_s:        go 조건이 이 시간 동안 끊김 없이 맞아야 PASS (state_machine의 splini_hyst_timer_sec)
+
+레이스 개정안 (static_bypass, 기본 off): 사고로 멈춘 앞차는 의도와 무관하게 장애물로 확정해 돌아간다.
+    후보: v_B < static_v이고 횡이동 ≤ static_lat. 후보 동안은 static_bypass_gap 뒤에서 서도록 속도만 줄인다.
+    확정: 후보가 이어진 시간 ≥ static_t_never(처음 본 뒤 한 번도 안 움직인 차) / static_t_moved(달리다 선 차, 급정지일 수 있음).
+    확정되면 WAIT·APPROACH·PROBE·FOLLOW 어디서든 횡 여유가 있으면 PASS (belief와 무관). 다시 움직이면 확정을 푼다.
 """
 from collections import namedtuple
 
@@ -68,6 +73,13 @@ class EgoFSM:
         self._yb_hist = []              # PASS 중 최근 y_B (abort_yb_window)
         self._yb_track = []             # 최근 유효 (t, y_B): 선행차 횡속도 (leader_vlat_window)
         self._go_since = None           # go 조건이 끊김 없이 맞기 시작한 시각 (go_hold_s)
+        # 멈춘 차 확정 (static_bypass)
+        self.static_confirmed = False
+        self._lead_moved = False        # 앞차가 static_moving_v보다 빠르게 움직이는 것을 본 적이 있는가
+        self._still_since = None        # 멈춘 차 후보가 시작된 시각
+        self._seen_since = None         # 앞차를 처음 본 시각 (v_B 수렴 전에는 후보로 보지 않는다)
+        self._still_y = None
+        self._static_pass = False       # 지금 PASS가 멈춘 차 우회인가
         self.leader_vlat = None         # 선행차 횡속도 추정 [m/s] (기록용, 왼쪽 +)
 
     # ------------------------------------------------------------ 방법별 종방향
@@ -99,6 +111,7 @@ class EgoFSM:
         W = p.W if p.W is not None else obs.W
         delta = safety.lane_offset(W, p) if W is not None else 0.0
         trk = self._update_track_and_safety(obs)
+        self._update_static(obs)
         self._update_leader_vlat(obs)
         self._start_and_update_belief(obs)
 
@@ -107,6 +120,15 @@ class EgoFSM:
         v = self._follow_speed(trk)
         if self.state in ('APPROACH', 'PROBE') or (p.stationary_pass and self.state == 'WAIT'):
             reason = self._decide(obs, trk, W, reason)
+        if p.static_bypass and self.state in ('WAIT', 'APPROACH', 'PROBE', 'FOLLOW'):
+            if self.static_confirmed and obs.valid and obs.d >= p.static_bypass_min_d and self._lateral_ok(W, obs):
+                self.state, reason = 'PASS', 'static_bypass'
+                self._static_pass = True
+                self._y_b_most_yielded = obs.y_b
+                self._yb_hist = [obs.y_b]
+            elif self._still_since is not None and trk is not None:
+                # 멈춘 차 후보: 확정까지 우회 공간(static_bypass_gap) 뒤에서 선다. 너무 붙으면 돌아갈 수 없다
+                v = min(v, safety.v_lim(max(0.0, trk.d - p.static_bypass_gap + p.m_stop + p.eps_follow), trk.v_b, p))
         if self.state == 'PASS' and not self._overlapped and obs.valid:
             if self._check_pass_abort(obs, W):
                 reason = 'pass_abort'
@@ -151,6 +173,28 @@ class EgoFSM:
         else:
             self.h, self.d_safe, self.v_lim = INF, None, None
         return trk
+
+    def _update_static(self, obs):
+        """멈춘 앞차 후보·확정 (static_bypass). 안 보이는 scan은 상태를 그대로 둔다."""
+        p = self.p
+        if not p.static_bypass or not obs.valid or obs.v_b is None:
+            return
+        if self._seen_since is None:
+            self._seen_since = obs.t
+        if obs.t - self._seen_since < p.static_settle_s:
+            # 새 추적은 v_B를 0에서 시작한다: 수렴 전에는 달리는 앞차도 멈춘 차처럼 보여 출발이 늦어졌다
+            return
+        if obs.v_b > p.static_moving_v:
+            self._lead_moved = True
+        still = obs.v_b < p.static_v and (self._still_since is None or abs(obs.y_b - self._still_y) <= p.static_lat)
+        if not still:
+            self._still_since, self._still_y, self.static_confirmed = None, None, False
+            return
+        if self._still_since is None:
+            self._still_since, self._still_y = obs.t, obs.y_b
+        need = p.static_t_moved if self._lead_moved else p.static_t_never
+        if obs.t - self._still_since >= need:
+            self.static_confirmed = True
 
     def _update_leader_vlat(self, obs):
         """최근 유효 y_B로 선행차 횡속도(최소제곱 기울기)를 구한다. 3개 미만이면 None."""
@@ -271,7 +315,8 @@ class EgoFSM:
         """PASS 속도: 선행차와 횡으로 완전히 어긋나고 추월 차선(+δ)에 도착하기 전에는 추종 속도, 그 뒤 v_pass.
         차선 변경 중 빠르면 틀어진 차체 앞에 벽이 AEB 한계 안으로 들어온다. 이미 옆에 겹쳤으면 바로 v_pass."""
         p = self.p
-        if p.stationary_pass and not self._cleared:
+        stationary = p.stationary_pass or self._static_pass
+        if stationary and not self._cleared:
             v = min(p.v_B_nominal, self.v_lim) if self.v_lim is not None else 0.0
         if self._overlapped:
             self._cleared = True
@@ -279,7 +324,7 @@ class EgoFSM:
             # 중심 간격 ≥ w + c 이면 옆으로 나란히 가도 c 이상 떨어진다. 그 전에는 추종 속도를 지킨다.
             self._cleared = obs.ego_lat - self._last.y_b >= p.w_car + p.c_lat
         in_lane = abs(obs.ego_lat - delta) < p.lane_change_tol
-        if p.stationary_pass and self._cleared:
+        if stationary and self._cleared:
             return p.v_B_nominal, 'stationary_passing'
         if self._cleared and (in_lane or self._overlapped):
             return p.v_pass, 'passing'

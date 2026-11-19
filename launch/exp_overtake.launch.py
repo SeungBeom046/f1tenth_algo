@@ -53,9 +53,10 @@ def generate_launch_description():
         DeclareLaunchArgument('method', default_value='d', description='(ego) a 고정 규칙 | b 소극적 | c 공격적 | d 제안'),
         # 시뮬 차량과 같은 값(구동 0.15 + 1차 지연 0.10). 기획안 0.15로는 시뮬에서 NY 급정지 때 추돌했다. 보정 실험 값으로 바꾼다
         DeclareLaunchArgument('t_d', default_value='0.25', description='(ego) 제동 지연 [s], scan 주기 0.1 s는 따로 더해진다'),
-        DeclareLaunchArgument('intent', default_value='Y', description='Y: 비킨다 / NY: 안 비키고 급정지'),
+        DeclareLaunchArgument('intent', default_value='Y', description='Y: 비킨다 / NY: 안 비키고 급정지 / S: 멈춘 차 (레이스 S3)'),
         DeclareLaunchArgument('run_id', default_value='0', description='회차 이름. d_y·급정지 지연 seed'),
         DeclareLaunchArgument('d_y', default_value='0.0', description='> 0이면 양보 반응 거리 고정 [m]'),
+        DeclareLaunchArgument('resume_after', default_value='0.0', description='(leader NY) > 0이면 급정지 후 이 시간 뒤 재출발 [s] (레이스 S2: 2.0)'),
         DeclareLaunchArgument('W', default_value='0.0', description='실측 통로 폭 [m]. 0이면 벽으로 추정'),
         DeclareLaunchArgument('servo_center', default_value='0.5',
                               description='직진 서보 값 (차마다 보정, docs/CAR_TERMINALS.md 서보 중심 보정)'),
@@ -83,7 +84,7 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'role': arg('role', str), 'intent': arg('intent', str), 'run_id': arg('run_id', str),
-                'd_y': arg('d_y', float), 'W': arg('W', float), 'speed_source': arg('speed_source', str),
+                'd_y': arg('d_y', float), 'resume_after': arg('resume_after', float), 'W': arg('W', float), 'speed_source': arg('speed_source', str),
                 'method': arg('method', str), 't_d': arg('t_d', float), 'steer': arg('steer', float),
                 'experiment_safety': arg('experiment_safety', bool),
                 'stationary_pass': arg('stationary_pass', bool),

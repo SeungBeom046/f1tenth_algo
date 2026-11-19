@@ -24,6 +24,7 @@ sys.path.insert(0, REPO)
 sys.path.insert(0, HERE)
 
 from my_algo.baseline.aeb import AEBSafetyModel                         # noqa: E402
+from my_algo.aur import safety                                 # noqa: E402
 from my_algo.aur.corridor import Corridor                      # noqa: E402
 from my_algo.aur.ego_fsm import EgoFSM, Obs                    # noqa: E402
 from my_algo.aur.ego_runner import rail_fallback                # noqa: E402
@@ -230,10 +231,17 @@ class Sim:
         self.leader = Car(self, 'leader', self.cfg['start']['gap0'] + v['rear_overhang'], 'rear')
         self.fsm = EgoFSM(self.p, method)
         behavior = lead['behavior']
-        if behavior not in ('Y', 'NY', 'YR'):
-            raise ValueError('leader.behavior는 Y|NY|YR: %r' % (behavior,))
-        self.logic = Leader(self.p, 'NY' if behavior == 'NY' else 'Y', run_id if run_id is not None else seed,
-                            return_after=lead['return_after'] if behavior == 'YR' else None)
+        if behavior not in ('Y', 'NY', 'NYR', 'YR', 'S'):
+            raise ValueError('leader.behavior는 Y|NY|NYR|YR|S: %r' % (behavior,))
+        intent = {'NY': 'NY', 'NYR': 'NY', 'S': 'S'}.get(behavior, 'Y')
+        self.logic = Leader(self.p, intent, run_id if run_id is not None else seed,
+                            return_after=lead['return_after'] if behavior == 'YR' else None,
+                            resume_after=lead.get('resume_after', 2.0) if behavior == 'NYR' else None)
+        if behavior == 'S':
+            # 레이스 시나리오 S3: 사고로 멈춘 차는 처음부터 트랙 한쪽에 서 있다 (stop_y, 기본 오른쪽 차선 중심)
+            W = self.p.W if self.p.W is not None else float(self.cfg['track']['W'])
+            y = lead.get('stop_y')
+            self.leader.kin.y = float(y) if y is not None else -safety.lane_offset(W, self.p)
         if lead['d_y'] is not None:
             self.logic.d_y = float(lead['d_y'])
         self.t = 0.0

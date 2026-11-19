@@ -346,3 +346,15 @@ def test_rail_fallback_keeps_moving_through_short_rail_loss(fallback):
         assert all(x['reason'] == 'rail_fallback' for x in during) and min(x['v_e'] for x in during) > 0.5
     else:
         assert during[-1]['v_e'] < 0.05
+
+
+@pytest.mark.parametrize('behavior', ['S', 'NYR'])
+def test_race_stopped_car_is_bypassed_and_restarting_car_is_followed(behavior):
+    # 레이스 개정안: 사고로 멈춘 차(S)는 method d도 돌아가고, 급정지 뒤 2 s 만에 다시 출발하는 차(NYR)는 돌아가지 않는다
+    cfg = load_cfg(**{'leader.behavior': behavior, 'leader.d_y': 1.0, 'start.gap0': 2.5})
+    r = Sim('d', cfg, static_bypass=True).run()
+    assert not r['collision']
+    if behavior == 'S':
+        assert r['final_state'] == 'DONE' and r['pass_entered']
+    else:
+        assert not r['pass_entered']

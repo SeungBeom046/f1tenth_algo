@@ -92,32 +92,41 @@
 | config/exp_common.yaml | 94 | `pose_k_heading` | 0.15 | - | 헤딩 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
 | config/exp_common.yaml | 95 | `pose_k_lateral` | 0.3 | - | 횡위치 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
 | config/exp_common.yaml | 96 | `pose_reset_s` | 1.0 | s | 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 (자이로 드리프트 차단) | 임시 | - | - |
-| config/exp_common.yaml | 98 | `rail_fallback_v` | 0.9 | m/s | 레일 무효 동안 빈 공간 가운데를 따라가는 속도, null이면 끔(정지) | 임시 (2026-11-19 실차 rail_lost 75% 정지) | - | - |
-| config/exp_common.yaml | 99 | `rail_fallback_s` | 3.0 | s | 마지막 레일 측정 뒤 대체 주행을 허용하는 시간 | 임시 | - | - |
-| config/exp_common.yaml | 100 | `rail_fallback_clear` | 1.5 | m | 앞범퍼 앞 이 거리 안 진행 경로(w/2 + c)에 점이 있으면 대체 주행 없이 정지 | 임시 | - | - |
-| config/exp_common.yaml | 102 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
-| config/exp_common.yaml | 103 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
-| config/exp_common.yaml | 104 | `corridor_min_points` | 8 | 개 | 한쪽 벽으로 인정할 최소 점 수 | 측정 (lidar_reactive_drive와 같은 값) | 벽 인정 점 수 | 기존 값 유지 |
-| config/exp_common.yaml | 105 | `corridor_wall_percentile` | 0.35 | - | 측면 거리 분위값 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 분위값 | 기존 값 유지 |
-| config/exp_common.yaml | 106 | `corridor_guardrail` | true | - | 실측 W에 맞는 가드레일 직선 선택, 무효면 정지 | 임시 (2026-11-18, 실차 미확인) | 켜면 실측 W가 필요하다. 가까운 평행 벽을 선택하고 유효한 벽을 잃으면 속도 명령 0 | 실측 W와 함께 true |
-| config/exp_common.yaml | 107 | `corridor_line_tol` | 0.03 | m | 벽 직선에서 허용하는 점의 수직 오차 | 임시 (합성·MuJoCo 회귀) | 키우면 가드레일 윗면·복도 벽 점이 같은 직선에 섞일 수 있다 | 0.01~0.03 (실차 미확인) |
-| config/exp_common.yaml | 108 | `corridor_width_tol` | 0.10 | m | 실측 W와 두 벽 사이 거리의 허용 차이 | 임시 (합성·MuJoCo 회귀) | 키우면 잘못된 벽 조합을 허용하고, 줄이면 측정 오차에 정지가 늘어난다 | 0.05~0.10 (실차 미확인) |
-| config/exp_common.yaml | 109 | `corridor_min_span` | 0.20 | m | 벽 직선의 최소 전후 길이, 분리된 점 덩어리 사이 최대 간격 | 임시 (합성·MuJoCo 회귀) | 키우면 짧은 물체를 벽으로 보는 일이 줄지만 가까운 낮은 벽을 놓칠 수 있다 | 0.15~0.30 (실차 미확인) |
-| config/exp_common.yaml | 110 | `min_point_x` | -1.0 | m | 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | 임시 | −0.05면 벽 거리 < 0.25 m에서 벽을 놓친다 (추월 차선 0.235 m). −1.0은 곡선에서 편향이 더 작지만 앞쪽 벽을 미리 보는 효과가 없다 | −1.0 (직선 통로) |
-| config/exp_common.yaml | 112 | `wall_follow_gain` | 0.30 | rad/m | 횡 오차 → 조향 P 게인 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 횡 수렴이 빠르지만 흔들린다 | 0.2~0.5 |
-| config/exp_common.yaml | 113 | `wall_error_filter_alpha` | 0.25 | - | 횡 오차 저역 필터 계수 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 반응이 빠르고 잡음에 민감하다 | 0.15~0.5 |
-| config/exp_common.yaml | 114 | `steer_rate_limit` | 0.08 | rad/scan | 조향 변화 한계 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 차선 변경이 빠르고 덜그럭거린다 | 0.05~0.15 |
-| config/exp_common.yaml | 115 | `steering_deadband` | 0.0 | rad | 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | 임시 (2026-11-16 시뮬) | 0.055 rad는 횡오차 약 0.09 m에 해당한다. 추월 차선 벽 여유(c = 0.10)와 merge_tol보다 크면 줄여야 한다 | 0.01~0.055 |
-| config/exp_common.yaml | 116 | `max_steering` | 0.349 | rad | 최대 조향각 (실차 앞바퀴 물리 한계 ±20°, 기본 주행은 0.78) | 측정 (2026-11-17 사용자 측정) | 조향 포화 | 기존 값 유지 |
-| config/exp_common.yaml | 117 | `heading_gain` | 1.0 | rad/rad | 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°) | 감쇠비 ζ = heading_gain / (2·sqrt(2·wall_follow_gain·L)), 속도와 무관. 0.7이면 ζ ≈ 0.8 | 0.5~1.0 |
-| config/exp_common.yaml | 118 | `y_ref_rate` | 0.4 | m/s | 차선 변경 시 y_ref 기울기 제한 | 기획안 | 키우면 차선 변경이 빠르고 yaw가 커진다 (tracker 폭 게이트) | 0.2~0.5 |
-| config/exp_common.yaml | 119 | `lateral_ki` | 0.3 | rad/(m·s) | 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m) | - | - |
-| config/exp_common.yaml | 120 | `lateral_i_max` | 0.10 | rad | 횡 적분항 한계 | 임시 | - | - |
-| config/exp_common.yaml | 121 | `lateral_i_zone` | 0.10 | m | 횡오차가 이보다 작고 차선 변경 중이 아닐 때만 적분 | 임시 | - | - |
-| config/exp_common.yaml | 123 | `d_brake_trigger` | 1.0 | m | NY 급정지 이벤트 무장 거리 | 기획안 | NY 급정지 이벤트가 무장되는 거리 | 0.8~1.2 |
-| config/exp_common.yaml | 124 | `brake_delay_min` | 0.5 | s | 급정지 지연 최소 | 기획안 | 급정지 시점 난수 범위 | 0.5 |
-| config/exp_common.yaml | 125 | `brake_delay_max` | 2.0 | s | 급정지 지연 최대 | 기획안 | 급정지 시점 난수 범위 | 2.0 |
-| config/exp_common.yaml | 126 | `start_gap_margin` | 0.2 | m | t0에서 d_rear < d_y_max + 이 값이면 경고 | 기획안 | 출발 간격 경고 기준 | 0.2 |
+| config/exp_common.yaml | 98 | `static_bypass` | false | - | 멈춘 앞차를 확정하면 belief와 무관하게 우회 (끄면 method d는 뒤에서 정지) | 레이스 개정안 (2026-11-19) | - | - |
+| config/exp_common.yaml | 99 | `static_v` | 0.15 | m/s | 앞차 속도가 이보다 작으면 멈춘 차 후보 | 임시 | - | - |
+| config/exp_common.yaml | 100 | `static_lat` | 0.05 | m | 후보 동안 앞차 횡이동 허용 | 임시 | - | - |
+| config/exp_common.yaml | 101 | `static_moving_v` | 0.3 | m/s | 앞차가 이보다 빠르면 '움직이는 것을 본 차' | 임시 | - | - |
+| config/exp_common.yaml | 102 | `static_t_never` | 1.0 | s | 한 번도 안 움직인 차를 멈춘 차로 확정하는 시간 | 임시 | - | - |
+| config/exp_common.yaml | 103 | `static_t_moved` | 3.0 | s | 달리다 선 차를 확정하는 시간, 급정지 뒤 재출발(S2 2 s)보다 길게 | 임시 | - | - |
+| config/exp_common.yaml | 104 | `static_settle_s` | 0.5 | s | 앞차를 처음 본 뒤 이 시간은 후보로 안 봄 (새 추적의 v_B는 0에서 시작) | 임시 (2026-11-19 시뮬: 출발 지연으로 Y 추월 9 → 4/16) | - | - |
+| config/exp_common.yaml | 105 | `static_bypass_gap` | 2.0 | m | 후보 동안 이 거리 뒤에서 선다 (붙으면 돌아갈 수 없다) | 임시 (2026-11-19 시뮬: 1.5면 y −0.2 정지 차 0/4, 2.0이면 4/4) | - | - |
+| config/exp_common.yaml | 106 | `static_bypass_min_d` | 1.0 | m | 우회를 시작할 수 있는 최소 거리 | 임시 | - | - |
+| config/exp_common.yaml | 108 | `rail_fallback_v` | 0.9 | m/s | 레일 무효 동안 빈 공간 가운데를 따라가는 속도, null이면 끔(정지) | 임시 (2026-11-19 실차 rail_lost 75% 정지) | - | - |
+| config/exp_common.yaml | 109 | `rail_fallback_s` | 3.0 | s | 마지막 레일 측정 뒤 대체 주행을 허용하는 시간 | 임시 | - | - |
+| config/exp_common.yaml | 110 | `rail_fallback_clear` | 1.5 | m | 앞범퍼 앞 이 거리 안 진행 경로(w/2 + c)에 점이 있으면 대체 주행 없이 정지 | 임시 | - | - |
+| config/exp_common.yaml | 112 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
+| config/exp_common.yaml | 113 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
+| config/exp_common.yaml | 114 | `corridor_min_points` | 8 | 개 | 한쪽 벽으로 인정할 최소 점 수 | 측정 (lidar_reactive_drive와 같은 값) | 벽 인정 점 수 | 기존 값 유지 |
+| config/exp_common.yaml | 115 | `corridor_wall_percentile` | 0.35 | - | 측면 거리 분위값 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 분위값 | 기존 값 유지 |
+| config/exp_common.yaml | 116 | `corridor_guardrail` | true | - | 실측 W에 맞는 가드레일 직선 선택, 무효면 정지 | 임시 (2026-11-18, 실차 미확인) | 켜면 실측 W가 필요하다. 가까운 평행 벽을 선택하고 유효한 벽을 잃으면 속도 명령 0 | 실측 W와 함께 true |
+| config/exp_common.yaml | 117 | `corridor_line_tol` | 0.03 | m | 벽 직선에서 허용하는 점의 수직 오차 | 임시 (합성·MuJoCo 회귀) | 키우면 가드레일 윗면·복도 벽 점이 같은 직선에 섞일 수 있다 | 0.01~0.03 (실차 미확인) |
+| config/exp_common.yaml | 118 | `corridor_width_tol` | 0.10 | m | 실측 W와 두 벽 사이 거리의 허용 차이 | 임시 (합성·MuJoCo 회귀) | 키우면 잘못된 벽 조합을 허용하고, 줄이면 측정 오차에 정지가 늘어난다 | 0.05~0.10 (실차 미확인) |
+| config/exp_common.yaml | 119 | `corridor_min_span` | 0.20 | m | 벽 직선의 최소 전후 길이, 분리된 점 덩어리 사이 최대 간격 | 임시 (합성·MuJoCo 회귀) | 키우면 짧은 물체를 벽으로 보는 일이 줄지만 가까운 낮은 벽을 놓칠 수 있다 | 0.15~0.30 (실차 미확인) |
+| config/exp_common.yaml | 120 | `min_point_x` | -1.0 | m | 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | 임시 | −0.05면 벽 거리 < 0.25 m에서 벽을 놓친다 (추월 차선 0.235 m). −1.0은 곡선에서 편향이 더 작지만 앞쪽 벽을 미리 보는 효과가 없다 | −1.0 (직선 통로) |
+| config/exp_common.yaml | 122 | `wall_follow_gain` | 0.30 | rad/m | 횡 오차 → 조향 P 게인 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 횡 수렴이 빠르지만 흔들린다 | 0.2~0.5 |
+| config/exp_common.yaml | 123 | `wall_error_filter_alpha` | 0.25 | - | 횡 오차 저역 필터 계수 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 반응이 빠르고 잡음에 민감하다 | 0.15~0.5 |
+| config/exp_common.yaml | 124 | `steer_rate_limit` | 0.08 | rad/scan | 조향 변화 한계 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 차선 변경이 빠르고 덜그럭거린다 | 0.05~0.15 |
+| config/exp_common.yaml | 125 | `steering_deadband` | 0.0 | rad | 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | 임시 (2026-11-16 시뮬) | 0.055 rad는 횡오차 약 0.09 m에 해당한다. 추월 차선 벽 여유(c = 0.10)와 merge_tol보다 크면 줄여야 한다 | 0.01~0.055 |
+| config/exp_common.yaml | 126 | `max_steering` | 0.349 | rad | 최대 조향각 (실차 앞바퀴 물리 한계 ±20°, 기본 주행은 0.78) | 측정 (2026-11-17 사용자 측정) | 조향 포화 | 기존 값 유지 |
+| config/exp_common.yaml | 127 | `heading_gain` | 1.0 | rad/rad | 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°) | 감쇠비 ζ = heading_gain / (2·sqrt(2·wall_follow_gain·L)), 속도와 무관. 0.7이면 ζ ≈ 0.8 | 0.5~1.0 |
+| config/exp_common.yaml | 128 | `y_ref_rate` | 0.4 | m/s | 차선 변경 시 y_ref 기울기 제한 | 기획안 | 키우면 차선 변경이 빠르고 yaw가 커진다 (tracker 폭 게이트) | 0.2~0.5 |
+| config/exp_common.yaml | 129 | `lateral_ki` | 0.3 | rad/(m·s) | 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m) | - | - |
+| config/exp_common.yaml | 130 | `lateral_i_max` | 0.10 | rad | 횡 적분항 한계 | 임시 | - | - |
+| config/exp_common.yaml | 131 | `lateral_i_zone` | 0.10 | m | 횡오차가 이보다 작고 차선 변경 중이 아닐 때만 적분 | 임시 | - | - |
+| config/exp_common.yaml | 133 | `d_brake_trigger` | 1.0 | m | NY 급정지 이벤트 무장 거리 | 기획안 | NY 급정지 이벤트가 무장되는 거리 | 0.8~1.2 |
+| config/exp_common.yaml | 134 | `brake_delay_min` | 0.5 | s | 급정지 지연 최소 | 기획안 | 급정지 시점 난수 범위 | 0.5 |
+| config/exp_common.yaml | 135 | `brake_delay_max` | 2.0 | s | 급정지 지연 최대 | 기획안 | 급정지 시점 난수 범위 | 2.0 |
+| config/exp_common.yaml | 136 | `start_gap_margin` | 0.2 | m | t0에서 d_rear < d_y_max + 이 값이면 경고 | 기획안 | 출발 간격 경고 기준 | 0.2 |
 | sim/aur_overtake/scenario.yaml | 4 | `dt` | 0.01 | s | 시뮬 고정 스텝 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 5 | `max_time` | 25.0 | s | 회차 최대 시간 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 6 | `end_after_done` | 1.0 | s | DONE 또는 FOLLOW 후 정지 뒤 이만큼 더 돌고 끝 | 임시 | - | - |
@@ -129,38 +138,40 @@
 | sim/aur_overtake/scenario.yaml | 17 | `gap0` | 1.5 | m | 출발 시 ego 앞범퍼 → 선행차 뒷면 | 기획안 (초기 간격 1.5 m 이상) | - | - |
 | sim/aur_overtake/scenario.yaml | 18 | `ego_delay` | 0.0 | s | ego 출발 지연 (출발 시각 편차) | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 19 | `leader_delay` | 0.0 | s | 선행차 출발 지연 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 21 | `behavior` | Y | - | 선행차 행동 Y(양보) / NY(비양보, 급정지) / YR(양보 후 복귀) | 기획안 | - | - |
+| sim/aur_overtake/scenario.yaml | 21 | `behavior` | Y | - | 선행차 행동 Y(양보) / NY(비양보, 급정지 후 계속 정지) / NYR(급정지 후 resume_after 뒤 재출발, 레이스 S2) / YR(양보 후 복귀) / S(처음부터 정지, 레이스 S3) | 기획안 + 레이스 개정안 | - | - |
 | sim/aur_overtake/scenario.yaml | 22 | `d_y` | null | m | 양보 반응 거리, null이면 seed로 U[d_y_min, d_y_max] | 기획안 | - | - |
-| sim/aur_overtake/scenario.yaml | 23 | `return_after` | 1.5 | s | (YR) 양보 시작 후 복귀까지. 후행차가 이미 옆에 온 뒤 복귀하는 경우는 실차 선행차가 하지 않는 시뮬 전용 시나리오 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 24 | `fix_W` | true | - | 선행차에 실측 W(= track.W)를 준다 (W_leader). 끄면 scan 추정 | 임시 (2026-11-15 승인) | - | - |
-| sim/aur_overtake/scenario.yaml | 25 | `yield_yaw_deg` | null | deg | 양보 중 차체 yaw 고정값, null이면 선행차 횡 제어기가 정한다 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 26 | `yield_lat_speed` | 0.4 | m/s | (yield_yaw_deg 지정 시) 횡 이동 속도 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 28 | `length` | 0.50 | m | 차 길이 (뒤축→앞 0.41 + 뒤축→뒤 0.09) | 측정 | - | - |
-| sim/aur_overtake/scenario.yaml | 29 | `rear_overhang` | 0.09 | m | 뒤축 → 뒤 끝 | 측정 | - | - |
-| sim/aur_overtake/scenario.yaml | 30 | `height` | 0.25 | m | 차체 높이 (라이다 광선에 걸려야 한다) | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 31 | `wheelbase` | 0.33 | m | 휠베이스 | 측정 | - | - |
-| sim/aur_overtake/scenario.yaml | 32 | `t_r` | 0.15 | s | 구동 지연 (AurParams.t_d와 같은 가정) | 기획안 | - | - |
-| sim/aur_overtake/scenario.yaml | 33 | `tau` | 0.10 | s | 속도 1차 지연 시정수 | 임시 (예전 시뮬 가정값) | - | - |
-| sim/aur_overtake/scenario.yaml | 34 | `a_max` | 2.5 | m/s^2 | 최대 가속 | 임시 (예전 시뮬 가정값) | - | - |
-| sim/aur_overtake/scenario.yaml | 35 | `a_b` | 3.0 | m/s^2 | 최대 감속 (AurParams.a_brake와 같은 가정) | 기획안 | - | - |
-| sim/aur_overtake/scenario.yaml | 36 | `steer_rate` | 6.0 | rad/s | 조향각 변화율 한계 | 임시 (예전 시뮬 가정값) | - | - |
-| sim/aur_overtake/scenario.yaml | 37 | `steer_offset` | 0.0 | rad | 서보 중심 오차 (명령 0 rad일 때 실제 조향, 왼쪽 +) — 실차 트림 오차 모사 | 임시 (0 = 이상적 차량) | - | - |
-| sim/aur_overtake/scenario.yaml | 39 | `enabled` | true | - | AEB 켜기 | 측정 (실차 구성) | - | - |
-| sim/aur_overtake/scenario.yaml | 40 | `model` | geometric | - | legacy(기존 주행) / geometric(추월 실험 1층: 좁은 띠 + 속도 TTC, tracker 무관) | 임시 (2026-11-15 결정) | - | - |
-| sim/aur_overtake/scenario.yaml | 41 | `speed_source` | measured | - | AEB 속도 입력 measured(4단계 /sensors/core) / unknown(속도 없음 → geometric은 고정 거리) / zero(legacy에 0) | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 42 | `curved_band` | true | - | geometric AEB 검사 띠를 조향 명령 원호를 따라 휜다 (false = 직선 띠) | 임시 (2026-11-15 B1) | - | - |
-| sim/aur_overtake/scenario.yaml | 43 | `curve_max_steering` | 0.3 | rad | 휜 띠에 쓰는 조향 상한, 0이면 상한 없음 (launch aeb_curve_max_steering과 같게) | 임시 (2026-11-17 실차: 조향 0.78에서 옆 벽에 섬) | - | - |
-| sim/aur_overtake/scenario.yaml | 44 | `band_intersect` | true | - | 휜 띠와 직선 띠 둘 다에 든 점만 AEB (옆에 나란한 벽 무시) (launch aeb_band_intersect와 같게) | 임시 (2026-11-17 실차) | - | - |
-| sim/aur_overtake/scenario.yaml | 45 | `ttc_threshold` | 0.35 | s | TTC 임계 (한계 = 속도 × 이 값). d* = 0.425 m(v 0.9)보다 작아야 정상 추종에서 안 걸린다: < 0.47 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 46 | `hz` | 50.0 | Hz | autonomous_drive 제어 주기 | 측정 | - | - |
-| sim/aur_overtake/scenario.yaml | 47 | `vehicle_half_width` | 0.135 | m | AEB 검사 띠 반폭 = 실측 차 반폭 (launch aeb_vehicle_half_width와 같게) | 측정 (2026-11-17, 이전 0.15) | - | - |
-| sim/aur_overtake/scenario.yaml | 48 | `path_margin` | 0.0 | m | AEB 검사 띠 = 차 중심 ±(반폭 + 이 값) = ±0.135. 실차는 추월 때 차체-벽 약 5 cm (launch 값과 같게) | 임시 (2026-11-17, 이전 0.01) | - | - |
-| sim/aur_overtake/scenario.yaml | 49 | `latch_release_sec` | 1.0 | s | 실험 AEB 고정을 정지 후 비상 아님이 이 시간 이어지면 해제, 0이면 AUTO off까지 (launch aeb_latch_release_sec와 같게) | 임시 (실차 2026-11-18) | - | - |
-| sim/aur_overtake/scenario.yaml | 50 | `bumper_emergency_distance` | 0.20 | m | AEB 고정 정지 거리, 정지 여유 m 0.15 이상 (launch 값과 같게) | 임시 (2026-11-17, 이전 0.25) | - | - |
-| sim/aur_overtake/scenario.yaml | 52 | `gyro_noise_std` | 0.01 | rad/s | scan 주기(0.1 s) 평균 yaw rate 잡음 | 임시 (사양 미확인) | - | - |
-| sim/aur_overtake/scenario.yaml | 53 | `gyro_bias` | 0.005 | rad/s | 고정 바이어스 (선행차는 부호 반대) | 임시 (0.3°/s) | - | - |
-| sim/aur_overtake/scenario.yaml | 55 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
-| sim/aur_overtake/scenario.yaml | 56 | `rays_per_frame` | 11520 | 개 | 광선 수 = 방위 1440 × 고도 8줄 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 58 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 63 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
-| sim/aur_overtake/scenario.yaml | 70 | `level` | true | - | 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | 임시 (2026-11-17 실측 반영) | - | - |
+| sim/aur_overtake/scenario.yaml | 23 | `resume_after` | 2.0 | s | (NYR) 급정지 후 다시 출발까지 | 레이스 개정안 (2026-11-19) | - | - |
+| sim/aur_overtake/scenario.yaml | 24 | `stop_y` | null | m | (S) 멈춘 차 횡위치, null이면 오른쪽 차선 중심 −δ | 레이스 개정안 | - | - |
+| sim/aur_overtake/scenario.yaml | 25 | `return_after` | 1.5 | s | (YR) 양보 시작 후 복귀까지. 후행차가 이미 옆에 온 뒤 복귀하는 경우는 실차 선행차가 하지 않는 시뮬 전용 시나리오 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 26 | `fix_W` | true | - | 선행차에 실측 W(= track.W)를 준다 (W_leader). 끄면 scan 추정 | 임시 (2026-11-15 승인) | - | - |
+| sim/aur_overtake/scenario.yaml | 27 | `yield_yaw_deg` | null | deg | 양보 중 차체 yaw 고정값, null이면 선행차 횡 제어기가 정한다 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 28 | `yield_lat_speed` | 0.4 | m/s | (yield_yaw_deg 지정 시) 횡 이동 속도 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 30 | `length` | 0.50 | m | 차 길이 (뒤축→앞 0.41 + 뒤축→뒤 0.09) | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 31 | `rear_overhang` | 0.09 | m | 뒤축 → 뒤 끝 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 32 | `height` | 0.25 | m | 차체 높이 (라이다 광선에 걸려야 한다) | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 33 | `wheelbase` | 0.33 | m | 휠베이스 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 34 | `t_r` | 0.15 | s | 구동 지연 (AurParams.t_d와 같은 가정) | 기획안 | - | - |
+| sim/aur_overtake/scenario.yaml | 35 | `tau` | 0.10 | s | 속도 1차 지연 시정수 | 임시 (예전 시뮬 가정값) | - | - |
+| sim/aur_overtake/scenario.yaml | 36 | `a_max` | 2.5 | m/s^2 | 최대 가속 | 임시 (예전 시뮬 가정값) | - | - |
+| sim/aur_overtake/scenario.yaml | 37 | `a_b` | 3.0 | m/s^2 | 최대 감속 (AurParams.a_brake와 같은 가정) | 기획안 | - | - |
+| sim/aur_overtake/scenario.yaml | 38 | `steer_rate` | 6.0 | rad/s | 조향각 변화율 한계 | 임시 (예전 시뮬 가정값) | - | - |
+| sim/aur_overtake/scenario.yaml | 39 | `steer_offset` | 0.0 | rad | 서보 중심 오차 (명령 0 rad일 때 실제 조향, 왼쪽 +) — 실차 트림 오차 모사 | 임시 (0 = 이상적 차량) | - | - |
+| sim/aur_overtake/scenario.yaml | 41 | `enabled` | true | - | AEB 켜기 | 측정 (실차 구성) | - | - |
+| sim/aur_overtake/scenario.yaml | 42 | `model` | geometric | - | legacy(기존 주행) / geometric(추월 실험 1층: 좁은 띠 + 속도 TTC, tracker 무관) | 임시 (2026-11-15 결정) | - | - |
+| sim/aur_overtake/scenario.yaml | 43 | `speed_source` | measured | - | AEB 속도 입력 measured(4단계 /sensors/core) / unknown(속도 없음 → geometric은 고정 거리) / zero(legacy에 0) | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 44 | `curved_band` | true | - | geometric AEB 검사 띠를 조향 명령 원호를 따라 휜다 (false = 직선 띠) | 임시 (2026-11-15 B1) | - | - |
+| sim/aur_overtake/scenario.yaml | 45 | `curve_max_steering` | 0.3 | rad | 휜 띠에 쓰는 조향 상한, 0이면 상한 없음 (launch aeb_curve_max_steering과 같게) | 임시 (2026-11-17 실차: 조향 0.78에서 옆 벽에 섬) | - | - |
+| sim/aur_overtake/scenario.yaml | 46 | `band_intersect` | true | - | 휜 띠와 직선 띠 둘 다에 든 점만 AEB (옆에 나란한 벽 무시) (launch aeb_band_intersect와 같게) | 임시 (2026-11-17 실차) | - | - |
+| sim/aur_overtake/scenario.yaml | 47 | `ttc_threshold` | 0.35 | s | TTC 임계 (한계 = 속도 × 이 값). d* = 0.425 m(v 0.9)보다 작아야 정상 추종에서 안 걸린다: < 0.47 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 48 | `hz` | 50.0 | Hz | autonomous_drive 제어 주기 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 49 | `vehicle_half_width` | 0.135 | m | AEB 검사 띠 반폭 = 실측 차 반폭 (launch aeb_vehicle_half_width와 같게) | 측정 (2026-11-17, 이전 0.15) | - | - |
+| sim/aur_overtake/scenario.yaml | 50 | `path_margin` | 0.0 | m | AEB 검사 띠 = 차 중심 ±(반폭 + 이 값) = ±0.135. 실차는 추월 때 차체-벽 약 5 cm (launch 값과 같게) | 임시 (2026-11-17, 이전 0.01) | - | - |
+| sim/aur_overtake/scenario.yaml | 51 | `latch_release_sec` | 1.0 | s | 실험 AEB 고정을 정지 후 비상 아님이 이 시간 이어지면 해제, 0이면 AUTO off까지 (launch aeb_latch_release_sec와 같게) | 임시 (실차 2026-11-18) | - | - |
+| sim/aur_overtake/scenario.yaml | 52 | `bumper_emergency_distance` | 0.20 | m | AEB 고정 정지 거리, 정지 여유 m 0.15 이상 (launch 값과 같게) | 임시 (2026-11-17, 이전 0.25) | - | - |
+| sim/aur_overtake/scenario.yaml | 54 | `gyro_noise_std` | 0.01 | rad/s | scan 주기(0.1 s) 평균 yaw rate 잡음 | 임시 (사양 미확인) | - | - |
+| sim/aur_overtake/scenario.yaml | 55 | `gyro_bias` | 0.005 | rad/s | 고정 바이어스 (선행차는 부호 반대) | 임시 (0.3°/s) | - | - |
+| sim/aur_overtake/scenario.yaml | 57 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 58 | `rays_per_frame` | 11520 | 개 | 광선 수 = 방위 1440 × 고도 8줄 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 60 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 65 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
+| sim/aur_overtake/scenario.yaml | 72 | `level` | true | - | 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | 임시 (2026-11-17 실측 반영) | - | - |

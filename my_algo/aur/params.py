@@ -96,6 +96,16 @@ class AurParams:
     pose_k_heading: float = 0.15    # 헤딩 보정 비율 (1이면 측정 그대로)
     pose_k_lateral: float = 0.3     # 횡위치 보정 비율
     pose_reset_s: float = 1.0       # 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 [s]
+    # --- 레이스 개정안: 멈춘 앞차 확정·우회 (EgoFSM._update_static). 의도(belief)와 무관 ---
+    static_bypass: bool = False     # 끄면 멈춘 차도 belief대로 (method d는 뒤에서 정지)
+    static_v: float = 0.15          # 앞차 속도 v_B가 이보다 작으면 멈춘 차 후보 [m/s]
+    static_lat: float = 0.05        # 후보 동안 앞차 횡이동 허용 [m]
+    static_moving_v: float = 0.3    # 앞차가 이보다 빠르면 '움직이는 것을 본 차'로 기록 [m/s]
+    static_t_never: float = 1.0     # 한 번도 안 움직인 차를 멈춘 차로 확정하는 시간 [s]
+    static_t_moved: float = 3.0     # 달리다 선 차를 확정하는 시간 [s] (급정지 뒤 재출발보다 길어야 한다)
+    static_settle_s: float = 0.5    # 앞차를 처음 본 뒤 이 시간 동안은 후보로 보지 않는다 (v_B 수렴) [s]
+    static_bypass_gap: float = 2.0  # 후보 동안 이 거리 뒤에서 선다 [m] (1.5면 y −0.2 정지 차를 서서 출발해 못 돌아감)
+    static_bypass_min_d: float = 1.0    # 우회를 시작할 수 있는 최소 거리 [m]
     # --- 레일을 놓쳤을 때 대체 주행 (fallback.free_space_lateral). 앞차를 아직 못 봤고 추월 전일 때만 ---
     rail_fallback_v: Optional[float] = None   # 대체 주행 속도 [m/s]. None = 끔 (레일 무효면 정지)
     rail_fallback_s: float = 3.0      # 마지막 레일 측정 뒤 이 시간까지만 [s]

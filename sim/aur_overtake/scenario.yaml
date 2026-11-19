@@ -18,8 +18,10 @@ start:
   ego_delay: 0.0            # TUNE: ego 출발 지연 (출발 시각 편차) | s | 임시
   leader_delay: 0.0         # TUNE: 선행차 출발 지연 | s | 임시
 leader:
-  behavior: Y               # TUNE: 선행차 행동 Y(양보) / NY(비양보, 급정지) / YR(양보 후 복귀) | - | 기획안
+  behavior: Y               # TUNE: 선행차 행동 Y(양보) / NY(비양보, 급정지 후 계속 정지) / NYR(급정지 후 resume_after 뒤 재출발, 레이스 S2) / YR(양보 후 복귀) / S(처음부터 정지, 레이스 S3) | - | 기획안 + 레이스 개정안
   d_y: null                 # TUNE: 양보 반응 거리, null이면 seed로 U[d_y_min, d_y_max] | m | 기획안
+  resume_after: 2.0         # TUNE: (NYR) 급정지 후 다시 출발까지 | s | 레이스 개정안 (2026-11-19)
+  stop_y: null              # TUNE: (S) 멈춘 차 횡위치, null이면 오른쪽 차선 중심 −δ | m | 레이스 개정안
   return_after: 1.5         # TUNE: (YR) 양보 시작 후 복귀까지. 후행차가 이미 옆에 온 뒤 복귀하는 경우는 실차 선행차가 하지 않는 시뮬 전용 시나리오 | s | 임시
   fix_W: true               # TUNE: 선행차에 실측 W(= track.W)를 준다 (W_leader). 끄면 scan 추정 | - | 임시 (2026-11-15 승인)
   yield_yaw_deg: null       # TUNE: 양보 중 차체 yaw 고정값, null이면 선행차 횡 제어기가 정한다 | deg | 임시

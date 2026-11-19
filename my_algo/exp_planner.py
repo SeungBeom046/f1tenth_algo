@@ -40,8 +40,8 @@ def parse_intent(value):
     if value is True:
         return 'Y'
     intent = str(value).strip().upper()
-    if intent not in ('Y', 'NY'):
-        raise SystemExit('exp_planner: intent는 Y 또는 NY: %r' % (value,))
+    if intent not in ('Y', 'NY', 'S'):
+        raise SystemExit('exp_planner: intent는 Y, NY, S(멈춘 차) 중 하나: %r' % (value,))
     return intent
 
 
@@ -57,6 +57,7 @@ class ExpPlanner(Node):
         self.declare_parameter('intent', 'Y', intent_desc)     # (leader) Y | NY
         self.declare_parameter('run_id', '0')           # (leader) d_y·급정지 지연 seed (회차표 run_id를 그대로)
         self.declare_parameter('d_y', 0.0)              # (leader) > 0이면 run_id 대신 이 양보 반응 거리 [m]
+        self.declare_parameter('resume_after', 0.0)     # (leader NY) > 0이면 급정지 후 이 시간 뒤 다시 출발 [s] (레이스 S2)
         self.declare_parameter('method', 'd')           # (ego) a | b | c | d
         self.declare_parameter('t_d', 0.0)              # (ego) > 0이면 제동 지연 t_d [s] 덮어쓰기 (보정 실험 값)
         self.declare_parameter('W', 0.0)                # > 0이면 실측 통로 폭 [m]. 0이면 벽으로 추정
@@ -86,8 +87,9 @@ class ExpPlanner(Node):
         if self.role == 'leader':
             d_y = float(self.get_parameter('d_y').value)
             self.intent = parse_intent(self.get_parameter('intent').value)
+            resume = float(self.get_parameter('resume_after').value)
             self.runner = LeaderRunner(self.p, self.intent, str(self.get_parameter('run_id').value),
-                                       d_y=d_y if d_y > 0 else None)
+                                       d_y=d_y if d_y > 0 else None, resume_after=resume if resume > 0 else None)
         elif self.role == 'straight':
             self.runner = Corridor(self.p)
             self.straight_steer = float(self.get_parameter('steer').value)
@@ -198,7 +200,9 @@ class ExpPlanner(Node):
     def leader_step(self, t, msg, v):
         self.v_cmd, steer, y_ref = self.runner.step(t, msg, v, self.yaw_rate(t))
         lg, trk = self.runner.logic, self.runner.track
-        mode = 'LEADER_BRAKE' if lg.brake_fired else ('LEADER_YIELD' if y_ref != 0.0 else 'LEADER_CRUISE')
+        mode = ('LEADER_STOPPED' if self.intent == 'S' else
+                'LEADER_BRAKE' if lg.brake_fired and not lg.resumed else
+                'LEADER_YIELD' if y_ref != 0.0 else 'LEADER_CRUISE')
         s = dict(t=t, role='leader', intent=self.intent, mode=mode, v=v, v_cmd=self.v_cmd, steer=steer, y_ref=y_ref,
                  d_rear=trk.d if trk.valid else None, ego_lateral=self.runner.corridor.ego_lateral,
                  t0=lg.t0, d_y=lg.d_y, yield_triggered=lg.yield_triggered, t_yield=lg.t_yield,
@@ -218,7 +222,8 @@ class ExpPlanner(Node):
         if mode != prev.get('mode'):
             self.event({'LEADER_CRUISE': '주행 (중앙)',
                         'LEADER_YIELD': '양보 시작: 오른쪽 차선 y_ref=%.2f, 후행차 %s' % (y_ref, d_txt),
-                        'LEADER_BRAKE': '급정지 (NY)'}[mode])
+                        'LEADER_BRAKE': '급정지 (NY)',
+                        'LEADER_STOPPED': '멈춘 차 (S): 출발하지 않고 제자리 정지'}[mode])
         if s['brake_armed'] and not prev.get('brake_armed'):
             self.event('급정지 무장: %.2f s 뒤 정지' % lg.brake_delay)
         return s, mode, steer, 'intent=%s d_rear=%s' % (self.intent, 'none' if s['d_rear'] is None else '%.2f' % s['d_rear'])
@@ -268,7 +273,9 @@ def perception_tags(runner):
         rail = 'rail_ok' if cor.left is not None else 'rail_hold'
     else:
         rail = 'rail_init' if cor.initializing else 'rail_lost'
-    if trk is not None and trk.valid:
+    if trk is not None and trk.valid and getattr(getattr(runner, 'fsm', None), 'static_confirmed', False):
+        lead = 'lead_static %.2fm' % trk.d
+    elif trk is not None and trk.valid:
         lead = 'lead_detect %.2fm' % trk.d
     elif tracker.pending_d is not None:
         lead = 'lead_pending %.2fm' % tracker.pending_d
