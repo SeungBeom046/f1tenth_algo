@@ -301,6 +301,7 @@ Ctrl+C 요약의 `IMU 자이로` 줄에 받은 개수, scan 중 자이로를 쓴
 | `lead_pending` | 처음 본 후보를 3 scan 확인 중 → 정지 |
 | `lead_lost` / `lead_jump` | 보던 선행차를 놓쳤다 / 갑자기 먼 점이라 거부했다 → 정지 |
 | `lead_none` | 아직 한 번도 못 봤다 → `v_cruise` 1.2 m/s로 간다 |
+| `retreat` / `retreat_done` / `repass` | 추월 중단 뒤 추월 차선을 유지하며 감속 / 거의 멈춰 FOLLOW로 / FOLLOW에서 선행차가 더 비켜 다시 추월 |
 | `[EXP ego] 추월 보류: ...` | (method a + stationary_pass) 추월을 시작하지 않은 이유. `추적 미확정 (후보 확인 n/3, d m)` / `종방향 거리 부족 (d < 1.50 m)` / `횡 여유 부족 (W, 선행차 y_B, 차폭, 필요, 잔여)` / `조건 유지 시간 미충족 (t / 0.30 s)`. 이유 종류가 바뀔 때만 찍힌다. `/exp/state`의 `pass_block` |
 | `lead_static 1.80m` | 멈춘 차로 확정했다 (한 번도 안 움직인 차 1 s, 달리다 선 차 3 s). 옆 공간이 있으면 의도 판단과 무관하게 우회 (`static_bypass`). 확정 전 후보 동안은 2.0 m 뒤에서 선다 |
 
