@@ -29,6 +29,7 @@ from my_algo.aur.ego_fsm import EgoFSM, Obs                    # noqa: E402
 from my_algo.aur.lateral import Lateral                        # noqa: E402
 from my_algo.aur.leader_logic import Leader                    # noqa: E402
 from my_algo.aur.params import load_params                     # noqa: E402
+from my_algo.aur.pose import PoseFilter                        # noqa: E402
 from my_algo.aur.tracker import VehicleTracker, scan_to_points  # noqa: E402
 from my_algo.baseline.vehicle_utils import (ReactiveDriveCommand, SERVO_CENTER, SERVO_GAIN,  # noqa: E402
                                            sanitize_rpm, steering_to_servo)
@@ -98,6 +99,14 @@ class Car:
         self.shadow = VehicleTracker(p, view=view)   # 기록용: FSM 상태와 무관하게 매 scan 정면 규칙만 돌린다
         self.front_track = None     # shadow 결과 (추적 유지율·클러스터 폭 기록)
         self.corridor = Corridor(p)
+        self.pose = PoseFilter(p)
+        # 자차 IMU 자이로: scan 주기 평균 yaw rate = 실제 + 고정 바이어스 + 잡음. 다른 난수열과 섞이지 않게 따로 둔다
+        imu = cfg.get('imu') or {}
+        self.gyro_bias = imu.get('gyro_bias', 0.0) * (1.0 if name == 'ego' else -1.0)
+        self.gyro_noise = imu.get('gyro_noise_std', 0.0)
+        self.gyro_rng = np.random.default_rng(sim.seed + (201 if name == 'leader' else 200))
+        self._yaw_prev = None
+        self.yaw_rate = None
         self.lateral = Lateral(p)
         self.track = None
         self.points = []
@@ -138,13 +147,18 @@ class Car:
         self.points = scan_to_points(scan['ranges'].tolist(), scan['angle_min'], scan['angle_increment'],
                                      scan['range_min'], scan['range_max'])
         cor, p = self.corridor, sim.p
+        yaw = self.kin.yaw
+        self.yaw_rate = None if self._yaw_prev is None else (
+            (yaw - self._yaw_prev) / sim.frame_dt + self.gyro_bias + self.gyro_noise * self.gyro_rng.standard_normal())
+        self._yaw_prev = yaw
+        update = self.update_corridor
         fresh_wall = self.name == 'ego' and p.track_recovery and p.experiment_safety
         if cor.W_est is None and not (fresh_wall and p.guardrail_local_view):
-            cor.update(self.points, W_fixed=self.W_fixed, stamp=sim.t)
+            update(sim, self.points, W_fixed=self.W_fixed)
         W = self.W_fixed or (p.W if p.W is not None else cor.W_est)
         tracking_points = self.points
         if fresh_wall:
-            cor.update(self.points, stamp=sim.t)
+            update(sim, self.points)
             tracking_points = [q for q in self.points if q.i not in cor.wall_idx]
             if p.guardrail_local_view and not cor.valid:
                 tracking_points = []
@@ -152,8 +166,13 @@ class Car:
         self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
         self.front_track = self.shadow.update(*args)
         if not (fresh_wall and p.guardrail_local_view) or cor.sector_idx.intersection(self.track.idx):
-            cor.update(self.points, self.track.idx, W_fixed=self.W_fixed, stamp=sim.t)
+            update(sim, self.points, self.track.idx, W_fixed=self.W_fixed)
         return W
+
+    def update_corridor(self, sim, points, exclude_idx=(), W_fixed=None):
+        """실차 runner와 같다: 벽 갱신 직후마다 자차 위치 필터(pose_filter)를 적용한다."""
+        self.corridor.update(points, exclude_idx, W_fixed=W_fixed, stamp=sim.t)
+        self.pose.apply(self.corridor, sim.t, self.kin.v, self.yaw_rate)
 
     def drive(self, sim, v_cmd, y_ref):
         """종방향 명령 v_cmd와 횡 목표 y_ref → (rpm, 조향) = /reactive/lidar_command."""
@@ -289,7 +308,7 @@ class Sim:
         if not lead.track.valid:    # 후행차가 옆으로 오면 이어서 추적해 그 점을 벽 계산에서 뺀다
             side = lead.tracker.update_side(lead.points, self.t, lead.kin.v, lead.corridor.ego_lateral, Wl,
                                             lead.corridor.heading)
-            lead.corridor.update(lead.points, side.idx, W_fixed=lead.W_fixed, stamp=self.t)
+            lead.update_corridor(self, lead.points, side.idx, W_fixed=lead.W_fixed)
         if self.p.corridor_guardrail and not lead.corridor.valid:
             lead.drive(self, 0.0, lead.lateral.y_ref)
             return

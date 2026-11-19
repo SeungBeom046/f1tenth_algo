@@ -22,7 +22,7 @@ from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Imu, LaserScan
 from std_msgs.msg import Bool, String
 
 from my_algo.aur.corridor import Corridor
@@ -64,6 +64,9 @@ class ExpPlanner(Node):
         self.declare_parameter('experiment_safety', True)
         self.declare_parameter('stationary_pass', False)
         self.declare_parameter('steer', 0.0)            # (straight) 고정 조향 [rad]. 0이 아니면 원을 그려 실제 바퀴 각을 잰다
+        # 자차 위치 필터(pose_filter)의 자이로. Mid-360 내장 IMU, z축 각속도 [rad/s] (단위·부호는 실차 미확인)
+        self.declare_parameter('imu_topic', '/livox/imu')
+        self.declare_parameter('imu_yaw_sign', 1.0)
         self.declare_parameter('params_file', os.path.join(
             get_package_share_directory('my_algo'), 'config', 'exp_common.yaml'))
 
@@ -108,6 +111,11 @@ class ExpPlanner(Node):
 
         qos = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT, history=QoSHistoryPolicy.KEEP_LAST, depth=1)
         self.create_subscription(LaserScan, '/scan', self.scan_callback, qos)
+        self.imu_sign = float(self.get_parameter('imu_yaw_sign').value)
+        self.gyro_sum, self.gyro_n, self.t_gyro = 0.0, 0, None
+        self.create_subscription(Imu, self.get_parameter('imu_topic').value, self.imu_callback,
+                                 QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT,
+                                            history=QoSHistoryPolicy.KEEP_LAST, depth=50))
         self.cmd_pub = self.create_publisher(String, '/reactive/lidar_command', 10)
         self.state_pub = self.create_publisher(String, '/exp/state', 10)
         self.create_subscription(Bool, '/aeb/active', self.aeb_callback, 10)
@@ -149,6 +157,20 @@ class ExpPlanner(Node):
             self.event('AEB 작동: %s' % self.aeb_status)
         self.aeb_on = msg.data
 
+    def imu_callback(self, msg):
+        self.gyro_sum += self.imu_sign * msg.angular_velocity.z
+        self.gyro_n += 1
+        self.t_gyro = self.get_clock().now().nanoseconds / 1e9
+
+    def yaw_rate(self, t):
+        """직전 scan 이후 자이로 평균 [rad/s]. 0.3 s 넘게 안 왔으면 None (pose_filter는 기존 동작으로 돌아간다)."""
+        rate = None
+        if self.gyro_n and self.t_gyro is not None and t - self.t_gyro <= 0.3:
+            rate = self.gyro_sum / self.gyro_n
+        self.stats.imu(self.gyro_n, rate)
+        self.gyro_sum, self.gyro_n = 0.0, 0
+        return rate
+
     def scan_callback(self, msg):
         t = self.get_clock().now().nanoseconds / 1e9
         v = self.v if self.speed_source == 'sensors_core' else self.v_cmd
@@ -174,7 +196,7 @@ class ExpPlanner(Node):
         self.state_pub.publish(String(data=json.dumps(state)))
 
     def leader_step(self, t, msg, v):
-        self.v_cmd, steer, y_ref = self.runner.step(t, msg, v)
+        self.v_cmd, steer, y_ref = self.runner.step(t, msg, v, self.yaw_rate(t))
         lg, trk = self.runner.logic, self.runner.track
         mode = 'LEADER_BRAKE' if lg.brake_fired else ('LEADER_YIELD' if y_ref != 0.0 else 'LEADER_CRUISE')
         s = dict(t=t, role='leader', intent=self.intent, mode=mode, v=v, v_cmd=self.v_cmd, steer=steer, y_ref=y_ref,
@@ -185,7 +207,8 @@ class ExpPlanner(Node):
         cor = self.runner.corridor
         s.update(heading=cor.heading, W=cor.W_est, corridor_valid=cor.valid,
                  wall_left=cor.left, wall_right=cor.right,
-                 guardrail_local_view=self.p.guardrail_local_view, wall_initializing=cor.initializing)
+                 guardrail_local_view=self.p.guardrail_local_view, wall_initializing=cor.initializing,
+                 pose_filter=self.p.pose_filter)
         prev, self.prev = self.prev, s
         d_txt = '안 보임' if s['d_rear'] is None else '%.2f m' % s['d_rear']
         if s['t0'] is not None and prev.get('t0') is None:
@@ -215,7 +238,7 @@ class ExpPlanner(Node):
         return s, 'STRAIGHT', self.straight_steer, 'servo_center_check' if not self.straight_steer else 'steer_check'
 
     def ego_step(self, t, msg, v):
-        self.v_cmd, steer, y_ref, st, reason = self.runner.step(t, msg, v)
+        self.v_cmd, steer, y_ref, st, reason = self.runner.step(t, msg, v, self.yaw_rate(t))
         fsm, trk, cor = self.runner.fsm, self.runner.track, self.runner.corridor
         s = dict(t=t, role='ego', method=self.method, state=st, reason=reason, v=v, v_cmd=self.v_cmd, steer=steer,
                  y_ref=y_ref, valid=trk.valid, d=trk.d, y_b=trk.y_b, v_b=trk.v_b, ego_lateral=cor.ego_lateral,
@@ -223,7 +246,8 @@ class ExpPlanner(Node):
                  b=fsm.belief.prob_yield(), decided=fsm.decided,
                  t0=fsm.t0, t_decided=fsm.t_decided, n_abort=fsm.abort_count, leader_vlat=fsm.leader_vlat)
         s.update(corridor_valid=cor.valid, wall_left=cor.left, wall_right=cor.right,
-                 guardrail_local_view=self.p.guardrail_local_view, wall_initializing=cor.initializing)
+                 guardrail_local_view=self.p.guardrail_local_view, wall_initializing=cor.initializing,
+                 pose_filter=self.p.pose_filter)
         s.update(track_status=self.runner.tracker.status, pending_d=self.runner.tracker.pending_d)
         prev, self.prev = self.prev, s
         if prev.get('n_abort', 0) != s['n_abort']:
@@ -271,6 +295,15 @@ class RunStats:
         self.lead = collections.Counter()
         self.d_min = None
         self.aeb_reasons = []
+        self.imu_samples = 0
+        self.imu_scans = 0
+        self.yaw_rates = []
+
+    def imu(self, samples, rate):
+        self.imu_samples += samples
+        self.imu_scans += rate is not None
+        if rate is not None:
+            self.yaw_rates.append(rate)
 
     def aeb(self, status):
         self.aeb_reasons.append(status)
@@ -319,6 +352,10 @@ class RunStats:
             '선행차 인식          : %s' % pct(self.lead),
             '명령                 : %s' % pct(self.reasons),
             '선행차 최소 거리     : %s' % ('없음' if self.d_min is None else '%.2f m' % self.d_min),
+            'IMU 자이로           : %s' % ('없음 (pose_filter는 레일 측정만 씀)' if not self.imu_scans else
+                                          '%d개, scan %.0f%%, yaw rate 평균 %+.3f / 최대 |%.3f| rad/s' % (
+                                              self.imu_samples, 100.0 * self.imu_scans / self.n,
+                                              sum(self.yaw_rates) / len(self.yaw_rates), max(map(abs, self.yaw_rates)))),
             'AEB 작동             : %d회%s' % (len(self.aeb_reasons), ''.join('\n  - ' + r for r in self.aeb_reasons[:5])),
             '=================================',
         ]

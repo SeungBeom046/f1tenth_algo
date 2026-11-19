@@ -6,6 +6,7 @@
 from my_algo.aur.corridor import Corridor
 from my_algo.aur.ego_fsm import EgoFSM, Obs
 from my_algo.aur.lateral import Lateral
+from my_algo.aur.pose import PoseFilter
 from my_algo.aur.tracker import VehicleTracker, scan_to_points
 
 
@@ -17,20 +18,26 @@ class EgoRunner:
         self.tracker = VehicleTracker(p, view='front')
         self.corridor = Corridor(p)
         self.lateral = Lateral(p)
+        self.pose = PoseFilter(p)
         self.track = None
 
-    def step(self, t, scan, v):
-        """scan: LaserScan 필드. v: 자기 속도 [m/s]. 반환: (v_cmd [m/s], 조향 [rad], y_ref [m], 상태, reason)."""
+    def step(self, t, scan, v, yaw_rate=None):
+        """scan: LaserScan 필드. v: 자기 속도 [m/s]. yaw_rate: 자이로 [rad/s] (이 scan 주기 평균, 없으면 None).
+        반환: (v_cmd [m/s], 조향 [rad], y_ref [m], 상태, reason)."""
         p, cor = self.p, self.corridor
+
+        def update(*args, **kwargs):
+            cor.update(*args, **kwargs)
+            self.pose.apply(cor, t, v, yaw_rate)
         points = scan_to_points(list(scan.ranges), scan.angle_min, scan.angle_increment,
                                 scan.range_min, scan.range_max)
         fresh_wall = p.track_recovery and p.experiment_safety
         if cor.W_est is None and not (fresh_wall and p.guardrail_local_view):
-            cor.update(points, stamp=t)
+            update(points, stamp=t)
         W = p.W if p.W is not None else cor.W_est
         tracking_points = points
         if fresh_wall:
-            cor.update(points, stamp=t)
+            update(points, stamp=t)
             tracking_points = [q for q in points if q.i not in cor.wall_idx]
             if p.guardrail_local_view and not cor.valid:
                 tracking_points = []
@@ -38,7 +45,7 @@ class EgoRunner:
         args = (tracking_points, t, v, cor.ego_lateral, W, cor.heading)
         trk = self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
         if not (fresh_wall and p.guardrail_local_view) or cor.sector_idx.intersection(trk.idx):
-            cor.update(points, trk.idx, stamp=t)
+            update(points, trk.idx, stamp=t)
         if p.corridor_guardrail and not cor.valid:
             reason = 'corridor_initializing' if cor.initializing else 'corridor_invalid'
             return 0.0, self.lateral.steer, self.lateral.y_ref, self.fsm.state, reason

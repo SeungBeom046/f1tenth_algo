@@ -91,6 +91,11 @@ class AurParams:
     leader_vlat_window: int = 5     # 선행차 횡속도 = 최근 n개 유효 y_B의 최소제곱 기울기 [개]
     # race_stack state_machine의 splini_hyst_timer_sec: 추월 조건이 이 시간 동안 끊김 없이 유지돼야 PASS
     go_hold_s: float = 0.3          # [s]. 0 = 끔 (그 scan에 조건이 맞으면 바로 PASS)
+    # --- 자차 위치 필터 (pose.PoseFilter): 자이로 + 속도 예측, 레일 측정으로 고정 비율 보정. 지도 없음 ---
+    pose_filter: bool = False       # 끄면 매 scan 레일 측정을 그대로 쓴다 (자이로가 없어도 그렇다)
+    pose_k_heading: float = 0.15    # 헤딩 보정 비율 (1이면 측정 그대로)
+    pose_k_lateral: float = 0.3     # 횡위치 보정 비율
+    pose_reset_s: float = 1.0       # 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 [s]
     # --- corridor (lidar_reactive_drive.PLANNER_CONSTANTS와 같은 값) ---
     corridor_sector_min_deg: float = 45.0
     corridor_sector_max_deg: float = 115.0

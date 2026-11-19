@@ -1,4 +1,5 @@
 """시뮬 자체 점검 (mujoco가 있는 환경에서만): python -m pytest sim/aur_overtake/test_sim.py -q"""
+import math
 import pytest
 
 mujoco = pytest.importorskip('mujoco')
@@ -32,7 +33,7 @@ def test_leader_runner_matches_sim_leader(behavior):
     def checked():
         t, v = sim.t, sim.leader.kin.v
         frame()
-        rv, steer, _ = runner.step(t, sim.leader.scan_ns, v)
+        rv, steer, _ = runner.step(t, sim.leader.scan_ns, v, sim.leader.yaw_rate)
         out.append((rv * sim.p.erpm_gain, steer) == sim.leader.cmd)
     sim._leader_frame = checked
     sim.run()
@@ -54,7 +55,7 @@ def test_ego_runner_matches_sim_ego(behavior, recovery, local_view):
     def checked():
         t, v = sim.t, sim.ego.kin.v
         res = frame()
-        rv, steer, y_ref, state, reason = runner.step(t, sim.ego.scan_ns, v)
+        rv, steer, y_ref, state, reason = runner.step(t, sim.ego.scan_ns, v, sim.ego.yaw_rate)
         out.append((rv, y_ref, state, reason) == res and (rv * sim.p.erpm_gain, steer) == sim.ego.cmd)
         return res
     sim._ego_frame = checked
@@ -222,13 +223,14 @@ def test_low_guardrail_wall_collision_is_reproduced_when_disabled():
 
 @pytest.mark.parametrize('recovery', [False, True])
 @pytest.mark.parametrize('local_view', [False, True])
-def test_guardrail_runners_match_sim_with_hallway_points(recovery, local_view):
+@pytest.mark.parametrize('pose_filter', [False, True])
+def test_guardrail_runners_match_sim_with_hallway_points(recovery, local_view, pose_filter):
     from my_algo.aur.ego_runner import EgoRunner
     from my_algo.aur.leader_runner import LeaderRunner
     cfg = load_cfg(**{'track.wall_height': 0.20, 'leader.d_y': 1.0})
     cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
     sim = Sim('d', cfg, W=1.0, corridor_guardrail=True, track_recovery=recovery,
-              guardrail_local_view=local_view)
+              guardrail_local_view=local_view, pose_filter=pose_filter)
     ego = EgoRunner(sim.p, 'd')
     leader = LeaderRunner(sim.p, 'Y', sim.seed, d_y=1.0)
     ego_frame, leader_frame = sim._ego_frame, sim._leader_frame
@@ -236,7 +238,7 @@ def test_guardrail_runners_match_sim_with_hallway_points(recovery, local_view):
 
     def checked_ego():
         result = ego_frame()
-        rv, steer, y_ref, state, reason = ego.step(sim.t, sim.ego.scan_ns, sim.ego.kin.v)
+        rv, steer, y_ref, state, reason = ego.step(sim.t, sim.ego.scan_ns, sim.ego.kin.v, sim.ego.yaw_rate)
         assert (rv, y_ref, state, reason) == result
         assert (rv * sim.p.erpm_gain, steer) == sim.ego.cmd
         frames.append(sim.t)
@@ -244,7 +246,7 @@ def test_guardrail_runners_match_sim_with_hallway_points(recovery, local_view):
 
     def checked_leader():
         leader_frame()
-        rv, steer, _ = leader.step(sim.t, sim.leader.scan_ns, sim.leader.kin.v)
+        rv, steer, _ = leader.step(sim.t, sim.leader.scan_ns, sim.leader.kin.v, sim.leader.yaw_rate)
         assert (rv * sim.p.erpm_gain, steer) == sim.leader.cmd
 
     sim._ego_frame, sim._leader_frame = checked_ego, checked_leader
@@ -293,3 +295,29 @@ def test_noisy_low_guardrails_do_not_create_permanent_front_loss(seed):
     r = sim.run()
     assert not r['collision'] and sim.ego.kin.travel > 3.0
     assert not any(row['reason'] == 'front_track_lost' for row in sim.log)
+
+
+def test_pose_filter_steadies_heading_and_passes_stationary_car_with_lidar_noise():
+    # 실차 조건(20 cm 가드레일 + 2.7 m 복도, 라이다 거리 잡음 0.02 m): 자이로 + 속도 예측으로 헤딩 잡음을 줄여
+    # 정지 차 우회(method a stationary_pass)가 된다. 끄면 헤딩 잡음으로 추월을 중단한다 (2026-11-19)
+    def run(pose_filter):
+        cfg = load_cfg(**{'track.wall_height': 0.20, 'lidar.range_noise_std': 0.02, 'start.gap0': 2.5})
+        cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
+        sim = Sim('a', cfg, W=1.0, experiment_safety=True, stationary_pass=True, pose_filter=pose_filter)
+        sim.leader.kin.y = -0.2
+        sim.place_bodies()
+
+        def stationary():
+            sim.leader.perceive(sim, False)
+            sim.leader.drive(sim, 0.0, -0.2)
+        sim._leader_frame = stationary
+        err = []
+
+        def hook(s):
+            if s.ego.corridor.valid and s.t > 1.0:
+                err.append(abs(s.ego.corridor.heading - s.ego.kin.yaw))
+        return sim.run(hook=hook), max(err)
+    on, err_on = run(True)
+    off, err_off = run(False)
+    assert on["success"] and not on["collision"] and err_on < math.radians(4.0)   # 차선 변경 포함 최대 3.4°
+    assert not off['success'] and err_off > err_on

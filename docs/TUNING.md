@@ -88,29 +88,33 @@
 | config/exp_common.yaml | 89 | `leader_vlat_window` | 5 | 개 | 선행차 횡속도 최소제곱 기울기에 쓰는 최근 유효 y_B 수 | 임시 (2026-11-19 추가) | 키우면 횡속도 잡음이 줄고 복귀 감지가 늦어진다 | 4~8 |
 | config/exp_common.yaml | 90 | `go_hold_s` | 0.3 | s | 추월 조건(go)이 끊김 없이 유지돼야 하는 시간 (race_stack splini_hyst_timer_sec), 0이면 끔 | 임시 (2026-11-19 on: 잡음 Y 가짜 중단 16 → 8/45) | 키우면 경계 근처 y_B 잡음으로 PASS에 들어갔다 바로 중단하는 일이 줄고 추월 시작이 그만큼 늦어진다 | 0.2~0.75 (측정 후) |
 | config/exp_common.yaml | 91 | `side_gate` | 0.6 | m | 측면 추적 연관 거리 | 임시 | 추월 중 선행차를 다시 붙잡는 범위 | 0.4~0.8 |
-| config/exp_common.yaml | 93 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
-| config/exp_common.yaml | 94 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
-| config/exp_common.yaml | 95 | `corridor_min_points` | 8 | 개 | 한쪽 벽으로 인정할 최소 점 수 | 측정 (lidar_reactive_drive와 같은 값) | 벽 인정 점 수 | 기존 값 유지 |
-| config/exp_common.yaml | 96 | `corridor_wall_percentile` | 0.35 | - | 측면 거리 분위값 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 분위값 | 기존 값 유지 |
-| config/exp_common.yaml | 97 | `corridor_guardrail` | true | - | 실측 W에 맞는 가드레일 직선 선택, 무효면 정지 | 임시 (2026-11-18, 실차 미확인) | 켜면 실측 W가 필요하다. 가까운 평행 벽을 선택하고 유효한 벽을 잃으면 속도 명령 0 | 실측 W와 함께 true |
-| config/exp_common.yaml | 98 | `corridor_line_tol` | 0.03 | m | 벽 직선에서 허용하는 점의 수직 오차 | 임시 (합성·MuJoCo 회귀) | 키우면 가드레일 윗면·복도 벽 점이 같은 직선에 섞일 수 있다 | 0.01~0.03 (실차 미확인) |
-| config/exp_common.yaml | 99 | `corridor_width_tol` | 0.10 | m | 실측 W와 두 벽 사이 거리의 허용 차이 | 임시 (합성·MuJoCo 회귀) | 키우면 잘못된 벽 조합을 허용하고, 줄이면 측정 오차에 정지가 늘어난다 | 0.05~0.10 (실차 미확인) |
-| config/exp_common.yaml | 100 | `corridor_min_span` | 0.20 | m | 벽 직선의 최소 전후 길이, 분리된 점 덩어리 사이 최대 간격 | 임시 (합성·MuJoCo 회귀) | 키우면 짧은 물체를 벽으로 보는 일이 줄지만 가까운 낮은 벽을 놓칠 수 있다 | 0.15~0.30 (실차 미확인) |
-| config/exp_common.yaml | 101 | `min_point_x` | -1.0 | m | 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | 임시 | −0.05면 벽 거리 < 0.25 m에서 벽을 놓친다 (추월 차선 0.235 m). −1.0은 곡선에서 편향이 더 작지만 앞쪽 벽을 미리 보는 효과가 없다 | −1.0 (직선 통로) |
-| config/exp_common.yaml | 103 | `wall_follow_gain` | 0.30 | rad/m | 횡 오차 → 조향 P 게인 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 횡 수렴이 빠르지만 흔들린다 | 0.2~0.5 |
-| config/exp_common.yaml | 104 | `wall_error_filter_alpha` | 0.25 | - | 횡 오차 저역 필터 계수 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 반응이 빠르고 잡음에 민감하다 | 0.15~0.5 |
-| config/exp_common.yaml | 105 | `steer_rate_limit` | 0.08 | rad/scan | 조향 변화 한계 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 차선 변경이 빠르고 덜그럭거린다 | 0.05~0.15 |
-| config/exp_common.yaml | 106 | `steering_deadband` | 0.0 | rad | 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | 임시 (2026-11-16 시뮬) | 0.055 rad는 횡오차 약 0.09 m에 해당한다. 추월 차선 벽 여유(c = 0.10)와 merge_tol보다 크면 줄여야 한다 | 0.01~0.055 |
-| config/exp_common.yaml | 107 | `max_steering` | 0.349 | rad | 최대 조향각 (실차 앞바퀴 물리 한계 ±20°, 기본 주행은 0.78) | 측정 (2026-11-17 사용자 측정) | 조향 포화 | 기존 값 유지 |
-| config/exp_common.yaml | 108 | `heading_gain` | 1.0 | rad/rad | 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°) | 감쇠비 ζ = heading_gain / (2·sqrt(2·wall_follow_gain·L)), 속도와 무관. 0.7이면 ζ ≈ 0.8 | 0.5~1.0 |
-| config/exp_common.yaml | 109 | `y_ref_rate` | 0.4 | m/s | 차선 변경 시 y_ref 기울기 제한 | 기획안 | 키우면 차선 변경이 빠르고 yaw가 커진다 (tracker 폭 게이트) | 0.2~0.5 |
-| config/exp_common.yaml | 110 | `lateral_ki` | 0.3 | rad/(m·s) | 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m) | - | - |
-| config/exp_common.yaml | 111 | `lateral_i_max` | 0.10 | rad | 횡 적분항 한계 | 임시 | - | - |
-| config/exp_common.yaml | 112 | `lateral_i_zone` | 0.10 | m | 횡오차가 이보다 작고 차선 변경 중이 아닐 때만 적분 | 임시 | - | - |
-| config/exp_common.yaml | 114 | `d_brake_trigger` | 1.0 | m | NY 급정지 이벤트 무장 거리 | 기획안 | NY 급정지 이벤트가 무장되는 거리 | 0.8~1.2 |
-| config/exp_common.yaml | 115 | `brake_delay_min` | 0.5 | s | 급정지 지연 최소 | 기획안 | 급정지 시점 난수 범위 | 0.5 |
-| config/exp_common.yaml | 116 | `brake_delay_max` | 2.0 | s | 급정지 지연 최대 | 기획안 | 급정지 시점 난수 범위 | 2.0 |
-| config/exp_common.yaml | 117 | `start_gap_margin` | 0.2 | m | t0에서 d_rear < d_y_max + 이 값이면 경고 | 기획안 | 출발 간격 경고 기준 | 0.2 |
+| config/exp_common.yaml | 93 | `pose_filter` | false | - | 자차 횡위치·헤딩을 자이로·속도로 예측하고 레일 측정으로 보정, 자이로 없으면 기존과 같다 | 임시 (2026-11-19 잡음 0.02 m 헤딩 sd 2.9°) | - | - |
+| config/exp_common.yaml | 94 | `pose_k_heading` | 0.15 | - | 헤딩 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
+| config/exp_common.yaml | 95 | `pose_k_lateral` | 0.3 | - | 횡위치 보정 비율, 1이면 레일 측정 그대로 | 임시 | - | - |
+| config/exp_common.yaml | 96 | `pose_reset_s` | 1.0 | s | 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 (자이로 드리프트 차단) | 임시 | - | - |
+| config/exp_common.yaml | 98 | `corridor_sector_min_deg` | 45.0 | deg | 벽 거리 측면 섹터 시작각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
+| config/exp_common.yaml | 99 | `corridor_sector_max_deg` | 115.0 | deg | 벽 거리 측면 섹터 끝각 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 섹터 | 기존 값 유지 |
+| config/exp_common.yaml | 100 | `corridor_min_points` | 8 | 개 | 한쪽 벽으로 인정할 최소 점 수 | 측정 (lidar_reactive_drive와 같은 값) | 벽 인정 점 수 | 기존 값 유지 |
+| config/exp_common.yaml | 101 | `corridor_wall_percentile` | 0.35 | - | 측면 거리 분위값 | 측정 (lidar_reactive_drive와 같은 값) | 벽 거리 분위값 | 기존 값 유지 |
+| config/exp_common.yaml | 102 | `corridor_guardrail` | true | - | 실측 W에 맞는 가드레일 직선 선택, 무효면 정지 | 임시 (2026-11-18, 실차 미확인) | 켜면 실측 W가 필요하다. 가까운 평행 벽을 선택하고 유효한 벽을 잃으면 속도 명령 0 | 실측 W와 함께 true |
+| config/exp_common.yaml | 103 | `corridor_line_tol` | 0.03 | m | 벽 직선에서 허용하는 점의 수직 오차 | 임시 (합성·MuJoCo 회귀) | 키우면 가드레일 윗면·복도 벽 점이 같은 직선에 섞일 수 있다 | 0.01~0.03 (실차 미확인) |
+| config/exp_common.yaml | 104 | `corridor_width_tol` | 0.10 | m | 실측 W와 두 벽 사이 거리의 허용 차이 | 임시 (합성·MuJoCo 회귀) | 키우면 잘못된 벽 조합을 허용하고, 줄이면 측정 오차에 정지가 늘어난다 | 0.05~0.10 (실차 미확인) |
+| config/exp_common.yaml | 105 | `corridor_min_span` | 0.20 | m | 벽 직선의 최소 전후 길이, 분리된 점 덩어리 사이 최대 간격 | 임시 (합성·MuJoCo 회귀) | 키우면 짧은 물체를 벽으로 보는 일이 줄지만 가까운 낮은 벽을 놓칠 수 있다 | 0.15~0.30 (실차 미확인) |
+| config/exp_common.yaml | 106 | `min_point_x` | -1.0 | m | 벽 거리에 쓰는 점의 x 하한 (앞범퍼 기준), 기존 주행은 −0.05 | 임시 | −0.05면 벽 거리 < 0.25 m에서 벽을 놓친다 (추월 차선 0.235 m). −1.0은 곡선에서 편향이 더 작지만 앞쪽 벽을 미리 보는 효과가 없다 | −1.0 (직선 통로) |
+| config/exp_common.yaml | 108 | `wall_follow_gain` | 0.30 | rad/m | 횡 오차 → 조향 P 게인 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 횡 수렴이 빠르지만 흔들린다 | 0.2~0.5 |
+| config/exp_common.yaml | 109 | `wall_error_filter_alpha` | 0.25 | - | 횡 오차 저역 필터 계수 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 반응이 빠르고 잡음에 민감하다 | 0.15~0.5 |
+| config/exp_common.yaml | 110 | `steer_rate_limit` | 0.08 | rad/scan | 조향 변화 한계 | 측정 (lidar_reactive_drive와 같은 값) | 키우면 차선 변경이 빠르고 덜그럭거린다 | 0.05~0.15 |
+| config/exp_common.yaml | 111 | `steering_deadband` | 0.0 | rad | 이보다 작은 P항 조향은 0, 기존 주행은 0.055. 적분항과 함께 쓰면 deadband가 트림 보정을 막아 0 | 임시 (2026-11-16 시뮬) | 0.055 rad는 횡오차 약 0.09 m에 해당한다. 추월 차선 벽 여유(c = 0.10)와 merge_tol보다 크면 줄여야 한다 | 0.01~0.055 |
+| config/exp_common.yaml | 112 | `max_steering` | 0.349 | rad | 최대 조향각 (실차 앞바퀴 물리 한계 ±20°, 기본 주행은 0.78) | 측정 (2026-11-17 사용자 측정) | 조향 포화 | 기존 값 유지 |
+| config/exp_common.yaml | 113 | `heading_gain` | 1.0 | rad/rad | 헤딩 감쇠 게인 (코드 기본 0 = 횡위치 P만, 차선 변경 때 넘어감) | 임시 (2026-11-16 시뮬, 0.7 → 1.0에서 ego 흔들림 0.59 → 0.29°) | 감쇠비 ζ = heading_gain / (2·sqrt(2·wall_follow_gain·L)), 속도와 무관. 0.7이면 ζ ≈ 0.8 | 0.5~1.0 |
+| config/exp_common.yaml | 114 | `y_ref_rate` | 0.4 | m/s | 차선 변경 시 y_ref 기울기 제한 | 기획안 | 키우면 차선 변경이 빠르고 yaw가 커진다 (tracker 폭 게이트) | 0.2~0.5 |
+| config/exp_common.yaml | 115 | `lateral_ki` | 0.3 | rad/(m·s) | 횡 적분 게인 (서보 중심 오차 보정), 0이면 끔 | 임시 (2026-11-16 시뮬, 트림 ±0.01 rad에서 ego 쏠림 0.030 → 0.011 m) | - | - |
+| config/exp_common.yaml | 116 | `lateral_i_max` | 0.10 | rad | 횡 적분항 한계 | 임시 | - | - |
+| config/exp_common.yaml | 117 | `lateral_i_zone` | 0.10 | m | 횡오차가 이보다 작고 차선 변경 중이 아닐 때만 적분 | 임시 | - | - |
+| config/exp_common.yaml | 119 | `d_brake_trigger` | 1.0 | m | NY 급정지 이벤트 무장 거리 | 기획안 | NY 급정지 이벤트가 무장되는 거리 | 0.8~1.2 |
+| config/exp_common.yaml | 120 | `brake_delay_min` | 0.5 | s | 급정지 지연 최소 | 기획안 | 급정지 시점 난수 범위 | 0.5 |
+| config/exp_common.yaml | 121 | `brake_delay_max` | 2.0 | s | 급정지 지연 최대 | 기획안 | 급정지 시점 난수 범위 | 2.0 |
+| config/exp_common.yaml | 122 | `start_gap_margin` | 0.2 | m | t0에서 d_rear < d_y_max + 이 값이면 경고 | 기획안 | 출발 간격 경고 기준 | 0.2 |
 | sim/aur_overtake/scenario.yaml | 4 | `dt` | 0.01 | s | 시뮬 고정 스텝 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 5 | `max_time` | 25.0 | s | 회차 최대 시간 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 6 | `end_after_done` | 1.0 | s | DONE 또는 FOLLOW 후 정지 뒤 이만큼 더 돌고 끝 | 임시 | - | - |
@@ -150,8 +154,10 @@
 | sim/aur_overtake/scenario.yaml | 48 | `path_margin` | 0.0 | m | AEB 검사 띠 = 차 중심 ±(반폭 + 이 값) = ±0.135. 실차는 추월 때 차체-벽 약 5 cm (launch 값과 같게) | 임시 (2026-11-17, 이전 0.01) | - | - |
 | sim/aur_overtake/scenario.yaml | 49 | `latch_release_sec` | 1.0 | s | 실험 AEB 고정을 정지 후 비상 아님이 이 시간 이어지면 해제, 0이면 AUTO off까지 (launch aeb_latch_release_sec와 같게) | 임시 (실차 2026-11-18) | - | - |
 | sim/aur_overtake/scenario.yaml | 50 | `bumper_emergency_distance` | 0.20 | m | AEB 고정 정지 거리, 정지 여유 m 0.15 이상 (launch 값과 같게) | 임시 (2026-11-17, 이전 0.25) | - | - |
-| sim/aur_overtake/scenario.yaml | 52 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
-| sim/aur_overtake/scenario.yaml | 53 | `rays_per_frame` | 11520 | 개 | 광선 수 = 방위 1440 × 고도 8줄 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 55 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
-| sim/aur_overtake/scenario.yaml | 60 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
-| sim/aur_overtake/scenario.yaml | 67 | `level` | true | - | 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | 임시 (2026-11-17 실측 반영) | - | - |
+| sim/aur_overtake/scenario.yaml | 52 | `gyro_noise_std` | 0.01 | rad/s | scan 주기(0.1 s) 평균 yaw rate 잡음 | 임시 (사양 미확인) | - | - |
+| sim/aur_overtake/scenario.yaml | 53 | `gyro_bias` | 0.005 | rad/s | 고정 바이어스 (선행차는 부호 반대) | 임시 (0.3°/s) | - | - |
+| sim/aur_overtake/scenario.yaml | 55 | `hz` | 10.0 | Hz | scan 주기 | 측정 | - | - |
+| sim/aur_overtake/scenario.yaml | 56 | `rays_per_frame` | 11520 | 개 | 광선 수 = 방위 1440 × 고도 8줄 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 58 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 63 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
+| sim/aur_overtake/scenario.yaml | 70 | `level` | true | - | 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | 임시 (2026-11-17 실측 반영) | - | - |

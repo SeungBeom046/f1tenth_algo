@@ -48,6 +48,9 @@ aeb:                        # 실차 autonomous_drive의 AEBSafetyModel을 두 �
   path_margin: 0.0          # TUNE: AEB 검사 띠 = 차 중심 ±(반폭 + 이 값) = ±0.135. 실차는 추월 때 차체-벽 약 5 cm (launch 값과 같게) | m | 임시 (2026-11-17, 이전 0.01)
   latch_release_sec: 1.0    # TUNE: 실험 AEB 고정을 정지 후 비상 아님이 이 시간 이어지면 해제, 0이면 AUTO off까지 (launch aeb_latch_release_sec와 같게) | s | 임시 (실차 2026-11-18)
   bumper_emergency_distance: 0.20   # TUNE: AEB 고정 정지 거리, 정지 여유 m 0.15 이상 (launch 값과 같게) | m | 임시 (2026-11-17, 이전 0.25)
+imu:                        # 자차 IMU 자이로 (pose_filter 입력). Mid-360 내장 IMU 가정
+  gyro_noise_std: 0.01      # TUNE: scan 주기(0.1 s) 평균 yaw rate 잡음 | rad/s | 임시 (사양 미확인)
+  gyro_bias: 0.005          # TUNE: 고정 바이어스 (선행차는 부호 반대) | rad/s | 임시 (0.3°/s)
 lidar:                      # Livox Mid-360을 수평 한 줄로 근사 → pointcloud_to_laserscan과 같은 규칙으로 /scan
   hz: 10.0                  # TUNE: scan 주기 | Hz | 측정
   rays_per_frame: 11520     # TUNE: 광선 수 = 방위 1440 × 고도 8줄 | 개 | 임시

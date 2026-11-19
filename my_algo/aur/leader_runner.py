@@ -5,6 +5,7 @@
 """
 from my_algo.aur.corridor import Corridor
 from my_algo.aur.lateral import Lateral
+from my_algo.aur.pose import PoseFilter
 from my_algo.aur.leader_logic import Leader
 from my_algo.aur.tracker import VehicleTracker, scan_to_points
 
@@ -19,23 +20,28 @@ class LeaderRunner:
         self.tracker = VehicleTracker(p, view='rear')
         self.corridor = Corridor(p)
         self.lateral = Lateral(p)
+        self.pose = PoseFilter(p)
         self.W_fixed = p.W_leader
         self.track = None
 
-    def step(self, t, scan, v):
+    def step(self, t, scan, v, yaw_rate=None):
         """scan: LaserScan 필드(ranges, angle_min, angle_increment, range_min, range_max). v: 자기 속도 [m/s].
-        반환: (v_cmd [m/s], 조향 [rad], y_ref [m])."""
+        yaw_rate: 자이로 [rad/s] (이 scan 주기 평균, 없으면 None). 반환: (v_cmd [m/s], 조향 [rad], y_ref [m])."""
         p, cor = self.p, self.corridor
+
+        def update(*args, **kwargs):
+            cor.update(*args, **kwargs)
+            self.pose.apply(cor, t, v, yaw_rate)
         points = scan_to_points(list(scan.ranges), scan.angle_min, scan.angle_increment,
                                 scan.range_min, scan.range_max)
         if cor.W_est is None:
-            cor.update(points, W_fixed=self.W_fixed, stamp=t)
+            update(points, W_fixed=self.W_fixed, stamp=t)
         W = self.W_fixed or (p.W if p.W is not None else cor.W_est)
         self.track = self.tracker.update(points, t, v, cor.ego_lateral, W, cor.heading)
-        cor.update(points, self.track.idx, W_fixed=self.W_fixed, stamp=t)
+        update(points, self.track.idx, W_fixed=self.W_fixed, stamp=t)
         if not self.track.valid:    # 후행차가 옆으로 오면 이어서 추적해 그 점을 벽 계산에서 뺀다
             side = self.tracker.update_side(points, t, v, cor.ego_lateral, W, cor.heading)
-            cor.update(points, side.idx, W_fixed=self.W_fixed, stamp=t)
+            update(points, side.idx, W_fixed=self.W_fixed, stamp=t)
         if p.corridor_guardrail and not cor.valid:
             return 0.0, self.lateral.steer, self.lateral.y_ref
         v_cmd, y_ref = self.logic.step(t, v, self.track.d if self.track.valid else None, W)
