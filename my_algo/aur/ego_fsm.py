@@ -76,6 +76,8 @@ class EgoFSM:
         self._yb_hist = []              # PASS 중 최근 y_B (abort_yb_window)
         self._yb_track = []             # 최근 유효 (t, y_B): 선행차 횡속도 (leader_vlat_window)
         self._go_since = None           # go 조건이 끊김 없이 맞기 시작한 시각 (go_hold_s)
+        self._yb_first = []             # 출발 전 첫 유효 y_B 3개 (belief_pre_t0 기준점)
+        self._yb_recent = []            # 최근 유효 y_B 3개 (belief_pre_t0)
         # 멈춘 차 확정 (static_bypass)
         self.static_confirmed = False
         self._lead_moved = False        # 앞차가 static_moving_v보다 빠르게 움직이는 것을 본 적이 있는가
@@ -229,12 +231,21 @@ class EgoFSM:
         p = self.p
         if p.stationary_pass and self.t0 is None and obs.v_e > p.t0_speed_threshold:
             self.t0 = obs.t
+        if p.belief_pre_t0 and obs.valid and self.state == 'WAIT':
+            if len(self._yb_first) < 3:
+                self._yb_first.append(obs.y_b)
+            self._yb_recent = (self._yb_recent + [obs.y_b])[-3:]
         if self.state == 'WAIT':
             self._prev = None
             if obs.v_e > p.t0_speed_threshold:
                 # t0: 정지 중 z = 0 관측이 NY 증거로 쌓이지 않도록 여기서 λ = 0.
                 self.state, self.t0 = 'APPROACH', obs.t
                 self.belief.reset()
+                if p.belief_pre_t0 and len(self._yb_first) == 3 and len(self._yb_recent) == 3:
+                    # 출발 전에 이미 비킨 변위(오른쪽, 음수)는 누적 변위로 넘긴다. NY 쪽 증거(거리 기반)는 t0부터만 센다.
+                    # 실차 overtake_01: ego가 서 있는 동안 선행차가 6 cm 비켜, t0 뒤 4 cm만 보고 NY로 판정했다 (2026-11-19)
+                    median = lambda v: sorted(v)[1]
+                    self.belief._s = min(0.0, median(self._yb_recent) - median(self._yb_first))
         if self.state in ('APPROACH', 'PROBE') and obs.valid:
             if self._prev is not None:
                 self.belief.update(obs.y_b - self._prev[1], obs.d, obs.t - self._prev[0])

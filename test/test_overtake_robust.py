@@ -49,3 +49,15 @@ def test_retreat_holds_lane_until_slow():
             assert y_ref > 0.2 and reason == 'retreat' and v <= q.v_min + 1e-9     # 추월 차선 유지, 최소 속도 이하
             fsm.step(obs(0.2, 1.2, -0.05, v_e=0.2, v_b=0.1))       # 거의 멈춤 → FOLLOW
             assert fsm.state == 'FOLLOW'
+
+
+def test_belief_counts_yield_before_departure():
+    for pre, decided in ((False, None), (True, 'Y')):
+        q = replace(P, belief_pre_t0=pre)
+        fsm = EgoFSM(q, 'd')
+        t = 0.0
+        for y in (-0.09, -0.09, -0.10, -0.12, -0.14, -0.15, -0.15, -0.15):   # ego는 서 있고 선행차가 6 cm 비킴
+            fsm.step(obs(t, 1.0, y, v_e=0.0)); t += 0.1
+        for y in (-0.16, -0.17, -0.18, -0.19):                                # 출발 뒤 4 cm 더
+            fsm.step(obs(t, 0.9, y, v_e=0.5)); t += 0.1
+        assert fsm.decided == decided

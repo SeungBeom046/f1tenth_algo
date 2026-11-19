@@ -129,6 +129,7 @@ class AurParams:
     stationary_steer_frac: float = 0.6  # 원호 계산에 쓰는 조향 비율 (서보 지연·횡 제어 여유)
     stationary_margin_x: float = 0.15   # 원호 거리에 더하는 종방향 여유 [m]
     wheelbase: float = 0.33             # [m] 실측
+    belief_pre_t0: bool = False         # belief 누적 횡변위에 출발(t0) 전 비킨 변위도 넣는다 (중앙값 3개 기준)
     retreat_hold: bool = False          # 추월 중단 뒤 추월 차선 유지·감속, 거의 멈추거나 선행차가 멀어지면 FOLLOW
     retreat_exit_v: float = 0.3         # 이 속도 이하면 RETREAT 종료 [m/s]
     retreat_exit_d: float = 2.0         # 선행차가 이만큼 앞서면 RETREAT 종료 [m]
