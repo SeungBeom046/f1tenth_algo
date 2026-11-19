@@ -135,6 +135,7 @@ class ExpPlanner(Node):
         self.tags = (None, None)    # 직전 인식 태그 (바뀔 때만 터미널에 찍는다)
         self.aeb_on = False
         self.aeb_status = ''
+        self.aeb_pending = False
 
         Wtxt = W if W > 0 else '벽 추정'
         if self.role == 'leader':
@@ -159,12 +160,17 @@ class ExpPlanner(Node):
         self.v = abs(msg.state.speed) / self.p.erpm_gain
 
     def aeb_status_callback(self, msg):
+        # autonomous_drive는 /aeb/active를 먼저, /aeb/status를 그 다음에 낸다. 켜진 순간의 이유는 뒤따르는 status다
+        # (전에는 active 때 직전 status를 찍어 'closest 1.16 m, 한계 0.52 m' 같은 앞 주기 이유가 나왔다)
         self.aeb_status = msg.data
+        if self.aeb_pending:
+            self.aeb_pending = False
+            self.stats.aeb(msg.data)
+            self.event('AEB 작동: %s' % msg.data)
 
     def aeb_callback(self, msg):
         if msg.data and not self.aeb_on:
-            self.stats.aeb(self.aeb_status)
-            self.event('AEB 작동: %s' % self.aeb_status)
+            self.aeb_pending = True
         self.aeb_on = msg.data
 
     def imu_callback(self, msg):
