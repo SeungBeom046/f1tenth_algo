@@ -322,3 +322,27 @@ def test_pose_filter_steadies_heading_and_passes_stationary_car_with_lidar_noise
     off, err_off = run(False)
     assert on["success"] and not on["collision"] and err_on < math.radians(4.0)   # 차선 변경 포함 최대 3.4°
     assert not off['success'] and err_off > err_on
+
+
+@pytest.mark.parametrize('fallback', [None, 0.9])
+def test_rail_fallback_keeps_moving_through_short_rail_loss(fallback):
+    # 앞차가 멀리 있는 동안 2.0~3.5 s 레일 인식을 강제로 끈다. 대체 주행이면 멈추지 않고 벽에도 닿지 않는다
+    cfg = load_cfg(**{'track.wall_height': 0.20, 'start.gap0': 20.0, 'start.leader_delay': 30.0, 'sim.max_time': 5.0})
+    cfg['track'].update(outer_width=2.7, outer_center_y=0.35)
+    sim = Sim('d', cfg, W=1.0, rail_fallback_v=fallback)
+    cor = sim.ego.corridor
+    update = cor.update
+
+    def lossy(*args, **kwargs):
+        update(*args, **kwargs)
+        if 2.0 <= sim.t <= 3.5:
+            cor.valid, cor.left, cor.right = False, None, None
+        return cor
+    cor.update = lossy
+    r = sim.run()
+    during = [x for x in sim.log if 2.3 <= x['t'] <= 3.5]
+    assert not r['collision']
+    if fallback:
+        assert all(x['reason'] == 'rail_fallback' for x in during) and min(x['v_e'] for x in during) > 0.5
+    else:
+        assert during[-1]['v_e'] < 0.05

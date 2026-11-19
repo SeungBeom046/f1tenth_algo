@@ -96,6 +96,10 @@ class AurParams:
     pose_k_heading: float = 0.15    # 헤딩 보정 비율 (1이면 측정 그대로)
     pose_k_lateral: float = 0.3     # 횡위치 보정 비율
     pose_reset_s: float = 1.0       # 레일을 이 시간 넘게 못 보면 다음 측정으로 바로 맞춘다 [s]
+    # --- 레일을 놓쳤을 때 대체 주행 (fallback.free_space_lateral). 앞차를 아직 못 봤고 추월 전일 때만 ---
+    rail_fallback_v: Optional[float] = None   # 대체 주행 속도 [m/s]. None = 끔 (레일 무효면 정지)
+    rail_fallback_s: float = 3.0      # 마지막 레일 측정 뒤 이 시간까지만 [s]
+    rail_fallback_clear: float = 1.5  # 앞범퍼 앞 이 거리 안 진행 경로(w/2 + c)에 점이 있으면 대체 주행 안 함 [m]
     # --- corridor (lidar_reactive_drive.PLANNER_CONSTANTS와 같은 값) ---
     corridor_sector_min_deg: float = 45.0
     corridor_sector_max_deg: float = 115.0

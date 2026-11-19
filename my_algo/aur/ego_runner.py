@@ -5,6 +5,7 @@
 """
 from my_algo.aur.corridor import Corridor
 from my_algo.aur.ego_fsm import EgoFSM, Obs
+from my_algo.aur.fallback import free_space_lateral
 from my_algo.aur.lateral import Lateral
 from my_algo.aur.pose import PoseFilter
 from my_algo.aur.tracker import VehicleTracker, scan_to_points
@@ -20,6 +21,7 @@ class EgoRunner:
         self.lateral = Lateral(p)
         self.pose = PoseFilter(p)
         self.track = None
+        self.t_rail = None          # 마지막으로 레일이 유효했던 시각 (rail_fallback)
 
     def step(self, t, scan, v, yaw_rate=None):
         """scan: LaserScan 필드. v: 자기 속도 [m/s]. yaw_rate: 자이로 [rad/s] (이 scan 주기 평균, 없으면 None).
@@ -46,7 +48,12 @@ class EgoRunner:
         trk = self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
         if not (fresh_wall and p.guardrail_local_view) or cor.sector_idx.intersection(trk.idx):
             update(points, trk.idx, stamp=t)
+        if cor.valid:
+            self.t_rail = t
         if p.corridor_guardrail and not cor.valid:
+            fallback = rail_fallback(self, t, points, W, v)
+            if fallback is not None:
+                return fallback
             reason = 'corridor_initializing' if cor.initializing else 'corridor_invalid'
             return 0.0, self.lateral.steer, self.lateral.y_ref, self.fsm.state, reason
         if self.tracker.pending_d is not None:
@@ -56,3 +63,19 @@ class EgoRunner:
         steer = self.lateral.step(cor.ego_lateral, y_ref, p.scan_period, cor.heading,
                                   integrate=not p.guardrail_local_view or v > p.t0_speed_threshold)
         return v_cmd, steer, y_ref, state, reason
+
+
+def rail_fallback(car, t, points, W, v):
+    """레일 무효 동안의 대체 주행 (실차 runner·시뮬 공용). car: fsm·tracker·corridor·lateral·t_rail를 가진 객체.
+    앞차를 아직 못 봤고(추적 이력 없음) 추월 전이며 마지막 레일 뒤 rail_fallback_s 안일 때만,
+    빈 공간 횡위치로 기존 횡 제어기를 돌려 rail_fallback_v로 간다. 반환: runner.step과 같은 튜플 또는 None."""
+    p, fsm = car.p, car.fsm
+    if p.rail_fallback_v is None or car.t_rail is None or t - car.t_rail > p.rail_fallback_s:
+        return None
+    if fsm.state not in ('WAIT', 'APPROACH') or fsm._last is not None or car.tracker.pending_d is not None:
+        return None
+    lateral = free_space_lateral(points, W, p)
+    if lateral is None:
+        return None
+    steer = car.lateral.step(lateral, 0.0, p.scan_period, car.corridor.heading, integrate=False)
+    return p.rail_fallback_v, steer, car.lateral.y_ref, fsm.state, 'rail_fallback'

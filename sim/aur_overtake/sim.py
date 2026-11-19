@@ -26,6 +26,7 @@ sys.path.insert(0, HERE)
 from my_algo.baseline.aeb import AEBSafetyModel                         # noqa: E402
 from my_algo.aur.corridor import Corridor                      # noqa: E402
 from my_algo.aur.ego_fsm import EgoFSM, Obs                    # noqa: E402
+from my_algo.aur.ego_runner import rail_fallback                # noqa: E402
 from my_algo.aur.lateral import Lateral                        # noqa: E402
 from my_algo.aur.leader_logic import Leader                    # noqa: E402
 from my_algo.aur.params import load_params                     # noqa: E402
@@ -107,6 +108,7 @@ class Car:
         self.gyro_rng = np.random.default_rng(sim.seed + (201 if name == 'leader' else 200))
         self._yaw_prev = None
         self.yaw_rate = None
+        self.t_rail = None          # 마지막으로 레일이 유효했던 시각 (rail_fallback)
         self.lateral = Lateral(p)
         self.track = None
         self.points = []
@@ -287,7 +289,18 @@ class Sim:
         ego = self.ego
         W = ego.perceive(self, side=self.fsm.state in ('PASS', 'MERGE', 'RETREAT'))
         trk = ego.track
+        if ego.corridor.valid:
+            ego.t_rail = self.t
         if self.p.corridor_guardrail and not ego.corridor.valid:
+            # 실차 EgoRunner와 같은 대체 주행 (레일 무효, 앞차 이력 없음, 추월 전)
+            view = SimpleNamespace(p=self.p, fsm=self.fsm, tracker=ego.tracker, corridor=ego.corridor,
+                                   lateral=ego.lateral, t_rail=ego.t_rail)
+            fallback = rail_fallback(view, self.t, ego.points, W, ego.kin.v)
+            if fallback is not None:
+                v_cmd, steer, y_ref, state, reason = fallback
+                ego.v_cmd, ego.y_ref = v_cmd, y_ref
+                ego.cmd = (v_cmd * self.p.erpm_gain, steer)
+                return v_cmd, y_ref, state, reason
             ego.drive(self, 0.0, ego.lateral.y_ref)
             reason = 'corridor_initializing' if ego.corridor.initializing else 'corridor_invalid'
             return 0.0, ego.lateral.y_ref, self.fsm.state, reason
