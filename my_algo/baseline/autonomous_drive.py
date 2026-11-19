@@ -102,6 +102,8 @@ class AutonomousDriveNode(Node):
         self.declare_parameter('aeb_band_intersect', False)
         # experiment_safety AEB 전용: 정지 후 비상이 아닌 상태가 이 시간 이어지면 고정 해제 [s], 0이면 AUTO off까지 고정
         self.declare_parameter('aeb_latch_release_sec', 0.0)
+        # experiment_safety AEB 전용: 최근 n scan 안에 같은 거리에서 넓은 뒷면을 봤으면 좁게 보여도 부분 관측 규칙을 쓰지 않는다
+        self.declare_parameter('aeb_partial_wide_memory', 0)
         self.declare_parameter('experiment_safety', False)
 
         # 직진 서보 값 (조향 0 rad일 때 VESC 서보 위치). 차마다 트림이 다르면 보정 실험으로 정한다.
@@ -127,6 +129,7 @@ class AutonomousDriveNode(Node):
             from my_algo.aur.emergency import ExperimentAEB
             aeb_type = ExperimentAEB
             extra['latch_release_sec'] = float(self.get_parameter('aeb_latch_release_sec').value)
+            extra['partial_wide_memory'] = int(self.get_parameter('aeb_partial_wide_memory').value)
         self.aeb = aeb_type(
             **extra,
             ttc_threshold=float(self.get_parameter('aeb_ttc_threshold').value),

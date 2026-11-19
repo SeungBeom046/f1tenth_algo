@@ -121,7 +121,8 @@ class Car:
         aeb_type, extra = AEBSafetyModel, {}
         if p.experiment_safety:
             from my_algo.aur.emergency import ExperimentAEB
-            aeb_type, extra = ExperimentAEB, {'latch_release_sec': a.get('latch_release_sec', 0.0)}
+            aeb_type, extra = ExperimentAEB, {'latch_release_sec': a.get('latch_release_sec', 0.0),
+                                              'partial_wide_memory': a.get('partial_wide_memory', 0)}
         self.aeb = aeb_type(**extra, path_margin=a['path_margin'], bumper_emergency_distance=a['bumper_emergency_distance'],
                                   vehicle_half_width=a.get('vehicle_half_width', 0.15),
                                   lidar_to_bumper_dist=p.lidar_to_front,

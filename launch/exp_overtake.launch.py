@@ -120,6 +120,8 @@ def generate_launch_description():
                 'aeb_bumper_overlap_tolerance': 0.0,
                 # 실차 2026-11-18: 정지 차 뒤 고정 뒤 영영 출발 못함. 정지 + 비상 아님 1 s면 해제 (scenario.yaml aeb와 같게)
                 'aeb_latch_release_sec': 1.0,
+                # 좁게·넓게 번갈아 보이는 앞차에 부분 관측 AEB가 계속 걸렸다 (실차 overtake_02). 0이면 끔 (scenario.yaml aeb와 같게)
+                'aeb_partial_wide_memory': 0,
                 'lidar_to_bumper_dist': arg('lidar_to_bumper', float),
                 'max_steering': arg('max_steering', float),
                 'servo_center': arg('servo_center', float),

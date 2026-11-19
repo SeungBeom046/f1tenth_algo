@@ -8,11 +8,18 @@ from my_algo.baseline.vehicle_utils import ERPM_GAIN
 class ExperimentAEB(AEBSafetyModel):
     CHECK_HZ = 50.0     # autonomous_drive 제어 타이머·시뮬 Car.control 주기 (check_emergency_braking 호출 빈도)
 
-    def __init__(self, latch_release_sec=0.0, **kwargs):
+    def __init__(self, latch_release_sec=0.0, partial_wide_memory=0, **kwargs):
         """latch_release_sec > 0: 정지(측정 속도 < 0.05 m/s) 상태에서 지금 명령으로 다시 검사해도 비상이 아닌 상태가
         이 시간 이어지면 고정을 푼다. 0이면 AUTO off까지 고정 (기존)."""
         super().__init__(**kwargs)
         self.latch_release_sec = latch_release_sec
+        # partial_wide_memory > 0: 최근 이 수의 scan 안에 같은 거리(±0.15 m)에서 넓은(≥ 0.12 m) 뒷면을 봤으면 좁게 보여도
+        # '라이다만 보인다'(+0.22 m, 정지 물체 제동거리)로 보지 않는다. 실차 overtake_02: 앞차가 좁게·넓게 번갈아 보여
+        # 처음 21 s 동안 AEB가 77% 켜져 출발하지 못했다. 0이면 기존
+        self.partial_wide_memory = int(partial_wide_memory)
+        self._mem_scan = None
+        self._wide_left = 0
+        self._wide_x = None
         self.latched = False
         self.latched_reason = ''
         self._clear_checks = 0
@@ -62,6 +69,9 @@ class ExperimentAEB(AEBSafetyModel):
         return emergency
 
     def _partial_target(self, scan):
+        if self.partial_wide_memory > 0 and scan is not self._mem_scan:
+            self._mem_scan = scan
+            self._wide_left = max(0, self._wide_left - 1)
         points = []
         for i, distance in enumerate(scan.ranges):
             if not math.isfinite(distance) or not scan.range_min <= distance <= scan.range_max:
@@ -83,5 +93,12 @@ class ExperimentAEB(AEBSafetyModel):
         # 검사 띠로 잘린 차 모서리를 좁은 라이다 반환으로 오인하지 않도록 띠 바깥 점도 연결한다.
         for group in groups:
             if group[0] <= target_y <= group[-1]:
-                return len(group) >= 3 and group[-1] - group[0] < 0.12 and abs(sum(group) / len(group)) < 0.10
+                width = group[-1] - group[0]
+                narrow = len(group) >= 3 and width < 0.12 and abs(sum(group) / len(group)) < 0.10
+                if self.partial_wide_memory > 0:
+                    if width >= 0.12:
+                        self._wide_left, self._wide_x = self.partial_wide_memory, closest
+                    elif narrow and self._wide_left > 0 and abs(closest - self._wide_x) <= 0.15:
+                        return False
+                return narrow
         return False
