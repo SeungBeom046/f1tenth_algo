@@ -182,8 +182,13 @@ ros2 launch vesc_driver vesc_driver_node.launch.py
 export ROS_DOMAIN_ID=38
 source /opt/ros/foxy/setup.bash
 source ~/f1tenth_ws/install/setup.bash        # realsense2_camera를 소스로 빌드했으면 그 워크스페이스
-ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true align_depth:=true pointcloud.enable:=false
+ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true align_depth:=true pointcloud.enable:=false \
+  depth_module.profile:=640x480x15 rgb_camera.profile:=640x480x15 \
+  depth_module.depth_profile:=640x480x15 rgb_camera.color_profile:=640x480x15 \
+  depth_width:=640 depth_height:=480 depth_fps:=15.0 color_width:=640 color_height:=480 color_fps:=15.0
 ```
+
+해상도 인자도 버전마다 이름이 달라 셋 다 준다 (기본 1280×720은 정렬 깊이 영상이 커서 Foxy에서 초당 0~5장만 왔다, 실차 2026-11-21).
 
 `ros2 topic list`에 `/camera/camera/...`처럼 이름이 두 번 나오면 터미널 5에 `cam_ns:=/camera/camera`를 붙인다. 카메라 확인은 터미널 3, 실행은 터미널 5의 (가-카메라).
 
@@ -248,6 +253,13 @@ ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0 servo_cent
 ```
 
 시작하면 `[CAM] 바닥 보정: 숙임 …°, 높이 0.16x m` 줄이 나와야 한다 (출발 전 1 s, 차를 건드리지 않는다). 터미널 6 없이 한 번에 띄우려면 `camera_driver:=false`를 빼면 된다.
+
+**정지 차 배치와 출발 (실차 cam_test_01, 2026-11-21).**
+- 정지 차와 처음 간격은 **1.0 m 이상**. 터미널의 `추월 보류: 종방향 거리 부족 (d 0.77 < 필요 0.98 m …)`이 그 뜻이다 (조향 최대 원호로 옆으로 비킬 거리).
+- 출발 보조: 서 있다가 출발 명령이 나오면 0.5 s 동안 5500 ERPM을 준다 (`[EXP ego] 출발 보조` 줄). 최저 속도 4000 ERPM·조향 최대로 출발하면 모터가 17 A에서 거의 못 돌았다. 끄려면 `start_kick_erpm:=0`.
+- `t_d:=1.0`처럼 제동 지연을 크게 주면 정지 차 우회에 필요한 거리도 늘어난다 (기본 0.25).
+- 카메라 바닥 보정은 실측 장착(숙임 17.5°, 높이 0.16 m)에서 8°·4 cm 넘게 다른 값을 버린다. `바닥 보정 실패`가 나오면 카메라 앞이 가렸거나 장착 각도가 바뀐 것이다 → `cam_pitch_deg:=실제값`.
+- YOLO 기본 모델(COCO `yolov8n.pt`)은 cam_test_01에서 검정이를 한 번도 차로 못 찾았다 (차 상자 0). 그동안은 라이다 규칙만 동작한다. 미세조정한 모델이 필요하다 (아래 YOLO 절).
 
 **카메라 화면 보기.** 차에 모니터(또는 원격 데스크톱)가 있으면 위 명령 끝에 `cam_view:=true`를 붙인다. `camera_fusion` 창이 뜬다.
 
