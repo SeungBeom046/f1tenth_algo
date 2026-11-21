@@ -23,8 +23,9 @@ class EgoRunner:
         self.track = None
         self.t_rail = None          # 마지막으로 레일이 유효했던 시각 (rail_fallback)
 
-    def step(self, t, scan, v, yaw_rate=None):
-        """scan: LaserScan 필드. v: 자기 속도 [m/s]. yaw_rate: 자이로 [rad/s] (이 scan 주기 평균, 없으면 None).
+    def step(self, t, scan, v, yaw_rate=None, cam_lead=None):
+        """scan: LaserScan 필드 (camera_fusion이면 카메라 거리를 이미 합친 것). v: 자기 속도 [m/s].
+        yaw_rate: 자이로 [rad/s] (이 scan 주기 평균, 없으면 None). cam_lead: 카메라 YOLO 앞차 (tracker.update 참고) 또는 None.
         반환: (v_cmd [m/s], 조향 [rad], y_ref [m], 상태, reason)."""
         p, cor = self.p, self.corridor
 
@@ -45,7 +46,7 @@ class EgoRunner:
                 tracking_points = []
         side = self.fsm.state in ('PASS', 'MERGE', 'RETREAT')     # 옆으로 나란해지면 측면 추적
         args = (tracking_points, t, v, cor.ego_lateral, W, cor.heading)
-        trk = self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
+        trk = self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args, cam=cam_lead)
         if not (fresh_wall and p.guardrail_local_view) or cor.sector_idx.intersection(trk.idx):
             update(points, trk.idx, stamp=t)
         if cor.valid:

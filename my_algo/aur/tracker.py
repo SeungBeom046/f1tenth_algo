@@ -20,7 +20,8 @@ Track = namedtuple('Track', 'valid d y_b v_b idx front_rel width y_l')
 Track.__new__.__defaults__ = (None, None)
 # rear_y: 가장 가까운 면(x0에서 rear_face_depth 안) 점들의 y 범위 중앙 = 상대 차 뒷면(후방 뷰는 앞면) 중심
 # y_left: 왼쪽 모서리 (view 좌표계, _left_edge)
-_Cluster = namedtuple('_Cluster', 'x0 x1 y0 y1 idx rear_y y_left')
+# a0·a1·r0: 라이다 원점 기준 방위 범위·최소 수평 거리 (카메라 YOLO 앞차와 맞춰 볼 때, heading 회전과 무관)
+_Cluster = namedtuple('_Cluster', 'x0 x1 y0 y1 idx rear_y y_left a0 a1 r0')
 
 
 def scan_to_points(ranges, angle_min, angle_increment, range_min, range_max):
@@ -52,6 +53,7 @@ class VehicleTracker:
         self.pending_d = None
         self.status = 'no_candidate'
         self._seen_wide = False         # 이 추적에서 뒷면 전체를 본 적이 있는가 (stationary_geom_pass)
+        self.cam_confirmed = False      # 이번 scan 앞차가 카메라 YOLO와 맞았는가 (기록용)
 
     def _clusters(self, points, ego_lat, W, fov=True):
         p = self.p
@@ -81,7 +83,8 @@ class VehicleTracker:
                 x0 = min(xs)
                 face = [y for x, y in zip(xs, ys) if x <= x0 + p.rear_face_depth]
                 out.append(_Cluster(x0, max(xs), min(ys), max(ys), [q.i for q in g], (min(face) + max(face)) / 2.0,
-                                    self._left_edge(xs, ys, x0)))
+                                    self._left_edge(xs, ys, x0), min(q.ang for q in g), max(q.ang for q in g),
+                                    min(math.hypot(q.x, q.y) for q in g)))
         return out
 
     def _left_edge(self, xs, ys, x0):
@@ -111,9 +114,17 @@ class VehicleTracker:
         c, s = math.cos(heading), math.sin(heading)
         return [Pt(q.i, q.ang, q.x * c - q.y * s, q.x * s + q.y * c) for q in points]
 
-    def update(self, points, t, v_ego, ego_lat, W, heading=0.0):
-        """정면 규칙으로 가장 가까운 차량 클러스터를 찾는다."""
+    def cam_hit(self, c, cam):
+        """camera_lead: YOLO가 차로 본 방위 범위·거리(cam, 라이다 원점 기준)와 클러스터가 겹치는가."""
         p = self.p
+        return (cam is not None and p.camera_lead and not self.rear
+                and c.a1 >= cam['a_lo'] - p.cam_match_ang and c.a0 <= cam['a_hi'] + p.cam_match_ang
+                and abs(c.r0 - cam['r']) <= p.cam_match_r)
+
+    def update(self, points, t, v_ego, ego_lat, W, heading=0.0, cam=None):
+        """정면 규칙으로 가장 가까운 차량 클러스터를 찾는다. cam: 카메라 YOLO 앞차 {'r', 'a_lo', 'a_hi'} 또는 None."""
+        p = self.p
+        self.cam_confirmed = False
         recovery = p.track_recovery and p.experiment_safety and not self.rear
         # stationary_partial_lead: 정지 차 우회 시험에서 첫 확정 전에는 검은 차체 일부만 보인 좁은 클러스터도 후보로 센다.
         # 실차 test_01(2026-11-19): 2.1 m 앞 정지 차가 폭 0.02~0.11 m로만 보여 차량 폭 하한 0.12에 걸려 1.36 m에서야 후보가 됐다.
@@ -129,7 +140,9 @@ class VehicleTracker:
                      and abs(c.x0 - self._d) <= p.track_jump_reset)
                  or (partial and p.partial_width_min <= c.y1 - c.y0
                      and c.x1 - c.x0 <= p.partial_depth_max and len(c.idx) >= p.partial_min_points
-                     and abs((c.y0 + c.y1) / 2 + ego_lat) <= W / 2.0 - p.wall_margin - p.partial_wall_clear))
+                     and abs((c.y0 + c.y1) / 2 + ego_lat) <= W / 2.0 - p.wall_margin - p.partial_wall_clear)
+                 # camera_lead: 카메라가 차로 본 클러스터는 라이다 폭(검은 차 위 모서리만 보임)과 무관하게 후보
+                 or self.cam_hit(c, cam))
             and c.x1 - c.x0 <= p.veh_depth_max]
         if not cands:
             if partial and self._candidate is not None and self._candidate_count > 0 \
@@ -143,6 +156,11 @@ class VehicleTracker:
             return Track(False, None, None, self._v_b, (), None)
         c = min(cands, key=lambda c: c.x0)
         d = c.x0
+        hit = self.cam_hit(c, cam)
+        self.cam_confirmed = hit
+        if hit:
+            # 카메라 뒷면이 라이다 점보다 가까우면 그게 뒷범퍼다 (라이다는 차체 위쪽 안쪽만 봤다)
+            d = min(d, max(0.0, cam['r'] - p.lidar_to_front))
         if recovery and self._d is None:
             previous = self._candidate
             consistent = (previous is not None and self._candidate_count > 0
@@ -151,12 +169,12 @@ class VehicleTracker:
                           and abs((c.y0 + c.y1 - previous.y0 - previous.y1) / 2) <= 0.10)
             self._candidate_count = self._candidate_count + 1 if consistent else 1
             self._candidate, self._candidate_t = c, t
-            if self._candidate_count < 3:
+            if self._candidate_count < 3 and not hit:     # 카메라가 차라고 하면 3 scan 확인을 기다리지 않는다
                 self.pending_d = d
                 self.status = 'confirming'
                 return Track(False, None, None, self._v_b, (), None)
         self.pending_d = None
-        narrow = c.y1 - c.y0 < p.veh_width_min
+        narrow = c.y1 - c.y0 < p.veh_width_min and not hit     # 카메라 뒷면 거리를 이미 d에 넣었다
         # stationary_geom_pass: 이 추적에서 뒷면 전체(폭 ≥ veh_width_min)를 본 적이 있으면 좁게 보인 scan도 같은 뒷면이다.
         # 실차 test_02(2026-11-19): 넓게 보일 때 1.56 m, 좁게 보일 때 0.22 m를 빼 1.35 m로 매 scan 바뀌어 추월 조건 유지가 끊겼다
         # lead_steady_face: 모든 방법에 적용 (실차 overtake_02: 0.66 ↔ 0.89 m로 튀어 v_B가 0 ↔ 0.5, 출발·정지 반복)

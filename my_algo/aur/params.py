@@ -144,6 +144,12 @@ class AurParams:
     partial_depth_max: float = 0.3      # 좁은 후보 최대 깊이 [m] (레일 조각은 길다)
     partial_min_points: int = 4         # 좁은 후보 최소 점 수
     partial_wall_clear: float = 0.10    # 좁은 후보 중심이 벽 경계(W/2 − wall_margin)에서 이만큼 안쪽 [m]
+    # --- 카메라 융합 (D455, my_algo/aur/camera.py). 카메라가 없거나 끊기면 라이다만 쓴다 ---
+    camera_fusion: bool = False         # 깊이 장애물 거리를 /scan bin마다 최솟값으로 합친다 (벽·추적·대체 주행 공통, AEB는 라이다만)
+    camera_lead: bool = False           # YOLO 차 상자와 겹치는 클러스터는 폭과 무관하게 후보, 바로 확정, 카메라 뒷면 거리 사용
+    cam_stale_s: float = 0.3            # 이보다 오래된 카메라 결과는 안 쓴다 [s]
+    cam_match_ang: float = 0.05         # 카메라 방위 범위와 클러스터 방위 범위 겹침 여유 [rad]
+    cam_match_r: float = 0.35           # 카메라 뒷면 거리와 클러스터 최소 거리 차 허용 [m] (지연 0.2 s × 1.2 m/s + 잡음)
     corridor_line_tol: float = 0.03    # 벽 직선에서 허용하는 점의 수직 오차 [m]
     corridor_width_tol: float = 0.10   # 실측 W와 벽 사이 거리의 허용 차이 [m]
     corridor_min_span: float = 0.20    # 벽 직선의 최소 전후 길이 [m]
