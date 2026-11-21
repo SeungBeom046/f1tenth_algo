@@ -18,11 +18,15 @@ flowchart LR
     AD -->|/aeb/active, /aeb/status| LOG[(bag)]
     EP -->|/exp/state| LOG
     HB["estop_sender (계획)"] -->|"/estop/heartbeat (계획)"| AD
+    D455[RealSense D455<br/>깊이를 컬러에 정렬] -->|aligned depth, color| CF["camera_fusion (ego, camera:=true)<br/>바닥 보정 + 장애물 거리 + YOLO"]
+    CF -->|"/camera/obstacle_scan<br/>/camera/lead"| EP
+    EP -->|"/scan_fused (camera_aeb)"| AD
 ```
 
 - `exp_planner`(`my_algo/exp_planner.py`)는 기본 주행의 `lidar_reactive_drive`를 대체한다 (같은 토픽·JSON 형식). `autonomous_drive`와 AEB 경로는 그대로 쓰고, `launch/exp_overtake.launch.py`가 `aeb_model:=geometric`으로 띄운다.
 - leader 역할은 scan마다 `LeaderRunner.step`(`my_algo/aur/leader_runner.py`)을 부른다. 순서는 시뮬 `Sim._leader_frame`과 같고 `test_leader_runner_matches_sim_leader`가 명령 일치를 확인한다. ego 역할은 `EgoRunner.step`(`my_algo/aur/ego_runner.py`, 시뮬 `Car.perceive` + `Sim._ego_frame`과 같은 순서, `test_ego_runner_matches_sim_ego`).
 - 두 차는 서로 다른 `ROS_DOMAIN_ID`를 쓴다 (통신 없음).
+- 카메라 융합 (ego, 2026-11-21, `camera:=true camera_lead:=true camera_aeb:=true`): `camera_fusion`(`my_algo/camera_fusion.py`, 계산은 `my_algo/aur/camera.py`)이 시작 1 s 동안 바닥 평면 RANSAC으로 카메라 숙임·roll·높이를 재고(이후 프레임마다 3°·3 cm 안이면 다시 맞춘 값), 바닥 위 0.05~0.5 m·0.3~3.0 m 점을 `/scan`과 같은 각도 격자의 거리로 낸다 (bin마다 25% 분위, 3점 미만은 버림). YOLO 차 상자 안 깊이 점으로 앞차 뒷면 거리·방위를 `/camera/lead`로 낸다. `exp_planner`는 0.3 s(`cam_stale_s`) 안의 결과만 쓴다 (`camera.fused_scan`, 시뮬·bag 재생과 같은 함수): `camera_lead`면 YOLO 앞차 방위 ±0.05 rad·거리 [r − 0.1, r + 0.6] 안 카메라 bin만 `/scan`에 bin마다 최솟값으로 합치고, 그 앞차와 겹치는 클러스터는 폭 게이트 없이 후보·카메라 뒷면 거리 사용(`VehicleTracker.update(cam=...)`). `camera_full`(비교용)이면 카메라 bin 전부를 합친다. `camera_aeb`면 합친 scan을 `/scan_fused`로 내고 launch가 `autonomous_drive`의 `/scan`을 그것으로 바꾼다 (ego만). 지도는 쓰지 않는다.
 - 시뮬(`sim/aur_overtake/sim.py`)은 같은 순서를 한 프로세스에서 흉내 낸다: `Car.perceive` → `Sim._ego_frame` / `_leader_frame` (= exp_planner), `Car.control` (= autonomous_drive).
 
 ## 2. 모듈 파이프라인 (scan 한 프레임)

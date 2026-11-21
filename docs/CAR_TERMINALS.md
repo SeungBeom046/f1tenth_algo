@@ -2,7 +2,7 @@
 
 **역할: 파랑이(Foxy) = 추월하는 차(ego, 뒤), 검정이(jazzy) = 앞차(leader).** 출발할 때 검정이를 앞에, 파랑이를 뒤에 둔다.
 
-차 한 대에 터미널 6개를 띄운다. 아래 블록을 터미널마다 **그대로 복사해** 붙인다.
+차 한 대에 터미널 6개(0~5)를 띄운다. 파랑이에서 카메라 융합을 쓰면 터미널 6(카메라)을 하나 더 띄운다. 아래 블록을 터미널마다 **그대로 복사해** 붙인다.
 각 블록 안에 환경 설정(`ROS_DOMAIN_ID`, `source`)이 들어 있으므로 터미널을 새로 열 때마다 블록 전체를 붙인다.
 
 | 터미널 | 하는 일 | 끄는 순서 |
@@ -13,8 +13,9 @@
 | 3 | 확인 + 정지 명령 (계속 열어 둔다) | 5 |
 | 4 | 기록 (ros2 bag) | 2 |
 | 5 | 주행 알고리즘 | 1 |
+| 6 | 카메라 D455 (**파랑이만**, 카메라 융합을 쓸 때) | 2 |
 
-띄우는 순서는 0 → 1 → 2 → 3(확인) → 4 → 5, 끄는 순서는 5 → 4 → 2 → 1 → 3이다.
+띄우는 순서는 0 → 1 → 2 → (6) → 3(확인) → 4 → 5, 끄는 순서는 5 → (6) → 4 → 2 → 1 → 3이다.
 
 > **터미널 5를 실행하는 순간 차가 바로 출발한다** (조이스틱 없음). 처음에는 바퀴를 띄우고 실행한다.
 > 이 명령들은 Mac에서 정리했고 차에서 그대로 실행해 확인하지 않았다. 다르면 이 문서를 고친다.
@@ -173,6 +174,19 @@ source ~/vesc_ws/install/setup.bash
 ros2 launch vesc_driver vesc_driver_node.launch.py
 ```
 
+### 터미널 6: 카메라 D455 (카메라 융합을 쓸 때만, 터미널 5보다 먼저)
+
+깊이를 컬러에 정렬해서 띄운다 (`camera_fusion`이 상자 안 깊이를 찾으려면 필요). 드라이버 버전에 따라 인자 이름이 달라 둘 다 준다 (모르는 쪽은 무시된다).
+
+```bash
+export ROS_DOMAIN_ID=38
+source /opt/ros/foxy/setup.bash
+source ~/f1tenth_ws/install/setup.bash        # realsense2_camera를 소스로 빌드했으면 그 워크스페이스
+ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true align_depth:=true pointcloud.enable:=false
+```
+
+`ros2 topic list`에 `/camera/camera/...`처럼 이름이 두 번 나오면 터미널 5에 `cam_ns:=/camera/camera`를 붙인다. 카메라 확인은 터미널 3, 실행은 터미널 5의 (가-카메라).
+
 ### 터미널 3: 확인 + 정지 (바퀴를 띄운 상태에서)
 
 ```bash
@@ -182,6 +196,9 @@ source ~/vesc_ws/install/setup.bash          # 없으면 /sensors/core에서 No 
 ros2 topic list                              # /livox/lidar, /sensors/core 가 보여야 한다. 안 보이면 터미널마다 ROS_DOMAIN_ID 확인
 ros2 topic info /livox/lidar                 # Type: sensor_msgs/msg/PointCloud2
 ros2 topic hz /sensors/core                  # 숫자가 나오면 VESC 정상. Ctrl+C
+# 카메라(터미널 6)를 띄웠으면:
+ros2 topic hz /camera/aligned_depth_to_color/image_raw    # 15~30 Hz. 안 나오면 터미널 6의 정렬 인자·cam_ns 확인
+ros2 topic hz /camera/color/image_raw                     # YOLO 입력
 ```
 
 터미널 5를 띄운 뒤:
@@ -201,7 +218,8 @@ source ~/vesc_ws/install/setup.bash          # /sensors/core(vesc_msgs) 기록�
 mkdir -p ~/runs && cd ~/runs
 ros2 bag record -o $(date +%m%d_%H%M)_test1_blue \
   /scan /sensors/core /commands/motor/speed /commands/servo/position \
-  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state /livox/imu
+  /reactive/lidar_command /aeb/active /aeb/status /autonomous_mode /exp/state /livox/imu \
+  /camera/obstacle_scan /camera/lead /scan_fused   # 카메라 융합(camera:=true) 결과, 안 쓰면 0개로 남는다
 ```
 
 ### 터미널 5: 주행 알고리즘 (실행하면 바로 출발)
@@ -217,6 +235,43 @@ source ~/vesc_ws/install/setup.bash
 source ~/f1tenth_ws/install/setup.bash
 ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0 servo_center:=0.50    # 실측 통로 폭·보정한 서보 값으로
 ```
+
+(가-카메라) 추월 알고리즘 + 카메라 융합: 터미널 6(카메라)을 먼저 띄운 뒤. 설명·터미널 로그는 아래 "카메라 융합" 절.
+
+```bash
+export ROS_DOMAIN_ID=38
+source /opt/ros/foxy/setup.bash
+source ~/vesc_ws/install/setup.bash
+source ~/f1tenth_ws/install/setup.bash
+ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0 servo_center:=0.50 \
+  camera:=true camera_driver:=false camera_lead:=true camera_aeb:=true
+```
+
+시작하면 `[CAM] 바닥 보정: 숙임 …°, 높이 0.16x m` 줄이 나와야 한다 (출발 전 1 s, 차를 건드리지 않는다). 터미널 6 없이 한 번에 띄우려면 `camera_driver:=false`를 빼면 된다.
+
+**카메라 화면 보기.** 차에 모니터(또는 원격 데스크톱)가 있으면 위 명령 끝에 `cam_view:=true`를 붙인다. `camera_fusion` 창이 뜬다.
+
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0 servo_center:=0.50 \
+  camera:=true camera_driver:=false camera_lead:=true camera_aeb:=true cam_view:=true
+```
+
+차에 화면이 없으면(SSH) `cam_image:=true`를 붙이고, 같은 `ROS_DOMAIN_ID=38` 네트워크의 노트북에서 본다 (영상이라 Wi-Fi가 느리면 끊긴다):
+
+```bash
+export ROS_DOMAIN_ID=38
+source /opt/ros/foxy/setup.bash               # 노트북 ROS 버전
+ros2 run rqt_image_view rqt_image_view /camera/fusion/image
+```
+
+| 화면에 보이는 것 | 뜻 |
+|---|---|
+| 주황 점 | 장애물로 본 깊이 점 (바닥 위 5~50 cm, 3 m 안). 덕트와 앞차에만 찍혀야 한다. **바닥에 주황 점이 깔리면** 숙임 보정이 틀렸다 → 위쪽 글자의 pitch 확인 |
+| 초록 상자 + `car 0.82 \| 1.62 m` | YOLO가 차로 본 상자, 신뢰도, 상자 안 깊이로 잰 앞차 뒷면 거리. 거리가 안 붙으면 상자 안 깊이가 모자란다 (검은 차체에서 깊이 실패) |
+| 회색 상자 | 차가 아닌 YOLO 결과 (무시한다) |
+| 위쪽 글자 | `pitch 17.3 deg height 0.158 m` 바닥 보정값, `obstacle pts` 장애물 점 수, `lead 1.62 m` 이번 프레임 앞차 거리 |
+
+창이 안 뜨면 터미널에 `[CAM] 창을 못 띄움 (화면 없음? DISPLAY 확인)`이 찍히고 주행은 그대로 된다. 그릴 때 YOLO 주기가 조금 느려질 수 있으니 기록용 회차에서는 끈다.
 
 (나) 기본 주행 (gap follow): 보정 실험용. **추월 코드가 아니다.**
 
@@ -286,6 +341,60 @@ ros2 topic echo /livox/imu --field angular_velocity.z      # 차를 손으로 �
 **실시간 출력.** 1 s마다 `[EXP ego] IMU yaw rate +0.012 rad/s (바이어스 +0.0040 뺌) | 헤딩 +0.8° 횡위치 -0.021 m`가 찍힌다 (`imu_print_s:=0.0`이면 끔). 서 있을 때 yaw rate가 0 근처(|0.01| rad/s 안)이고, 손으로 왼쪽으로 돌리면 양수·헤딩 증가면 정상이다.
 
 Ctrl+C 요약의 `IMU 자이로` 줄에 받은 개수, scan 중 자이로를 쓴 비율, yaw rate 평균, 뺀 바이어스가 나온다.
+
+## 카메라 융합 (D455, 파랑이만, 2026-11-21)
+
+추월 launch에 `camera:=true`를 붙이면 (`camera_lead`·`camera_aeb`는 기본 true) RealSense 드라이버(깊이를 컬러에 정렬)와 `camera_fusion` 노드가 같이 뜬다. 지도는 여전히 안 쓴다.
+
+- YOLO(`camera_lead`): 컬러 영상에서 차 상자를 찾고, 상자 안 깊이 점으로 앞차 뒷면 거리·방위를 낸다(`/camera/lead`). **상자 안 깊이 점만** 라이다 scan에 합친다 → 검은 앞차의 뒷면 전체(범퍼·바퀴)가 보인다. 이 방위·거리와 겹치는 클러스터는 폭이 좁아도 앞차 후보가 되고, 카메라 뒷면 거리를 쓴다. YOLO가 못 찾으면 기존 라이다 규칙 그대로다 (카메라는 더할 뿐 빼지 않는다).
+- AEB(`camera_aeb`): AEB도 같은 합친 scan(`/scan_fused`)을 쓴다. 라이다만 보면 검은 앞차가 좁게 보여 부분 관측 규칙(+0.22 m)으로 AEB가 계속 걸린다 (실차 overtake_02의 AEB 77%, 시뮬에서 64회 → 2회).
+- 깊이 전부(`camera_full`, 비교용): 바닥 위 5~50 cm 점을 전부 합친다. 시뮬에서 추월 중 레일 근처 카메라 점이 앞차와 한 덩어리로 묶여 추월 중단·AEB가 늘어서(80~93회) 기본으로 쓰지 않는다.
+- 카메라가 안 뜨거나 끊기면(0.3 s) 라이다만으로 간다 (`camera_aeb`이면 AEB는 라이다 scan을 그대로 받는다). 터미널에 `카메라: 결과 없음 (라이다만 ...)`.
+
+**처음 한 번: 토픽 확인 (터미널 5를 띄우기 전, 바퀴를 띄운 상태)**
+
+```bash
+ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true      # Foxy 구버전 드라이버는 align_depth:=true
+ros2 topic list | grep -E "aligned_depth_to_color|color/image_raw"
+ros2 topic hz /camera/aligned_depth_to_color/image_raw                   # 15~30 Hz
+```
+
+`/camera/camera/aligned_...`처럼 이름이 두 번 나오면 실행 때 `cam_ns:=/camera/camera`. 이 드라이버를 그대로 켜 두고 추월 launch에 `camera_driver:=false`를 준다 (터미널 6). 끄고 `camera_driver:=false`를 빼면 추월 launch가 드라이버를 같이 띄운다.
+
+**장착 값.** 라이다 중심 → 카메라 유리면 앞쪽 거리를 줄자로 재서 `cam_x`(기본 0.27 m: 실측 앞바퀴 축 7 cm 앞, 라이다는 뒤축 앞 0.13 m). 숙임·높이는 시작할 때 바닥으로 다시 재므로 대략이면 된다 (`cam_pitch_deg` 17.5, `cam_height` 0.16(실측)은 바닥을 못 찾았을 때만 쓴다).
+
+**실행 (터미널 5 대신)**
+
+```bash
+ros2 launch my_algo exp_overtake.launch.py role:=ego method:=d W:=1.0 servo_center:=0.50 camera:=true camera_driver:=false camera_lead:=true camera_aeb:=true \
+  2>&1 | tee ~/runs/$(date +%m%d_%H%M)_cam_blue.log
+```
+
+| 터미널 줄 | 뜻 / 할 것 |
+|---|---|
+| `[CAM] 시작: 깊이 ..., YOLO ON (yolov8n.pt, car,truck)` | 정상. `YOLO OFF`면 ultralytics·모델 파일 확인 (깊이 융합은 된다) |
+| `[CAM] 바닥 보정: 숙임 17.3°, roll +0.4°, 높이 0.158 m (15프레임 중앙값)` | 출발 전 1 s 동안 잰 값. 숙임이 장착 각도(15~20°)와 5° 넘게 다르거나 높이가 실측 0.16 m와 3 cm 넘게 다르면 카메라 앞을 덕트·차가 가렸는지, 장착이 흔들리는지 본다 |
+| `[CAM] 바닥 보정 실패 ...` | 바닥이 안 보였다 (렌즈 앞 가림, 너무 위를 봄). 기본값으로 가지만 장애물 높이가 틀릴 수 있다 |
+| `[CAM] 깊이 15 Hz (처리 12 ms), 장애물 bin 평균 180, 바닥 재맞춤 95% ... YOLO 8 Hz, 차 상자 12, 앞차 위치 10` | 2 s마다. 처리 시간이 60 ms를 넘으면 YOLO를 끄고(`camera_lead:=false`) 비교 |
+| `[EXP ego] 카메라: 깊이 융합 중` / `카메라: 결과 없음` | 카메라 결과가 들어오기 시작함 / 0.3 s 넘게 안 옴 |
+| `[EXP ego] 카메라 YOLO가 앞차 확인 (1.62 m)` | 앞차 후보를 카메라가 확인 |
+| 요약 `카메라 : cam_ok 97%, YOLO 앞차 확인 85 scan` | scan 중 카메라를 합친 비율 |
+
+장애물이 없는데 차가 서거나 `lead_pending`이 뜨면(바닥을 장애물로 봄): 출발할 때 바닥 보정 줄의 숙임 값을 확인하고, 그래도 생기면 `camera:=false`로 비교한 뒤 기록 bag을 보내 준다.
+
+**기록 (터미널 4에 더하기).** 카메라 결과는 작아서 항상 넣는다: `/camera/obstacle_scan /camera/lead`. YOLO 학습용 영상은 크기가 커서(원본 컬러 30 Hz ≈ 80 MB/s) 따로 짧게 받는다:
+
+```bash
+ros2 bag record -o $(date +%m%d_%H%M)_yolo_data /camera/color/image_raw --max-bag-duration 60
+```
+
+**F1TENTH 차 YOLO 모델 (직접 학습).** 공개된 F1TENTH 차 학습 가중치는 찾지 못했다 (2026-11-21 조사, docs/RESEARCH_RACE.md 2.1절). 기본은 COCO `yolov8n.pt`의 `car`인데 1/10 차를 얼마나 잡는지는 **실차 미확인**이다. 정확도를 올리려면 위 영상에서 검정이를 200~500장 라벨링하고(Roboflow 등, 공개 데이터 "F1 Tenth" 167장 CC BY 4.0을 섞어도 된다) Jetson이 아닌 PC에서 학습한다:
+
+```bash
+yolo detect train model=yolov8n.pt data=f1tenth.yaml epochs=100 imgsz=640      # 결과 runs/detect/train/weights/best.pt
+```
+
+차에 `best.pt`를 복사하고 `yolo_model:=/home/<사용자>/best.pt yolo_classes:='*'`로 실행한다.
 
 ## 로그·요약 읽기 (추월 launch)
 
