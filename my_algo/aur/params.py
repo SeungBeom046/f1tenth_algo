@@ -148,7 +148,8 @@ class AurParams:
     camera_fusion: bool = False         # 깊이 장애물 거리를 /scan bin마다 최솟값으로 합친다 (벽·추적·대체 주행 공통, AEB는 라이다만)
     camera_lead: bool = False           # YOLO 차 상자와 겹치는 클러스터는 폭과 무관하게 후보, 바로 확정, 카메라 뒷면 거리 사용.
                                         # camera_fusion이 꺼져 있으면 깊이는 YOLO 앞차 범위만 scan에 합친다 (camera.lead_span)
-    cam_instant_confirm: bool = True    # 카메라가 확인한 후보는 3 scan 확인을 기다리지 않는다
+    cam_instant_confirm: bool = False   # 카메라가 확인한 후보는 3 scan 확인을 기다리지 않는다. 시뮬(2026-11-21)에서 출발이 당겨져
+                                        # 멈춘 차에 0.2 m 더 붙어 서서 못 돌아가는 회차가 늘어 끔
     camera_aeb: bool = False            # AEB도 카메라를 합친 scan을 쓴다 (실차: launch가 autonomous_drive /scan → /scan_fused)
     cam_stale_s: float = 0.3            # 이보다 오래된 카메라 결과는 안 쓴다 [s]
     cam_match_ang: float = 0.05         # 카메라 방위 범위와 클러스터 방위 범위 겹침 여유 [rad]

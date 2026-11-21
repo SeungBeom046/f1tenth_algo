@@ -122,12 +122,13 @@ def narrow_car(x_bumper=1.5, width=0.05, n=5):
     return [Pt(i, math.atan2(y, x), x, y) for i, y in enumerate(np.linspace(-width / 2, width / 2, n))]
 
 
-def test_camera_confirms_narrow_lead_at_once_and_uses_camera_face():
+def test_camera_confirms_narrow_lead_and_uses_camera_face():
     pts = narrow_car()
     cam = {'r': 1.5 + P.lidar_to_front, 'a_lo': -0.09, 'a_hi': 0.09}
     trk = VehicleTracker(C)
-    res = trk.update(pts, 0.0, 0.0, 0.0, 1.0, cam=cam)
-    assert res.valid and abs(res.d - 1.5) < 1e-9 and trk.cam_confirmed
+    res = [trk.update(pts, 0.1 * k, 0.0, 0.0, 1.0, cam=cam) for k in range(3)]
+    assert [r.valid for r in res] == [False, False, True]      # 라이다만이면 좁아서 영영 후보가 아니다
+    assert abs(res[-1].d - 1.5) < 1e-9 and trk.cam_confirmed
     # 카메라가 다른 곳(옆 레일 방향)을 차로 봤으면 기존 규칙 (좁아서 후보 아님)
     other = VehicleTracker(C)
     assert not other.update(pts, 0.0, 0.0, 0.0, 1.0, cam={'r': 1.78, 'a_lo': 0.4, 'a_hi': 0.5}).valid
@@ -136,12 +137,12 @@ def test_camera_confirms_narrow_lead_at_once_and_uses_camera_face():
     assert not off.update(pts, 0.0, 0.0, 0.0, 1.0, cam=cam).valid and not off.cam_confirmed
 
 
-def test_camera_skips_three_scan_confirmation_for_wide_lead():
+def test_camera_confirmation_waits_three_scans_unless_instant():
     pts = narrow_car(width=0.2)
     cam = {'r': 1.5 + P.lidar_to_front + 0.2, 'a_lo': -0.07, 'a_hi': 0.07}
-    lidar_only = VehicleTracker(C)
-    assert [lidar_only.update(pts, 0.1 * k, 0.0, 0.0, 1.0).valid for k in range(3)] == [False, False, True]
-    assert VehicleTracker(C).update(pts, 0.0, 0.0, 0.0, 1.0, cam=cam).valid
+    for trk in (VehicleTracker(C), VehicleTracker(C)):
+        assert [trk.update(pts, 0.1 * k, 0.0, 0.0, 1.0, cam=cam).valid for k in range(3)] == [False, False, True]
+    assert VehicleTracker(replace(C, cam_instant_confirm=True)).update(pts, 0.0, 0.0, 0.0, 1.0, cam=cam).valid
 
 
 def test_node_image_decoding_handles_row_padding_and_rgb():
