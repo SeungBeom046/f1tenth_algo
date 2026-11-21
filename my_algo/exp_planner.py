@@ -16,6 +16,7 @@ import json
 import math
 import os
 import time
+from types import SimpleNamespace
 
 import rclpy
 from ament_index_python.packages import get_package_share_directory
@@ -25,6 +26,7 @@ from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import Imu, LaserScan
 from std_msgs.msg import Bool, String
 
+from my_algo.aur.camera import fuse_ranges
 from my_algo.aur.corridor import Corridor
 from my_algo.aur.ego_runner import EgoRunner
 from my_algo.aur.leader_runner import LeaderRunner
@@ -70,6 +72,9 @@ class ExpPlanner(Node):
         self.declare_parameter('imu_yaw_sign', 1.0)
         self.declare_parameter('imu_calib_s', 0.0)      # > 0이면 실행 직후 이 시간 정지한 채 자이로 평균을 바이어스로 재서 뺀다 [s]
         self.declare_parameter('imu_print_s', 0.0)      # > 0이면 이 주기로 IMU yaw rate·헤딩을 터미널에 찍는다 [s]
+        # (ego) D455 카메라 융합 (my_algo/camera_fusion.py가 낸 결과). 카메라가 없거나 끊기면 라이다만 쓴다
+        self.declare_parameter('camera_fusion', False)  # /camera/obstacle_scan을 /scan에 bin마다 최솟값으로 합친다
+        self.declare_parameter('camera_lead', False)    # /camera/lead(YOLO 차)로 앞차 후보 확인
         self.declare_parameter('params_file', os.path.join(
             get_package_share_directory('my_algo'), 'config', 'exp_common.yaml'))
 
@@ -81,6 +86,8 @@ class ExpPlanner(Node):
         over = {}
         over['experiment_safety'] = bool(self.get_parameter('experiment_safety').value)
         over['stationary_pass'] = bool(self.get_parameter('stationary_pass').value)
+        over['camera_fusion'] = bool(self.get_parameter('camera_fusion').value)
+        over['camera_lead'] = bool(self.get_parameter('camera_lead').value)
         if W > 0:
             over['W_leader' if self.role == 'leader' else 'W'] = W
         if t_d > 0:
@@ -126,6 +133,10 @@ class ExpPlanner(Node):
         self.create_subscription(Imu, self.get_parameter('imu_topic').value, self.imu_callback,
                                  QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT,
                                             history=QoSHistoryPolicy.KEEP_LAST, depth=50))
+        self.cam_scan = self.cam_lead = None     # (받은 시각, 메시지)
+        if self.role == 'ego' and (self.p.camera_fusion or self.p.camera_lead):
+            self.create_subscription(LaserScan, '/camera/obstacle_scan', self.cam_scan_callback, qos)
+            self.create_subscription(String, '/camera/lead', self.cam_lead_callback, 10)
         self.cmd_pub = self.create_publisher(String, '/reactive/lidar_command', 10)
         self.state_pub = self.create_publisher(String, '/exp/state', 10)
         self.create_subscription(Bool, '/aeb/active', self.aeb_callback, 10)
@@ -154,6 +165,15 @@ class ExpPlanner(Node):
 
     def event(self, msg):
         print_event_line('[EXP %s] %s' % (self.role, msg))
+
+    def now(self):
+        return self.get_clock().now().nanoseconds / 1e9
+
+    def cam_scan_callback(self, msg):
+        self.cam_scan = (self.now(), msg)
+
+    def cam_lead_callback(self, msg):
+        self.cam_lead = (self.now(), json.loads(msg.data))
 
     def core_callback(self, msg):
         # shortcut: /sensors/core speed를 ERPM으로 가정 (미확인, 보정 실험에서 확인)
@@ -285,8 +305,14 @@ class ExpPlanner(Node):
         return s, 'STRAIGHT', self.straight_steer, 'servo_center_check' if not self.straight_steer else 'steer_check'
 
     def ego_step(self, t, msg, v):
-        self.v_cmd, steer, y_ref, st, reason = self.runner.step(t, msg, v, self.yaw_rate(t))
+        scan, lead, cam = camera_inputs(self.p, t, msg, self.cam_scan, self.cam_lead)
+        self.v_cmd, steer, y_ref, st, reason = self.runner.step(t, scan, v, self.yaw_rate(t), cam_lead=lead)
         fsm, trk, cor = self.runner.fsm, self.runner.track, self.runner.corridor
+        cam_lead = self.runner.tracker.cam_confirmed
+        self.stats.camera(cam, cam_lead)
+        if cam != self.prev.get('cam'):
+            self.event({'cam_ok': '카메라: 깊이 융합 중', 'cam_none': '카메라: 결과 없음 (라이다만, camera_fusion 노드·D455 확인)',
+                        'cam_off': '카메라: 꺼짐'}[cam])
         s = dict(t=t, role='ego', method=self.method, state=st, reason=reason, v=v, v_cmd=self.v_cmd, steer=steer,
                  y_ref=y_ref, valid=trk.valid, d=trk.d, y_b=trk.y_b, v_b=trk.v_b, ego_lateral=cor.ego_lateral,
                  heading=cor.heading, W=cor.W_est, h=fsm.h if fsm.h != float('inf') else None,
@@ -296,7 +322,7 @@ class ExpPlanner(Node):
                  guardrail_local_view=self.p.guardrail_local_view, wall_initializing=cor.initializing,
                  pose_filter=self.p.pose_filter)
         s.update(track_status=self.runner.tracker.status, pending_d=self.runner.tracker.pending_d,
-                 pass_block=fsm.pass_block)
+                 pass_block=fsm.pass_block, cam=cam, cam_lead=cam_lead)
         prev, self.prev = self.prev, s
         block = (s['pass_block'] or '').split(' (')[0]
         if block != (prev.get('pass_block') or '').split(' (')[0] and st in ('WAIT', 'APPROACH', 'PROBE'):
@@ -306,9 +332,28 @@ class ExpPlanner(Node):
         if st != prev.get('state'):
             self.event('%s → %s (%s), 선행차 %s m' % (prev.get('state', '-'), st, reason,
                                                      '%.2f' % trk.d if trk.valid else '안 보임'))
+        if cam_lead and not prev.get('cam_lead'):
+            self.event('카메라 YOLO가 앞차 확인 (%.2f m)' % trk.d)
         if s['decided'] and not prev.get('decided'):
             self.event('belief 확정 %s (b=%.2f)' % (s['decided'], s['b']))
         return s, 'EGO_' + st, steer, reason
+
+
+def camera_inputs(p, t, msg, cam_scan, cam_lead):
+    """(합친 scan 또는 msg, YOLO 앞차 또는 None, 카메라 태그 cam_ok | cam_none | cam_off).
+    cam_scan·cam_lead = (받은 시각, 메시지) 또는 None. cam_stale_s보다 오래된 카메라 결과는 안 쓴다."""
+    if not (p.camera_fusion or p.camera_lead):
+        return msg, None, 'cam_off'
+    fresh = cam_scan is not None and t - cam_scan[0] <= p.cam_stale_s
+    scan = msg
+    if p.camera_fusion and fresh:
+        c = cam_scan[1]
+        scan = SimpleNamespace(ranges=fuse_ranges(msg.ranges, msg.angle_min, msg.angle_increment,
+                                                  c.ranges, c.angle_min, c.angle_increment),
+                               angle_min=msg.angle_min, angle_increment=msg.angle_increment,
+                               range_min=msg.range_min, range_max=msg.range_max)
+    lead = cam_lead[1] if p.camera_lead and cam_lead is not None and t - cam_lead[0] <= p.cam_stale_s else None
+    return scan, lead, 'cam_ok' if fresh else 'cam_none'
 
 
 def perception_tags(runner):
@@ -352,6 +397,12 @@ class RunStats:
         self.imu_bias = None
         self.imu_scans = 0
         self.yaw_rates = []
+        self.cam = collections.Counter()
+        self.cam_lead = 0
+
+    def camera(self, tag, lead_confirmed):
+        self.cam[tag] += 1
+        self.cam_lead += bool(lead_confirmed)
 
     def imu(self, samples, rate):
         self.imu_samples += samples
@@ -411,6 +462,8 @@ class RunStats:
                                               self.imu_samples, 100.0 * self.imu_scans / self.n,
                                               sum(self.yaw_rates) / len(self.yaw_rates), max(map(abs, self.yaw_rates)),
                                               '보정 안 함' if self.imu_bias is None else '%+.4f rad/s 뺌' % self.imu_bias)),
+            '카메라               : %s' % ('꺼짐' if not self.cam or set(self.cam) == {'cam_off'} else
+                                          '%s, YOLO 앞차 확인 %d scan' % (pct(self.cam), self.cam_lead)),
             'AEB 작동             : %d회%s' % (len(self.aeb_reasons), ''.join('\n  - ' + r for r in self.aeb_reasons[:5])),
             '=================================',
         ]

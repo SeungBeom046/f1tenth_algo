@@ -44,6 +44,41 @@ def _scan_nodes(context):
     return nodes
 
 
+def _camera_nodes(context):
+    """(ego, camera:=true) RealSense D455 드라이버(깊이를 컬러에 정렬) + camera_fusion. 다른 역할이면 띄우지 않는다.
+
+    정렬 인자 이름은 드라이버 버전마다 다르다 (4.x align_depth.enable, Foxy ros2-legacy align_depth): 둘 다 넘긴다.
+    토픽 이름공간은 camera_drive.launch.py가 실차에서 쓰는 /camera/... (cam_ns로 바꾼다).
+    """
+    on = LaunchConfiguration('camera').perform(context).lower() in ('true', '1', 'yes')
+    if not on or LaunchConfiguration('role').perform(context) != 'ego':
+        return []
+    import os
+    from ament_index_python.packages import get_package_share_directory
+    from launch.actions import IncludeLaunchDescription
+    from launch.launch_description_sources import PythonLaunchDescriptionSource
+    ns = LaunchConfiguration('cam_ns').perform(context).rstrip('/')
+    nodes = [IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py')),
+        launch_arguments={'align_depth.enable': 'true', 'align_depth': 'true', 'pointcloud.enable': 'false'}.items(),
+    )]
+    nodes.append(Node(
+        package='my_algo', executable='camera_fusion', output='screen',
+        parameters=[{
+            'depth_topic': ns + '/aligned_depth_to_color/image_raw',
+            'info_topic': ns + '/aligned_depth_to_color/camera_info',
+            'color_topic': ns + '/color/image_raw',
+            'mount_x': float(LaunchConfiguration('cam_x').perform(context)),
+            'pitch_deg': float(LaunchConfiguration('cam_pitch_deg').perform(context)),
+            'height': float(LaunchConfiguration('cam_height').perform(context)),
+            'yolo': LaunchConfiguration('camera_lead').perform(context).lower() in ('true', '1', 'yes'),
+            'yolo_model': LaunchConfiguration('yolo_model').perform(context),
+            'yolo_classes': LaunchConfiguration('yolo_classes').perform(context),
+        }],
+    ))
+    return nodes
+
+
 def generate_launch_description():
     def arg(name, typ):
         return ParameterValue(LaunchConfiguration(name), value_type=typ)
@@ -80,7 +115,17 @@ def generate_launch_description():
         DeclareLaunchArgument('imu_print_s', default_value='1.0', description='> 0이면 이 주기로 IMU yaw rate·헤딩 출력 [s]'),
         DeclareLaunchArgument('use_metrics_logger', default_value='true', description='종료 때 기본 주행과 같은 주행 요약 (autonomous_metrics_logger)'),
         DeclareLaunchArgument('stationary_pass', default_value='false', description='method a 전용 정지차 우회 시험, 앞차 간격 1.5 m 이상'),
+        # (ego) D455 카메라 융합. 카메라가 안 뜨거나 끊겨도 exp_planner는 라이다만으로 간다 (터미널 '카메라: 결과 없음')
+        DeclareLaunchArgument('camera', default_value='false', description='(ego) D455 드라이버 + camera_fusion, 깊이 장애물을 /scan에 합친다'),
+        DeclareLaunchArgument('camera_lead', default_value='false', description='(ego, camera:=true) YOLO 차 상자로 앞차 후보 확인'),
+        DeclareLaunchArgument('cam_ns', default_value='/camera', description='RealSense 토픽 이름공간 (ros2 topic list로 확인)'),
+        DeclareLaunchArgument('cam_x', default_value='0.23', description='라이다 → 카메라 전방 거리 [m] (앞바퀴 축 3 cm 앞, 실측 확인)'),
+        DeclareLaunchArgument('cam_pitch_deg', default_value='17.5', description='카메라 숙임 기본값 [°] (시작 때 바닥으로 다시 잰다)'),
+        DeclareLaunchArgument('cam_height', default_value='0.17', description='바닥 → 카메라 기본값 [m] (시작 때 바닥으로 다시 잰다)'),
+        DeclareLaunchArgument('yolo_model', default_value='yolov8n.pt', description='YOLO 가중치 (직접 학습한 F1TENTH 모델 경로로 바꿀 수 있다)'),
+        DeclareLaunchArgument('yolo_classes', default_value='car,truck', description="차로 볼 클래스 이름 (직접 학습 모델이면 그 이름, '*' = 전부)"),
         OpaqueFunction(function=_scan_nodes),
+        OpaqueFunction(function=_camera_nodes),
         Node(
             package='my_algo',
             executable='exp_planner',
@@ -93,6 +138,7 @@ def generate_launch_description():
                 'stationary_pass': arg('stationary_pass', bool),
                 'imu_yaw_sign': arg('imu_yaw_sign', float),
                 'imu_calib_s': arg('imu_calib_s', float), 'imu_print_s': arg('imu_print_s', float),
+                'camera_fusion': arg('camera', bool), 'camera_lead': arg('camera_lead', bool),
             }],
         ),
         Node(

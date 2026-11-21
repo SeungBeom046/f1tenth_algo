@@ -142,3 +142,24 @@ def test_camera_skips_three_scan_confirmation_for_wide_lead():
     lidar_only = VehicleTracker(C)
     assert [lidar_only.update(pts, 0.1 * k, 0.0, 0.0, 1.0).valid for k in range(3)] == [False, False, True]
     assert VehicleTracker(C).update(pts, 0.0, 0.0, 0.0, 1.0, cam=cam).valid
+
+
+def test_node_image_decoding_handles_row_padding_and_rgb():
+    """camera_fusion.image_array (ROS 없이 함수만 떼어 검사)."""
+    import ast
+    import os
+    from types import SimpleNamespace
+    src = os.path.join(os.path.dirname(__file__), '..', 'my_algo', 'camera_fusion.py')
+    tree = ast.parse(open(src).read())
+    keep = [n for n in tree.body if (isinstance(n, ast.FunctionDef) and n.name == 'image_array')
+            or (isinstance(n, ast.Assign) and getattr(n.targets[0], 'id', '') == '_DTYPE')]
+    ns = {'np': np}
+    exec(compile(ast.Module(body=keep, type_ignores=[]), src, 'exec'), ns)
+    depth = np.arange(12, dtype=np.uint16).reshape(3, 4)
+    padded = np.zeros((3, 6), np.uint16)
+    padded[:, :4] = depth
+    msg = SimpleNamespace(encoding='16UC1', height=3, width=4, step=12, data=padded.tobytes())
+    assert (ns['image_array'](msg) == depth).all()
+    rgb = np.arange(2 * 2 * 3, dtype=np.uint8).reshape(2, 2, 3)
+    msg = SimpleNamespace(encoding='rgb8', height=2, width=2, step=6, data=rgb.tobytes())
+    assert (ns['image_array'](msg) == rgb[..., ::-1]).all()

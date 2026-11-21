@@ -32,6 +32,7 @@ setup(
             'joy_controller = my_algo.baseline.joy_controller:main',
             'autonomous_metrics_logger = my_algo.baseline.autonomous_metrics_logger:main',
             'exp_planner = my_algo.exp_planner:main',
+            'camera_fusion = my_algo.camera_fusion:main',
         ],
     },
 )

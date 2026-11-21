@@ -6,7 +6,9 @@ import math
 import os
 import time
 from dataclasses import replace
+from types import SimpleNamespace
 
+from my_algo.aur.camera import fuse_ranges
 from my_algo.aur.ego_runner import EgoRunner
 from my_algo.aur.params import AurParams, EXPERIMENT_OVERRIDES
 
@@ -16,14 +18,15 @@ SRC = os.path.join(os.path.dirname(__file__), '..', 'my_algo', 'exp_planner.py')
 def _load():
     tree = ast.parse(open(SRC).read())
     keep = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))
-            and n.name in ('perception_tags', 'RunStats')]
-    ns = {'collections': collections, 'json': json, 'math': math, 'time': time}
+            and n.name in ('perception_tags', 'RunStats', 'camera_inputs')]
+    ns = {'collections': collections, 'json': json, 'math': math, 'time': time,
+          'SimpleNamespace': SimpleNamespace, 'fuse_ranges': fuse_ranges}
     exec(compile(ast.Module(body=keep, type_ignores=[]), SRC, 'exec'), ns)
-    return ns['perception_tags'], ns['RunStats']
+    return ns['perception_tags'], ns['RunStats'], ns['camera_inputs']
 
 
 def test_tags_and_summary():
-    perception_tags, RunStats = _load()
+    perception_tags, RunStats, _ = _load()
     from _aur_synth import scan
     from test_aur_guardrail import scan_message
     runner = EgoRunner(replace(AurParams(), **dict(EXPERIMENT_OVERRIDES, W=1.0)), 'd')
@@ -39,3 +42,19 @@ def test_tags_and_summary():
     stats.aeb('ttc=0.71s closest=0.64m')
     text = stats.summary('ego')
     assert '레일 인식' in text and 'AEB 작동             : 1회' in text and '0.20 m' in text
+    assert '카메라               : 꺼짐' in text
+    stats.camera('cam_ok', True)
+    assert 'YOLO 앞차 확인 1 scan' in stats.summary('ego')
+
+
+def test_camera_inputs_fuse_only_fresh_results():
+    camera_inputs = _load()[2]
+    msg = SimpleNamespace(ranges=[2.0, 2.0, 2.0], angle_min=0.0, angle_increment=0.1, range_min=0.05, range_max=20.0)
+    cam = SimpleNamespace(ranges=[float('inf'), 1.0, float('inf')], angle_min=0.0, angle_increment=0.1)
+    lead = {'r': 1.2, 'a_lo': -0.1, 'a_hi': 0.1}
+    on = replace(AurParams(), camera_fusion=True, camera_lead=True)
+    scan, got, tag = camera_inputs(on, 1.0, msg, (0.9, cam), (0.95, lead))
+    assert list(scan.ranges) == [2.0, 1.0, 2.0] and got == lead and tag == 'cam_ok'
+    scan, got, tag = camera_inputs(on, 2.0, msg, (0.9, cam), (0.95, lead))     # 1 s 지남: 라이다만
+    assert scan is msg and got is None and tag == 'cam_none'
+    assert camera_inputs(AurParams(), 1.0, msg, (0.9, cam), (0.95, lead)) == (msg, None, 'cam_off')
