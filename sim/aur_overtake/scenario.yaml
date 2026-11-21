@@ -67,6 +67,26 @@ lidar:                      # Livox Mid-360을 수평 한 줄로 근사 → poin
   range_noise_std: 0.0      # TUNE: 거리 노이즈 | m | 임시 (0 = 무잡음 기준선)
   mount_xyz: [0.13, -0.005, 0.24]   # 뒤축 → 라이다 (실측 2026-11-03: 앞 0.13, 오른쪽 0.5 cm, 바닥에서 장착면 0.21 + 원점 0.03(임시))
   mount_rpy: [0.0023, 0.0557, 0.0]  # 라이다 장착 기울기 roll, pitch, yaw [rad] (실측 2026-11-06 정지 IMU, pitch 3.2° 앞 숙임)
+  leader_visible_half_width: null   # TUNE: ego 라이다가 앞차 차체에서 맞히는 폭의 절반 (검은 차체는 가운데 비검정 부품만 반사), null = 차체 전부 | m | 임시 (실차 test_01: 2.1 m에서 폭 0.02~0.11 m → 0.05)
+camera:                     # D455 깊이 카메라 (ego만, my_algo/camera_fusion.py와 같은 계산)
+  enabled: false            # TUNE: 카메라 융합 시뮬 | - | 임시
+  mount_xyz: [0.40, 0.0, 0.16]      # TUNE: 뒤축 → 카메라 (앞바퀴 축 0.33 + 7 cm, 바닥에서 0.16 m) | m | 측정 (2026-11-21 실측)
+  pitch_deg: 17.5           # TUNE: 숙임 (실차 15~20°) | deg | 측정 (2026-11-21 대략)
+  width: 160                # 실차 640×480 stride 4와 같은 화소 수
+  height: 120
+  hfov_deg: 87.0            # D455 깊이 시야 87° × 58° (사양)
+  vfov_deg: 58.0
+  max_depth: 6.0
+  depth_noise: 0.005        # TUNE: 깊이 잡음 σ = 이 값 × z² (D455 사양 2 m에서 2% 이하) | 1/m | 임시
+  leader_dropout: 0.2       # TUNE: 검은 앞차 화소의 깊이 실패 확률 | - | 임시 (미측정)
+  min_height: 0.05          # camera_fusion 노드 값과 같게
+  max_height: 0.5
+  range_min: 0.3
+  range_max: 3.0
+  min_points: 3
+  yolo: true                # 시뮬 YOLO: 앞차 꼭짓점 투영 상자를 확률로 낸다
+  yolo_p_detect: 0.8        # TUNE: 프레임당 검출 확률 | - | 임시 (COCO 모델로 1/10 차 검출률 미측정)
+  yolo_max_range: 4.0       # TUNE: 이 거리 넘으면 검출 안 함 | m | 임시
 scan:                       # launch/lidar_drive.launch.py의 pointcloud_to_laserscan과 같은 값
   angle_min: -3.14159
   angle_max: 3.14159

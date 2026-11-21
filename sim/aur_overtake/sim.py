@@ -36,7 +36,8 @@ from my_algo.aur.tracker import VehicleTracker, scan_to_points  # noqa: E402
 from my_algo.baseline.vehicle_utils import (ReactiveDriveCommand, SERVO_CENTER, SERVO_GAIN,  # noqa: E402
                                            sanitize_rpm, steering_to_servo)
 
-from lidar import Lidar, cloud_to_scan                         # noqa: E402
+from lidar import DepthCamera, Lidar, cloud_to_scan            # noqa: E402
+from my_algo.aur import camera as cam_geo                        # noqa: E402
 from vehicle import Kinematic                                  # noqa: E402
 from world import build_xml                                    # noqa: E402
 
@@ -97,6 +98,12 @@ class Car:
         self.body = mujoco.mj_name2id(sim.m, mujoco.mjtObj.mjOBJ_BODY, name)
         mount = {'lidar_xyz': cfg['lidar']['mount_xyz'], 'lidar_rpy': cfg['lidar'].get('mount_rpy', [0.0, 0.0, 0.0])}
         self.lidar = Lidar(sim.m, cfg['lidar'], mount, self.body, seed=sim.seed + (1 if name == 'leader' else 0))
+        self.cam = None
+        self.cam_calib = None
+        self.cam_lead = None        # 이번 scan 시뮬 YOLO 앞차 (기록용)
+        if name == 'ego' and (cfg.get('camera') or {}).get('enabled'):
+            self.cam = DepthCamera(sim.m, cfg['camera'], self.body, seed=sim.seed + 400)
+            self.yolo_rng = np.random.default_rng(sim.seed + 401)
         self.tracker = VehicleTracker(p, view=view)
         self.shadow = VehicleTracker(p, view=view)   # 기록용: FSM 상태와 무관하게 매 scan 정면 규칙만 돌린다
         self.front_track = None     # shadow 결과 (추적 유지율·클러스터 폭 기록)
@@ -141,6 +148,9 @@ class Car:
     def perceive(self, sim, side):
         """scan 한 프레임: 레이캐스트 → scan → corridor(벽) + tracker(상대 차). side = 측면 추적(PASS·MERGE). 반환: W."""
         cloud, self.points_world, _ = self.lidar.scan(sim.d, self.kin.pose())
+        hw = sim.cfg['lidar'].get('leader_visible_half_width')
+        if self.name == 'ego' and hw is not None:
+            cloud, self.points_world = self._black_leader(sim, cloud, hw)
         if sim.cfg['scan'].get('level', False):
             # 실차 launch level_scan과 같다: 라이다 장착 기울기를 되돌린 수평 프레임(livox_level)에서 높이 띠를 자른다
             cloud = cloud @ self.lidar.R_mount.T
@@ -148,8 +158,13 @@ class Car:
         if sim.p.experiment_safety:
             scan_params = dict(scan_params, min_height=-0.20)
         scan = cloud_to_scan(cloud, scan_params)
-        self.scan_ns = SimpleNamespace(**dict(scan, ranges=scan['ranges'].tolist()))
-        self.points = scan_to_points(scan['ranges'].tolist(), scan['angle_min'], scan['angle_increment'],
+        self.scan_ns = SimpleNamespace(**dict(scan, ranges=scan['ranges'].tolist()))     # AEB 입력 (camera_aeb가 아니면 라이다만)
+        ranges, self.cam_lead = scan['ranges'], None
+        if self.cam is not None:
+            ranges, self.cam_lead = self._camera(sim, scan)
+            if sim.p.camera_aeb:
+                self.scan_ns.ranges = ranges.tolist()       # 실차 launch camera_aeb: autonomous_drive가 /scan_fused를 받는다
+        self.points = scan_to_points(ranges.tolist(), scan['angle_min'], scan['angle_increment'],
                                      scan['range_min'], scan['range_max'])
         cor, p = self.corridor, sim.p
         yaw = self.kin.yaw
@@ -168,11 +183,50 @@ class Car:
             if p.guardrail_local_view and not cor.valid:
                 tracking_points = []
         args = (tracking_points, sim.t, self.kin.v, cor.ego_lateral, W, cor.heading)
-        self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args)
-        self.front_track = self.shadow.update(*args)
+        self.track = self.tracker.update_side(*args) if side else self.tracker.update(*args, cam=self.cam_lead)
+        self.front_track = self.shadow.update(*args, cam=self.cam_lead)
         if not (fresh_wall and p.guardrail_local_view) or cor.sector_idx.intersection(self.track.idx):
             update(sim, self.points, self.track.idx, W_fixed=self.W_fixed)
         return W
+
+    def _black_leader(self, sim, cloud, hw):
+        """검은 앞차: 차체 가운데 ±hw 밖을 맞힌 라이다 점은 반사가 없다 (실차 test_01·overtake_02의 좁은 클러스터)."""
+        geom = mujoco.mj_name2id(sim.m, mujoco.mjtObj.mjOBJ_GEOM, 'leader_body')
+        x, y, yaw = sim.leader.kin.pose()
+        w = self.points_world
+        lateral = -(w[:, 0] - x) * math.sin(yaw) + (w[:, 1] - y) * math.cos(yaw)
+        keep = ~((self.lidar.last_geom == geom) & (np.abs(lateral) > hw))
+        return cloud[keep], w[keep]
+
+    def _camera(self, sim, scan):
+        """실차 camera_fusion 노드와 같은 계산: 깊이 → 바닥 보정 → 장애물 거리를 scan에 합침, 시뮬 YOLO 상자 → 앞차."""
+        c, cam, p = sim.cfg['camera'], self.cam, sim.p
+        geom = mujoco.mj_name2id(sim.m, mujoco.mjtObj.mjOBJ_GEOM, 'leader_body')
+        pose = self.kin.pose()
+        opt, u, v = cam_geo.deproject(cam.depth(sim.d, pose, geom, c['leader_dropout']), cam.K, stride=1, scale=1.0)
+        body = cam_geo.to_body(opt)
+        fit = cam_geo.fit_floor(body)
+        if self.cam_calib is None:
+            if fit is None:
+                return scan['ranges'], None
+            self.cam_calib = fit[0]
+        calib = cam_geo.refit(self.cam_calib, fit)
+        lid = sim.cfg['lidar']['mount_xyz']
+        mount = (c['mount_xyz'][0] - lid[0], c['mount_xyz'][1] - lid[1], 0.0)
+        band = dict(min_height=c['min_height'], max_height=c['max_height'], range_min=c['range_min'])
+        cam_r, _ = cam_geo.obstacle_ranges(body, calib, mount, scan['angle_min'], scan['angle_increment'],
+                                           len(scan['ranges']), range_max=c['range_max'], min_points=c['min_points'], **band)
+        lead = None
+        if c['yolo'] and p.camera_lead and sim.true_gap() <= c['yolo_max_range'] \
+                and self.yolo_rng.random() < c['yolo_p_detect']:
+            v_ = sim.cfg['vehicle']
+            box = cam.project_box(pose, np.array([
+                [x, y, z] for x, y in corners(*sim.leader.kin.pose(), sim.cfg) for z in (0.0, v_['height'])]))
+            if box is not None:
+                lead = cam_geo.lead_from_box(body, u, v, calib, mount, box, **band)
+        fused = cam_geo.fused_scan(p, scan['ranges'], scan['angle_min'], scan['angle_increment'],
+                                   cam_r, scan['angle_min'], scan['angle_increment'], lead)
+        return (scan['ranges'] if fused is None else fused), lead
 
     def update_corridor(self, sim, points, exclude_idx=(), W_fixed=None):
         """실차 runner와 같다: 벽 갱신 직후마다 자차 위치 필터(pose_filter)를 적용한다."""
@@ -469,7 +523,7 @@ class Sim:
             success=success, final_state=fsm.state, cause=cause, collision=self.collision or '',
             decided=fsm.decided or '', T_id=None if fsm.t_decided is None else round(fsm.t_decided - fsm.t0, 2),
             pass_entered=any(r['state'] == 'PASS' for r in log),
-            T_pass=round(getattr(self, '_t_done', float('nan')) - fsm.t0, 2) if success else None,
+            T_pass=round(getattr(self, '_t_done', float('nan')) - fsm.t0, 2) if success and fsm.t0 is not None else None,
             # 안전 판정 (기획안 변경): 급정지 전 h_min ≥ 0, 급정지 후 정지 간격 ≥ m
             h_min=rmin(r['h'] for r in post if r['state'] in ('APPROACH', 'PROBE', 'FOLLOW') and not r['brake_fired']),
             stop_gap=rmin(r['gap'] for r in post if r['brake_fired']),

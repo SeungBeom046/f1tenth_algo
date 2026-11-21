@@ -169,7 +169,7 @@ class VehicleTracker:
                           and abs((c.y0 + c.y1 - previous.y0 - previous.y1) / 2) <= 0.10)
             self._candidate_count = self._candidate_count + 1 if consistent else 1
             self._candidate, self._candidate_t = c, t
-            if self._candidate_count < 3 and not hit:     # 카메라가 차라고 하면 3 scan 확인을 기다리지 않는다
+            if self._candidate_count < 3 and not (hit and p.cam_instant_confirm):     # 카메라가 차라고 하면 3 scan 확인을 기다리지 않는다
                 self.pending_d = d
                 self.status = 'confirming'
                 return Track(False, None, None, self._v_b, (), None)

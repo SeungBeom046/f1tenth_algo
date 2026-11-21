@@ -75,6 +75,15 @@ def fit_floor(body, rng=None, iters=80, tol=0.015, max_points=3000, max_tilt_deg
     return calib, len(inl) / float(len(pts))
 
 
+def refit(calib, fit, max_deg=3.0, max_dh=0.03):
+    """프레임마다 맞춘 바닥(fit_floor 결과)이 보정값 근처면 그 값 (가감속 때 차체 기울기), 아니면 보정값
+    (앞차가 화면을 가려 바닥 대신 차 면을 맞춘 경우 등)."""
+    if fit is not None and abs(fit[0].pitch - calib.pitch) < math.radians(max_deg) \
+            and abs(fit[0].height - calib.height) < max_dh:
+        return fit[0]
+    return calib
+
+
 def to_lidar(body, calib, mount):
     """body 점 → (X, Y, 바닥 위 높이). mount = (x, y, yaw): 라이다 수평 프레임에서 카메라 위치 [m]·yaw [rad]."""
     q = body @ rotation(calib.pitch, calib.roll).T
@@ -83,8 +92,12 @@ def to_lidar(body, calib, mount):
 
 
 def obstacle_ranges(body, calib, mount, angle_min, angle_increment, n_bins,
-                    min_height=0.05, max_height=0.5, range_min=0.3, range_max=3.0, min_points=3):
-    """장애물 점 → /scan과 같은 격자의 거리 배열 (없는 bin = inf). 반환: (ranges, 장애물 점 수)."""
+                    min_height=0.05, max_height=0.5, range_min=0.3, range_max=3.0, min_points=3, quantile=0.25):
+    """장애물 점 → /scan과 같은 격자의 거리 배열 (없는 bin = inf). 반환: (ranges, 장애물 점 수).
+
+    bin 거리는 최솟값이 아니라 quantile 분위다: bin마다 높이 방향 점이 수십 개라 최솟값은 깊이 잡음 중 가장 가까운
+    표본을 골라 벽을 약 2 cm 안쪽으로 당겼다 (시뮬 잡음 0.005·z²). 그 2 cm로 벽 선(허용 3 cm)에서 빠진 레일 점을
+    추월 중 측면 추적이 앞차로 잡아 추월을 중단했다 (2026-11-21)."""
     X, Y, H = to_lidar(body, calib, mount)
     r = np.hypot(X, Y)
     a = np.arctan2(Y, X)
@@ -93,8 +106,11 @@ def obstacle_ranges(body, calib, mount, angle_min, angle_increment, n_bins,
     keep = idx < n_bins
     idx, rs = idx[keep], r[sel][keep]
     ranges = np.full(n_bins, np.inf)
-    np.minimum.at(ranges, idx, rs)
-    ranges[np.bincount(idx, minlength=n_bins) < min_points] = np.inf
+    order = np.lexsort((rs, idx))
+    idx, rs = idx[order], rs[order]
+    bins, start, count = np.unique(idx, return_index=True, return_counts=True)
+    ok = count >= min_points
+    ranges[bins[ok]] = rs[start[ok] + (quantile * (count[ok] - 1)).astype(int)]
     return ranges, int(len(idx))
 
 
@@ -107,6 +123,29 @@ def fuse_ranges(lidar, l_min, l_inc, cam, c_min, c_inc):
     ok = (idx >= 0) & (idx < len(out))
     np.minimum.at(out, idx[ok], cam[k[ok]])
     return out
+
+
+def lead_span(cam, c_min, c_inc, lead, margin=0.05, depth=0.6):
+    """카메라 거리 중 YOLO 앞차 방위 범위(±margin)·거리 [r − 0.1, r + depth] 안 bin만 남긴다 (나머지 inf).
+    camera_lead만 켰을 때 앞차 뒷면 전체(검은 차체 아랫부분)만 scan에 넣는다: 레일 근처 카메라 점이 추월 중
+    앞차 클러스터와 이어지지 않게 (시뮬 2026-11-21)."""
+    cam = np.asarray(cam, dtype=np.float64)
+    a = c_min + (np.arange(len(cam)) + 0.5) * c_inc
+    keep = ((a >= lead['a_lo'] - margin) & (a <= lead['a_hi'] + margin)
+            & (cam >= lead['r'] - 0.1) & (cam <= lead['r'] + depth))
+    return np.where(keep, cam, np.inf)
+
+
+def fused_scan(p, lidar, l_min, l_inc, cam, c_min, c_inc, lead):
+    """실차 exp_planner·시뮬·bag 재생 공통: camera_fusion이면 카메라 전부, 아니고 camera_lead와 앞차가 있으면
+    앞차 범위만 합친다. 합칠 것이 없으면 None."""
+    if cam is None:
+        return None
+    if p.camera_fusion:
+        return fuse_ranges(lidar, l_min, l_inc, cam, c_min, c_inc)
+    if p.camera_lead and lead is not None:
+        return fuse_ranges(lidar, l_min, l_inc, lead_span(cam, c_min, c_inc, lead), c_min, c_inc)
+    return None
 
 
 def lead_from_box(body, u, v, calib, mount, box, min_height=0.05, max_height=0.5, range_min=0.3,

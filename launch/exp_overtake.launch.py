@@ -10,7 +10,7 @@ gap follow(lidar_reactive_drive)와 카메라는 띄우지 않는다. 실행하�
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -58,10 +58,13 @@ def _camera_nodes(context):
     from launch.actions import IncludeLaunchDescription
     from launch.launch_description_sources import PythonLaunchDescriptionSource
     ns = LaunchConfiguration('cam_ns').perform(context).rstrip('/')
-    nodes = [IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py')),
-        launch_arguments={'align_depth.enable': 'true', 'align_depth': 'true', 'pointcloud.enable': 'false'}.items(),
-    )]
+    nodes = []
+    if LaunchConfiguration('camera_driver').perform(context).lower() in ('true', '1', 'yes'):
+        # 카메라 터미널에서 드라이버를 따로 띄웠으면 camera_driver:=false (같은 카메라를 두 번 열지 않게)
+        nodes.append(IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('realsense2_camera'), 'launch', 'rs_launch.py')),
+            launch_arguments={'align_depth.enable': 'true', 'align_depth': 'true', 'pointcloud.enable': 'false'}.items(),
+        ))
     nodes.append(Node(
         package='my_algo', executable='camera_fusion', output='screen',
         parameters=[{
@@ -74,9 +77,18 @@ def _camera_nodes(context):
             'yolo': LaunchConfiguration('camera_lead').perform(context).lower() in ('true', '1', 'yes'),
             'yolo_model': LaunchConfiguration('yolo_model').perform(context),
             'yolo_classes': LaunchConfiguration('yolo_classes').perform(context),
+            'show_window': LaunchConfiguration('cam_view').perform(context).lower() in ('true', '1', 'yes'),
+            'publish_image': LaunchConfiguration('cam_image').perform(context).lower() in ('true', '1', 'yes'),
         }],
     ))
     return nodes
+
+
+def _with_camera(name):
+    """camera:=true이고 name:=true일 때만 True (카메라를 안 띄우면 카메라 기능도 끈다)."""
+    on = "'.lower() in ('true', '1', 'yes')"
+    return ParameterValue(PythonExpression(["'", LaunchConfiguration('camera'), on, " and '", LaunchConfiguration(name), on]),
+                          value_type=bool)
 
 
 def generate_launch_description():
@@ -116,12 +128,22 @@ def generate_launch_description():
         DeclareLaunchArgument('use_metrics_logger', default_value='true', description='종료 때 기본 주행과 같은 주행 요약 (autonomous_metrics_logger)'),
         DeclareLaunchArgument('stationary_pass', default_value='false', description='method a 전용 정지차 우회 시험, 앞차 간격 1.5 m 이상'),
         # (ego) D455 카메라 융합. 카메라가 안 뜨거나 끊겨도 exp_planner는 라이다만으로 간다 (터미널 '카메라: 결과 없음')
-        DeclareLaunchArgument('camera', default_value='false', description='(ego) D455 드라이버 + camera_fusion, 깊이 장애물을 /scan에 합친다'),
-        DeclareLaunchArgument('camera_lead', default_value='false', description='(ego, camera:=true) YOLO 차 상자로 앞차 후보 확인'),
+        DeclareLaunchArgument('camera', default_value='false', description='(ego) D455 드라이버 + camera_fusion 노드를 띄운다'),
+        DeclareLaunchArgument('camera_lead', default_value='false',
+                              description='(ego, camera:=true) YOLO 차 상자로 앞차 확인, 상자 안 깊이만 /scan에 합친다'),
+        DeclareLaunchArgument('camera_full', default_value='false',
+                              description='(ego, camera:=true) 깊이 장애물 전부를 /scan에 합친다 (시뮬에서 레일 점이 앞차와 이어져 나빴다, 비교용)'),
+        DeclareLaunchArgument('camera_driver', default_value='true',
+                              description='(ego, camera:=true) RealSense 드라이버도 띄운다. 카메라 터미널에서 따로 띄웠으면 false'),
+        DeclareLaunchArgument('camera_aeb', default_value='false', description='(ego, camera:=true) AEB도 카메라를 합친 scan(/scan_fused)을 쓴다'),
+        DeclareLaunchArgument('cam_view', default_value='false',
+                              description='(ego, camera:=true) 카메라 화면 창: 장애물 깊이 점(주황), YOLO 상자·거리, 바닥 보정값'),
+        DeclareLaunchArgument('cam_image', default_value='false',
+                              description='(ego, camera:=true) 같은 화면을 /camera/fusion/image로 낸다 (다른 PC에서 rqt_image_view)'),
         DeclareLaunchArgument('cam_ns', default_value='/camera', description='RealSense 토픽 이름공간 (ros2 topic list로 확인)'),
-        DeclareLaunchArgument('cam_x', default_value='0.23', description='라이다 → 카메라 전방 거리 [m] (앞바퀴 축 3 cm 앞, 실측 확인)'),
+        DeclareLaunchArgument('cam_x', default_value='0.27', description='라이다 → 카메라 전방 거리 [m] (앞바퀴 축 7 cm 앞, 실측 2026-11-21)'),
         DeclareLaunchArgument('cam_pitch_deg', default_value='17.5', description='카메라 숙임 기본값 [°] (시작 때 바닥으로 다시 잰다)'),
-        DeclareLaunchArgument('cam_height', default_value='0.17', description='바닥 → 카메라 기본값 [m] (시작 때 바닥으로 다시 잰다)'),
+        DeclareLaunchArgument('cam_height', default_value='0.16', description='바닥 → 카메라 [m] (실측 2026-11-21, 시작 때 바닥으로 다시 잰다)'),
         DeclareLaunchArgument('yolo_model', default_value='yolov8n.pt', description='YOLO 가중치 (직접 학습한 F1TENTH 모델 경로로 바꿀 수 있다)'),
         DeclareLaunchArgument('yolo_classes', default_value='car,truck', description="차로 볼 클래스 이름 (직접 학습 모델이면 그 이름, '*' = 전부)"),
         OpaqueFunction(function=_scan_nodes),
@@ -138,13 +160,20 @@ def generate_launch_description():
                 'stationary_pass': arg('stationary_pass', bool),
                 'imu_yaw_sign': arg('imu_yaw_sign', float),
                 'imu_calib_s': arg('imu_calib_s', float), 'imu_print_s': arg('imu_print_s', float),
-                'camera_fusion': arg('camera', bool), 'camera_lead': arg('camera_lead', bool),
+                'camera_fusion': _with_camera('camera_full'), 'camera_lead': _with_camera('camera_lead'),
+                'camera_aeb': _with_camera('camera_aeb'),
             }],
         ),
         Node(
             package='my_algo',
             executable='autonomous_drive',
             output='screen',
+            # camera_aeb: AEB도 exp_planner가 카메라를 합친 /scan_fused를 쓴다 (검은 앞차를 일부만 보고 부분 관측 AEB가 걸리던 문제)
+            # /scan_fused는 ego exp_planner만 낸다: 다른 역할이면 /scan 그대로 (AEB 입력이 끊기지 않게)
+            remappings=[('/scan', PythonExpression(["'/scan_fused' if '", LaunchConfiguration('camera_aeb'),
+                                                    "'.lower() in ('true', '1', 'yes') and '", LaunchConfiguration('camera'),
+                                                    "'.lower() in ('true', '1', 'yes') and '", LaunchConfiguration('role'),
+                                                    "' == 'ego' else '/scan'"]))],
             parameters=[{
                 'drive_source': 'lidar',
                 'start_autonomous': True,

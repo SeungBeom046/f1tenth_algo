@@ -195,4 +195,12 @@
 | sim/aur_overtake/scenario.yaml | 60 | `rays_per_frame` | 11520 | 개 | 광선 수 = 방위 1440 × 고도 8줄 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 62 | `grid_azimuth` | 1440 | 개 | 방위 개수 | 임시 | - | - |
 | sim/aur_overtake/scenario.yaml | 67 | `range_noise_std` | 0.0 | m | 거리 노이즈 | 임시 (0 = 무잡음 기준선) | - | - |
-| sim/aur_overtake/scenario.yaml | 74 | `level` | true | - | 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | 임시 (2026-11-17 실측 반영) | - | - |
+| sim/aur_overtake/scenario.yaml | 70 | `leader_visible_half_width` | null | m | ego 라이다가 앞차 차체에서 맞히는 폭의 절반 (검은 차체는 가운데 비검정 부품만 반사), null = 차체 전부 | 임시 (실차 test_01: 2.1 m에서 폭 0.02~0.11 m → 0.05) | - | - |
+| sim/aur_overtake/scenario.yaml | 72 | `enabled` | false | - | 카메라 융합 시뮬 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 73 | `mount_xyz` | [0.40, 0.0, 0.16] | m | 뒤축 → 카메라 (앞바퀴 축 0.33 + 7 cm, 바닥에서 0.16 m) | 측정 (2026-11-21 실측) | - | - |
+| sim/aur_overtake/scenario.yaml | 74 | `pitch_deg` | 17.5 | deg | 숙임 (실차 15~20°) | 측정 (2026-11-21 대략) | - | - |
+| sim/aur_overtake/scenario.yaml | 80 | `depth_noise` | 0.005 | 1/m | 깊이 잡음 σ = 이 값 × z² (D455 사양 2 m에서 2% 이하) | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 81 | `leader_dropout` | 0.2 | - | 검은 앞차 화소의 깊이 실패 확률 | 임시 (미측정) | - | - |
+| sim/aur_overtake/scenario.yaml | 88 | `yolo_p_detect` | 0.8 | - | 프레임당 검출 확률 | 임시 (COCO 모델로 1/10 차 검출률 미측정) | - | - |
+| sim/aur_overtake/scenario.yaml | 89 | `yolo_max_range` | 4.0 | m | 이 거리 넘으면 검출 안 함 | 임시 | - | - |
+| sim/aur_overtake/scenario.yaml | 94 | `level` | true | - | 라이다 기울기를 되돌린 수평 프레임에서 scan을 만든다 (launch level_scan과 같게) | 임시 (2026-11-17 실측 반영) | - | - |

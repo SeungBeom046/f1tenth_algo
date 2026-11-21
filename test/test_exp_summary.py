@@ -8,7 +8,7 @@ import time
 from dataclasses import replace
 from types import SimpleNamespace
 
-from my_algo.aur.camera import fuse_ranges
+from my_algo.aur.camera import fused_scan
 from my_algo.aur.ego_runner import EgoRunner
 from my_algo.aur.params import AurParams, EXPERIMENT_OVERRIDES
 
@@ -20,7 +20,7 @@ def _load():
     keep = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))
             and n.name in ('perception_tags', 'RunStats', 'camera_inputs')]
     ns = {'collections': collections, 'json': json, 'math': math, 'time': time,
-          'SimpleNamespace': SimpleNamespace, 'fuse_ranges': fuse_ranges}
+          'SimpleNamespace': SimpleNamespace, 'fused_scan': fused_scan}
     exec(compile(ast.Module(body=keep, type_ignores=[]), SRC, 'exec'), ns)
     return ns['perception_tags'], ns['RunStats'], ns['camera_inputs']
 
@@ -58,3 +58,11 @@ def test_camera_inputs_fuse_only_fresh_results():
     scan, got, tag = camera_inputs(on, 2.0, msg, (0.9, cam), (0.95, lead))     # 1 s 지남: 라이다만
     assert scan is msg and got is None and tag == 'cam_none'
     assert camera_inputs(AurParams(), 1.0, msg, (0.9, cam), (0.95, lead)) == (msg, None, 'cam_off')
+    # camera_lead만: YOLO 앞차 범위(방위 −0.1~0.1, 거리 1.1~1.8 m) 안 bin만 합친다
+    only = replace(AurParams(), camera_lead=True)
+    near = SimpleNamespace(ranges=[1.0, 1.2, 1.9], angle_min=-0.15, angle_increment=0.1)
+    msg3 = SimpleNamespace(ranges=[2.0, 2.0, 2.0], angle_min=-0.15, angle_increment=0.1, range_min=0.05, range_max=20.0)
+    scan, _, _ = camera_inputs(only, 1.0, msg3, (0.9, near), (0.95, lead))
+    assert list(scan.ranges) == [2.0, 1.2, 2.0]     # 1.0은 r − 0.1 = 1.1보다 가깝고 1.9는 r + 0.6 = 1.8보다 멀다
+    scan, _, _ = camera_inputs(only, 1.0, msg3, (0.9, near), None)
+    assert scan is msg3                             # 앞차가 없으면 카메라 거리를 안 합친다

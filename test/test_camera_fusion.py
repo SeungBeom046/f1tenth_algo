@@ -1,7 +1,7 @@
 """D455 깊이 카메라 융합 (my_algo/aur/camera.py)과 YOLO 앞차 확인 (tracker camera_lead).
 
-합성 깊이 영상: 라이다 수평 프레임 원점, 바닥 z = 0, 카메라는 라이다 앞 0.23 m·높이 0.17 m에서 17.5° 숙임
-(실차 2026-11-21: 앞바퀴 축 3 cm 앞, 라이다보다 7 cm 낮음, 15~20° 숙임). D455 깊이 잡음 σ = 0.005·z² [m].
+합성 깊이 영상: 라이다 수평 프레임 원점, 바닥 z = 0, 카메라는 라이다 앞 0.27 m·높이 0.16 m에서 17.5° 숙임
+(실측 2026-11-21: 앞바퀴 축 7 cm 앞, 바닥에서 0.16 m, 15~20° 숙임). D455 깊이 잡음 σ = 0.005·z² [m].
 """
 import math
 from dataclasses import replace
@@ -13,8 +13,8 @@ from my_algo.aur.params import AurParams, EXPERIMENT_OVERRIDES
 from my_algo.aur.tracker import Pt, VehicleTracker
 
 K = (380.0, 380.0, 320.0, 240.0)            # 640×480, 수평 시야 약 80°
-MOUNT = (0.23, 0.0, 0.0)
-TRUE = camera.Calib(math.radians(17.5), math.radians(1.0), 0.17)
+MOUNT = (0.27, 0.0, 0.0)
+TRUE = camera.Calib(math.radians(17.5), math.radians(1.0), 0.16)
 RAIL_Y, RAIL_H = 0.5, 0.30                  # 통로 폭 1.0 m, 덕트 높이
 CAR = (1.5, 2.0, -0.135, 0.135, 0.02, 0.25)  # 앞차 상자 x0 x1 y0 y1 z0 z1 (라이다 프레임)
 GRID = (-math.pi, 0.00436, int(math.ceil(2 * math.pi / 0.00436)))

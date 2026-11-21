@@ -26,7 +26,7 @@ from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import Imu, LaserScan
 from std_msgs.msg import Bool, String
 
-from my_algo.aur.camera import fuse_ranges
+from my_algo.aur.camera import fused_scan
 from my_algo.aur.corridor import Corridor
 from my_algo.aur.ego_runner import EgoRunner
 from my_algo.aur.leader_runner import LeaderRunner
@@ -75,6 +75,7 @@ class ExpPlanner(Node):
         # (ego) D455 카메라 융합 (my_algo/camera_fusion.py가 낸 결과). 카메라가 없거나 끊기면 라이다만 쓴다
         self.declare_parameter('camera_fusion', False)  # /camera/obstacle_scan을 /scan에 bin마다 최솟값으로 합친다
         self.declare_parameter('camera_lead', False)    # /camera/lead(YOLO 차)로 앞차 후보 확인
+        self.declare_parameter('camera_aeb', False)     # 합친 scan을 /scan_fused로 내 AEB가 쓰게 한다 (launch가 AEB 입력을 바꾼다)
         self.declare_parameter('params_file', os.path.join(
             get_package_share_directory('my_algo'), 'config', 'exp_common.yaml'))
 
@@ -88,6 +89,7 @@ class ExpPlanner(Node):
         over['stationary_pass'] = bool(self.get_parameter('stationary_pass').value)
         over['camera_fusion'] = bool(self.get_parameter('camera_fusion').value)
         over['camera_lead'] = bool(self.get_parameter('camera_lead').value)
+        over['camera_aeb'] = bool(self.get_parameter('camera_aeb').value)
         if W > 0:
             over['W_leader' if self.role == 'leader' else 'W'] = W
         if t_d > 0:
@@ -137,6 +139,9 @@ class ExpPlanner(Node):
         if self.role == 'ego' and (self.p.camera_fusion or self.p.camera_lead):
             self.create_subscription(LaserScan, '/camera/obstacle_scan', self.cam_scan_callback, qos)
             self.create_subscription(String, '/camera/lead', self.cam_lead_callback, 10)
+        self.fused_pub = None
+        if self.role == 'ego' and self.p.camera_aeb:
+            self.fused_pub = self.create_publisher(LaserScan, '/scan_fused', qos)
         self.cmd_pub = self.create_publisher(String, '/reactive/lidar_command', 10)
         self.state_pub = self.create_publisher(String, '/exp/state', 10)
         self.create_subscription(Bool, '/aeb/active', self.aeb_callback, 10)
@@ -306,6 +311,13 @@ class ExpPlanner(Node):
 
     def ego_step(self, t, msg, v):
         scan, lead, cam = camera_inputs(self.p, t, msg, self.cam_scan, self.cam_lead)
+        if self.fused_pub is not None:
+            # camera_aeb: autonomous_drive가 /scan 대신 이것을 받는다 (카메라가 없으면 라이다 scan 그대로)
+            out = msg if scan is msg else LaserScan(header=msg.header, angle_min=msg.angle_min, angle_max=msg.angle_max,
+                                                    angle_increment=msg.angle_increment, time_increment=msg.time_increment,
+                                                    scan_time=msg.scan_time, range_min=msg.range_min, range_max=msg.range_max,
+                                                    ranges=[float(r) for r in scan.ranges], intensities=msg.intensities)
+            self.fused_pub.publish(out)
         self.v_cmd, steer, y_ref, st, reason = self.runner.step(t, scan, v, self.yaw_rate(t), cam_lead=lead)
         fsm, trk, cor = self.runner.fsm, self.runner.track, self.runner.corridor
         cam_lead = self.runner.tracker.cam_confirmed
@@ -341,18 +353,20 @@ class ExpPlanner(Node):
 
 def camera_inputs(p, t, msg, cam_scan, cam_lead):
     """(합친 scan 또는 msg, YOLO 앞차 또는 None, 카메라 태그 cam_ok | cam_none | cam_off).
-    cam_scan·cam_lead = (받은 시각, 메시지) 또는 None. cam_stale_s보다 오래된 카메라 결과는 안 쓴다."""
+    cam_scan·cam_lead = (받은 시각, 메시지) 또는 None. cam_stale_s보다 오래된 카메라 결과는 안 쓴다.
+    camera_fusion이면 카메라 거리 전부, camera_lead만이면 YOLO 앞차 범위만 합친다 (camera.fused_scan)."""
     if not (p.camera_fusion or p.camera_lead):
         return msg, None, 'cam_off'
     fresh = cam_scan is not None and t - cam_scan[0] <= p.cam_stale_s
-    scan = msg
-    if p.camera_fusion and fresh:
-        c = cam_scan[1]
-        scan = SimpleNamespace(ranges=fuse_ranges(msg.ranges, msg.angle_min, msg.angle_increment,
-                                                  c.ranges, c.angle_min, c.angle_increment),
-                               angle_min=msg.angle_min, angle_increment=msg.angle_increment,
-                               range_min=msg.range_min, range_max=msg.range_max)
     lead = cam_lead[1] if p.camera_lead and cam_lead is not None and t - cam_lead[0] <= p.cam_stale_s else None
+    scan = msg
+    if fresh:
+        c = cam_scan[1]
+        ranges = fused_scan(p, msg.ranges, msg.angle_min, msg.angle_increment,
+                            c.ranges, c.angle_min, c.angle_increment, lead)
+        if ranges is not None:
+            scan = SimpleNamespace(ranges=ranges, angle_min=msg.angle_min, angle_increment=msg.angle_increment,
+                                   range_min=msg.range_min, range_max=msg.range_max)
     return scan, lead, 'cam_ok' if fresh else 'cam_none'
 
 

@@ -72,11 +72,70 @@ class Lidar:
                            self.exclude, self.geomid, self.dist, None, self.n, float(self.c['range_max']))
         dist = self.dist.copy()
         hit = (dist >= self.c['range_min']) & (dist <= self.c['range_max']) & (self.geomid >= 0)
+        self.last_geom = self.geomid[hit].copy()     # 맞힌 geom (검은 앞차 라이다 반사 모사에 쓴다)
         if self.c['range_noise_std'] > 0:
             dist[hit] += self.rng.normal(0.0, self.c['range_noise_std'], int(hit.sum()))
         pts_lidar = d_lidar[hit] * dist[hit, None]
         pts_world = origin + pts_lidar @ R.T
         return pts_lidar, pts_world, origin
+
+
+class DepthCamera:
+    """D455 깊이 카메라 근사: 화소 격자 광선 → 깊이 영상(optical z) [m], 0 = 깊이 없음.
+
+    실차 노드는 640×480을 stride 4로 쓰므로 시뮬은 처음부터 160×120 (같은 화소 수). 잡음 σ = depth_noise·z².
+    장착 mount_xyz = 뒤축 기준, pitch_deg + = 아래를 봄. 지연은 모사하지 않는다 (scan과 같은 시각).
+    """
+
+    def __init__(self, model, cam_cfg, exclude_body, seed=0):
+        from my_algo.aur import camera
+        self.m, self.c, self.exclude = model, cam_cfg, exclude_body
+        W, H = int(cam_cfg['width']), int(cam_cfg['height'])
+        fx = 0.5 * W / math.tan(math.radians(cam_cfg['hfov_deg']) / 2)
+        fy = 0.5 * H / math.tan(math.radians(cam_cfg['vfov_deg']) / 2)
+        self.K = (fx, fy, 0.5 * W - 0.5, 0.5 * H - 0.5)
+        self.shape = (H, W)
+        v, u = np.mgrid[0:H, 0:W]
+        d_opt = np.stack([(u - self.K[2]) / fx, (v - self.K[3]) / fy, np.ones((H, W))], -1).reshape(-1, 3)
+        self.norm = np.linalg.norm(d_opt, axis=1)
+        self.R = camera.rotation(math.radians(cam_cfg['pitch_deg']), 0.0)
+        self.d_level = (camera.to_body(d_opt) / self.norm[:, None]) @ self.R.T
+        self.offset = np.array(cam_cfg['mount_xyz'], float)
+        self.n = len(self.d_level)
+        self.geomid = np.zeros(self.n, np.int32)
+        self.dist = np.zeros(self.n)
+        self.rng = np.random.default_rng(seed)
+
+    def origin(self, base_pose):
+        x, y, yaw = base_pose
+        return np.array([x, y, 0.0]) + rot_rpy(0.0, 0.0, yaw) @ self.offset
+
+    def depth(self, data, base_pose, drop_geom=-1, drop_p=0.0):
+        """깊이 영상 (H, W). drop_geom을 맞힌 화소는 drop_p 확률로 깊이 없음 (검은 차체에서 스테레오 실패)."""
+        R_yaw = rot_rpy(0.0, 0.0, base_pose[2])
+        d_world = self.d_level @ R_yaw.T
+        mujoco.mj_multiRay(self.m, data, self.origin(base_pose), np.ascontiguousarray(d_world).ravel(), RAY_GROUPS, 1,
+                           self.exclude, self.geomid, self.dist, None, self.n, float(self.c['max_depth']))
+        z = self.dist / self.norm
+        ok = (self.geomid >= 0) & (self.dist > 0) & (z <= self.c['max_depth'])
+        if drop_p > 0:
+            ok &= ~((self.geomid == drop_geom) & (self.rng.random(self.n) < drop_p))
+        z = np.where(ok, z, 0.0)
+        if self.c['depth_noise'] > 0:
+            z = np.where(ok, z + self.rng.normal(0.0, 1.0, self.n) * self.c['depth_noise'] * z ** 2, 0.0)
+        return z.reshape(self.shape)
+
+    def project_box(self, base_pose, corners_world):
+        """월드 꼭짓점들 → 화소 상자 (u1, v1, u2, v2), 카메라 앞이 아니거나 화면 밖이면 None (시뮬 YOLO 상자)."""
+        q = (corners_world - self.origin(base_pose)) @ rot_rpy(0.0, 0.0, base_pose[2])   # level
+        q = q @ self.R                                                                      # body
+        if (q[:, 0] < 0.1).any():
+            return None
+        u = self.K[2] - q[:, 1] / q[:, 0] * self.K[0]
+        v = self.K[3] - q[:, 2] / q[:, 0] * self.K[1]
+        H, W = self.shape
+        u1, u2, v1, v2 = max(u.min(), 0), min(u.max(), W - 1), max(v.min(), 0), min(v.max(), H - 1)
+        return (u1, v1, u2, v2) if u2 - u1 > 2 and v2 - v1 > 2 else None
 
 
 def cloud_to_scan(xyz, p2l):

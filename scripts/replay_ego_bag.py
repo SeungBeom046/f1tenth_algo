@@ -17,6 +17,7 @@ import sys
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from my_algo.aur.camera import fused_scan        # noqa: E402
 from my_algo.aur.ego_runner import EgoRunner     # noqa: E402
 from my_algo.aur.params import load_params       # noqa: E402
 
@@ -74,10 +75,19 @@ def string(b):
     return _R(b).string()
 
 
-def read(path, topic):
+def read(path, topic, optional=False):
     db = sqlite3.connect('file:%s?mode=ro' % path, uri=True)
-    tid = dict(db.execute('select name, id from topics').fetchall())[topic]
+    tids = dict(db.execute('select name, id from topics').fetchall())
+    if optional and topic not in tids:
+        return []
+    tid = tids[topic]
     return [(ts * 1e-9, data) for ts, data in db.execute('select timestamp, data from messages where topic_id=? order by timestamp', (tid,))]
+
+
+def latest(items, t, stale):
+    """(시각, 값) 목록에서 t 이전 최신 값, stale보다 오래됐으면 None."""
+    k = bisect.bisect_right([x for x, _ in items], t) - 1
+    return items[k][1] if k >= 0 and t - items[k][0] <= stale else None
 
 
 def value(text):
@@ -105,6 +115,12 @@ def main():
     scans = [(t, laserscan(b)) for t, b in read(path, '/scan')]
     imu = [(t, imu_z(b)[2]) for t, b in read(path, '/livox/imu')]
     states = [json.loads(string(b)) for _, b in read(path, '/exp/state')]
+    # 카메라 융합 기록 (camera:=true): 실차 exp_planner와 같이 cam_stale_s 안의 최신 결과만 쓴다
+    cam_scans = [(t, laserscan(b)) for t, b in read(path, '/camera/obstacle_scan', optional=True)]
+    cam_leads = [(t, json.loads(string(b))) for t, b in read(path, '/camera/lead', optional=True)]
+    if cam_scans or cam_leads:
+        print('카메라 기록: obstacle_scan %d개, lead %d개 (camera_fusion=%s, camera_lead=%s)' % (
+            len(cam_scans), len(cam_leads), p.camera_fusion, p.camera_lead))
     trials = [[]]
     for s in states:
         if trials[-1] and s['t'] - trials[-1][-1]['t'] > 2.0:
@@ -127,7 +143,14 @@ def main():
         log = states[k]
         lo, hi = bisect.bisect_left(it, prev_t if prev_t else ts - 0.1), bisect.bisect_right(it, ts)
         zs = [z for _, z in imu[lo:hi]]
-        _, _, _, state, reason = runner.step(log['t'], scan, log['v'], sum(zs) / len(zs) - a.gyro_bias if zs else None)
+        cam_s, lead = latest(cam_scans, ts, p.cam_stale_s), latest(cam_leads, ts, p.cam_stale_s)
+        lead = lead if p.camera_lead else None
+        fused = None if cam_s is None else fused_scan(p, scan.ranges, scan.angle_min, scan.angle_increment,
+                                                      cam_s.ranges, cam_s.angle_min, cam_s.angle_increment, lead)
+        if fused is not None:
+            scan = SimpleNamespace(**dict(vars(scan), ranges=fused))
+        _, _, _, state, reason = runner.step(log['t'], scan, log['v'], sum(zs) / len(zs) - a.gyro_bias if zs else None,
+                                             cam_lead=lead)
         prev_t = ts
         n += 1
         same += state == log.get('state') and reason == log.get('reason')
