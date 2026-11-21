@@ -125,7 +125,7 @@ def generate_launch_description():
         DeclareLaunchArgument('imu_calib_s', default_value='1.0',
                               description='> 0이면 실행 직후 이 시간 정지한 채 자이로 바이어스를 잰다 [s] (그동안 출발 안 함)'),
         DeclareLaunchArgument('imu_print_s', default_value='1.0', description='> 0이면 이 주기로 IMU yaw rate·헤딩 출력 [s]'),
-        DeclareLaunchArgument('start_kick_erpm', default_value='0.0',
+        DeclareLaunchArgument('start_kick_erpm', default_value='5500.0',
                               description='정지에서 출발할 때 잠깐 주는 최소 ERPM, 0 = 끔 (최저 속도 4000 ERPM·조향 최대 출발에서 모터가 못 돔)'),
         DeclareLaunchArgument('start_kick_s', default_value='0.5', description='출발 보조 시간 [s] (서 있으면 이만큼 쉬고 다시)'),
         DeclareLaunchArgument('use_metrics_logger', default_value='true', description='종료 때 기본 주행과 같은 주행 요약 (autonomous_metrics_logger)'),
