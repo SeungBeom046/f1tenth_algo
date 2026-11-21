@@ -68,7 +68,12 @@ class CameraFusion(Node):
         dp('yaw_deg', 0.0)
         dp('pitch_deg', 17.5)       # 바닥 보정 실패 때만 쓰는 값 (+ = 아래를 봄)
         dp('height', 0.16)          # 바닥 → 카메라 [m], 바닥 보정 실패 때만
-        dp('calib_s', 1.0)
+        dp('calib_s', 1.0)          # 최소 보정 시간 [s]
+        dp('calib_frames', 10)      # 받아들인 바닥 맞춤이 이만큼 모이면 끝 (calib_s 이후)
+        dp('calib_timeout_s', 5.0)  # 이때까지 못 모으면 모은 것으로, 하나도 없으면 기본값으로
+        dp('calib_tol_deg', 8.0)    # 기본 숙임(pitch_deg)에서 이보다 다른 바닥 맞춤은 버린다
+        dp('calib_tol_h', 0.04)     # 기본 높이(height, 실측)에서 이보다 다른 바닥 맞춤은 버린다 [m]
+        dp('image_reliable', True)  # 영상 구독 reliable (큰 영상이 best effort로 빠지던 문제). 3 s 동안 안 오면 best effort로 바꾼다
         dp('floor_refit', True)
         dp('stride', 4)
         dp('min_height', 0.05)      # 바닥 위 이 높이부터 장애물 [m] (깊이 잡음 σ ≈ 0.005·z²)
@@ -99,6 +104,7 @@ class CameraFusion(Node):
         self.K = None
         self.calib = None
         self.calib_fits = []
+        self.calib_rejected = 0
         self.t_calib0 = None
         self.rng = np.random.default_rng(0)
         self.lock = threading.Lock()
@@ -114,12 +120,14 @@ class CameraFusion(Node):
         self.frame = None           # 그린 최신 화면 (메인 스레드 창이 가져간다)
         self.last_lead = None
 
-        img_qos = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT, history=QoSHistoryPolicy.KEEP_LAST, depth=1)
-        depth_group, color_group = MutuallyExclusiveCallbackGroup(), MutuallyExclusiveCallbackGroup()
-        self.create_subscription(CameraInfo, g('info_topic').value, self.info_cb, img_qos, callback_group=depth_group)
-        self.create_subscription(Image, g('depth_topic').value, self.depth_cb, img_qos, callback_group=depth_group)
-        if self.model is not None or self.view:
-            self.create_subscription(Image, g('color_topic').value, self.color_cb, img_qos, callback_group=color_group)
+        # 영상은 reliable로 받는다: Foxy에서 큰 영상(정렬 깊이)을 best effort로 받으면 조각이 빠져 깊이가 초당 0~5개만 왔다
+        # (실차 2026-11-21). RealSense 드라이버 기본은 reliable. 3 s 동안 하나도 안 오면 best effort로 다시 구독한다
+        self.depth_group, self.color_group = MutuallyExclusiveCallbackGroup(), MutuallyExclusiveCallbackGroup()
+        self.n_depth_total = 0
+        self.image_subs = []
+        self._subscribe_images(bool(g('image_reliable').value))
+        self.t_sub = time.monotonic()
+        self.create_timer(1.0, self._check_images, callback_group=self.depth_group)
         self.image_pub = self.create_publisher(Image, '/camera/fusion/image', 1) if g('publish_image').value and self.view else None
         self.scan_pub = self.create_publisher(LaserScan, '/camera/obstacle_scan', 5)
         self.lead_pub = self.create_publisher(String, '/camera/lead', 5)
@@ -129,6 +137,30 @@ class CameraFusion(Node):
 
     def event(self, msg):
         print_event_line('[CAM] %s' % msg)
+
+    def _subscribe_images(self, reliable):
+        g = self.get_parameter
+        for sub in self.image_subs:
+            self.destroy_subscription(sub)
+        qos = QoSProfile(reliability=QoSReliabilityPolicy.RELIABLE if reliable else QoSReliabilityPolicy.BEST_EFFORT,
+                         history=QoSHistoryPolicy.KEEP_LAST, depth=1)
+        self.image_reliable = reliable
+        self.image_subs = [
+            self.create_subscription(CameraInfo, g('info_topic').value, self.info_cb, qos, callback_group=self.depth_group),
+            self.create_subscription(Image, g('depth_topic').value, self.depth_cb, qos, callback_group=self.depth_group)]
+        if self.model is not None or self.view:
+            self.image_subs.append(self.create_subscription(Image, g('color_topic').value, self.color_cb, qos,
+                                                            callback_group=self.color_group))
+
+    def _check_images(self):
+        """reliable로 3 s 동안 깊이가 하나도 안 오면 드라이버가 best effort로 내는 것으로 보고 다시 구독한다."""
+        if self.n_depth_total == 0 and self.image_reliable and time.monotonic() - self.t_sub > 3.0:
+            self.event('reliable로 깊이가 안 옴: best effort로 다시 구독 (드라이버 QoS가 best effort)')
+            self._subscribe_images(False)
+            self.t_sub = time.monotonic()
+        elif self.n_depth_total == 0 and time.monotonic() - self.t_sub > 3.0:
+            self.event('깊이 영상이 안 옴: 터미널 6(카메라)·cam_ns·정렬 인자 확인 (%s)' % self.get_parameter('depth_topic').value)
+            self.t_sub = time.monotonic()
 
     def _load_yolo(self):
         if not self.get_parameter('yolo').value:
@@ -147,6 +179,7 @@ class CameraFusion(Node):
         self.K = (k[0], k[4], k[2], k[5])
 
     def depth_cb(self, msg):
+        self.n_depth_total += 1
         if self.K is None:
             return
         t0 = time.perf_counter()
@@ -180,19 +213,29 @@ class CameraFusion(Node):
         fit = camera.fit_floor(body, self.rng)
         now = time.monotonic()
         if self.calib is None:
+            g = self.get_parameter
             self.t_calib0 = now if self.t_calib0 is None else self.t_calib0
-            if fit is not None:
+            # 실측 장착에서 먼 바닥 맞춤은 버린다. 실차 2026-11-21: 3프레임만 받아 숙임 3.1°·높이 0.082 m로 잡혀
+            # (실측 17.5°·0.16 m) 비어 있는 앞 1.1 m 바닥을 장애물로 냈다
+            if fit is not None and abs(fit[0].pitch - self.nominal.pitch) < math.radians(g('calib_tol_deg').value) \
+                    and abs(fit[0].height - self.nominal.height) < g('calib_tol_h').value:
                 self.calib_fits.append(fit[0])
-            if now - self.t_calib0 < self.get_parameter('calib_s').value:
+            else:
+                self.calib_rejected += 1
+            elapsed = now - self.t_calib0
+            if elapsed < g('calib_s').value or (len(self.calib_fits) < int(g('calib_frames').value)
+                                                 and elapsed < g('calib_timeout_s').value):
                 return None
             if self.calib_fits:
                 self.calib = camera.Calib(*(statistics.median(f[i] for f in self.calib_fits) for i in range(3)))
-                self.event('바닥 보정: 숙임 %.1f°, roll %+.1f°, 높이 %.3f m (%d프레임 중앙값). 기본값과 5° 넘게 다르면 장착 확인' % (
-                    math.degrees(self.calib.pitch), math.degrees(self.calib.roll), self.calib.height, len(self.calib_fits)))
+                self.event('바닥 보정: 숙임 %.1f°, roll %+.1f°, 높이 %.3f m (%d프레임 중앙값, 장착값과 먼 %d프레임 버림)' % (
+                    math.degrees(self.calib.pitch), math.degrees(self.calib.roll), self.calib.height, len(self.calib_fits),
+                    self.calib_rejected))
             else:
                 self.calib = self.nominal
-                self.event('바닥 보정 실패 (바닥이 안 보임?): 기본값 숙임 %.1f° 높이 %.2f m 사용' % (
-                    math.degrees(self.nominal.pitch), self.nominal.height))
+                self.event('바닥 보정 실패 (바닥이 안 보이거나 장착값과 다름, %d프레임 버림): 기본값 숙임 %.1f° 높이 %.2f m 사용. '
+                           'cam_pitch_deg·cam_height가 실제 장착과 맞는지 확인' % (
+                               self.calib_rejected, math.degrees(self.nominal.pitch), self.nominal.height))
             return self.calib
         if not self.get_parameter('floor_refit').value:
             return self.calib

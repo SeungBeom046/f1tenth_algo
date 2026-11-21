@@ -76,6 +76,10 @@ class ExpPlanner(Node):
         self.declare_parameter('camera_fusion', False)  # /camera/obstacle_scan을 /scan에 bin마다 최솟값으로 합친다
         self.declare_parameter('camera_lead', False)    # /camera/lead(YOLO 차)로 앞차 후보 확인
         self.declare_parameter('camera_aeb', False)     # 합친 scan을 /scan_fused로 내 AEB가 쓰게 한다 (launch가 AEB 입력을 바꾼다)
+        # 정지 상태에서 출발할 때만 잠깐 올리는 최소 ERPM (0 = 끔). 실차 2026-11-21: 4000 ERPM(최저 속도)·조향 최대로
+        # 출발하면 17 A에서 모터가 못 돌아 6 s 동안 0.3 m만 갔다. 11-19 기록의 5500 ERPM 이상 출발은 25~30 A로 모두 출발
+        self.declare_parameter('start_kick_erpm', 0.0)
+        self.declare_parameter('start_kick_s', 0.5)
         self.declare_parameter('params_file', os.path.join(
             get_package_share_directory('my_algo'), 'config', 'exp_common.yaml'))
 
@@ -141,12 +145,18 @@ class ExpPlanner(Node):
             self.create_subscription(String, '/camera/lead', self.cam_lead_callback, 10)
         self.fused_pub = None
         if self.role == 'ego' and self.p.camera_aeb:
-            self.fused_pub = self.create_publisher(LaserScan, '/scan_fused', qos)
+            # reliable로 낸다: AEB(best effort 구독)도 받고, 먼저 떠 있던 bag 기록기(기본 reliable)도 받는다
+            # (실차 2026-11-21: best effort로 내 bag에 0개)
+            self.fused_pub = self.create_publisher(LaserScan, '/scan_fused', 1)
         self.cmd_pub = self.create_publisher(String, '/reactive/lidar_command', 10)
         self.state_pub = self.create_publisher(String, '/exp/state', 10)
         self.create_subscription(Bool, '/aeb/active', self.aeb_callback, 10)
         self.create_subscription(String, '/aeb/status', self.aeb_status_callback, 10)
         self.prev = {}
+        self.start_kick_erpm = float(self.get_parameter('start_kick_erpm').value)
+        self.start_kick_s = float(self.get_parameter('start_kick_s').value)
+        self.kick = {}              # start_kick 상태 (시작 시각)
+        self.kick_on = False
         self.stats = RunStats()
         self.tags = (None, None)    # 직전 인식 태그 (바뀔 때만 터미널에 찍는다)
         self.aeb_on = False
@@ -260,8 +270,15 @@ class ExpPlanner(Node):
             reason = '%s | %s %s' % (reason, rail, lead)
             self.stats.scan(t, v, self.v_cmd, (time.perf_counter() - t_cpu) * 1e3, state, reason.split(' |')[0],
                             rail, lead.split()[0])
+        rpm = self.v_cmd * self.p.erpm_gain
+        kick = start_kick(self.kick, t, self.v_cmd, v, self.start_kick_erpm, self.start_kick_s)
+        if kick:
+            if not self.kick_on:
+                self.event('출발 보조: 정지 상태에서 %.0f ERPM %.1f s (명령 %.0f)' % (self.start_kick_erpm, self.start_kick_s, rpm))
+            rpm, reason = max(rpm, self.start_kick_erpm), reason + ' | start_kick'
+        self.kick_on = kick
         self.cmd_pub.publish(String(data=command_to_json(ReactiveDriveCommand(
-            steering_rad=steer, rpm=self.v_cmd * self.p.erpm_gain, mode=mode, confidence=1.0, reason=reason))))
+            steering_rad=steer, rpm=rpm, mode=mode, confidence=1.0, reason=reason))))
         self.state_pub.publish(String(data=json.dumps(state)))
 
     def leader_step(self, t, msg, v):
@@ -349,6 +366,16 @@ class ExpPlanner(Node):
         if s['decided'] and not prev.get('decided'):
             self.event('belief 확정 %s (b=%.2f)' % (s['decided'], s['b']))
         return s, 'EGO_' + st, steer, reason
+
+
+def start_kick(state, t, v_cmd, v, kick_erpm, kick_s, v_moving=0.15):
+    """출발 명령(v_cmd > 0)인데 측정 속도가 v_moving 아래면 kick_s 켜고 kick_s 쉬기를 반복한다 (움직이면 바로 끝).
+    state: 호출 사이에 들고 다니는 dict. 측정 속도는 서 있어도 ±0.07 m/s(약 300 ERPM)가 나와 v_moving을 그보다 크게 둔다."""
+    if kick_erpm <= 0.0 or v_cmd <= 0.0 or v >= v_moving:
+        state.pop('t', None)
+        return False
+    t0 = state.setdefault('t', t)
+    return (t - t0) % (2.0 * kick_s) < kick_s
 
 
 def camera_inputs(p, t, msg, cam_scan, cam_lead):
